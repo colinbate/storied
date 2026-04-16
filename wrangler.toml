@@ -1,0 +1,27 @@
+name = "storied"
+compatibility_date = "2026-04-16"
+main = ".svelte-kit/cloudflare/_worker.js"
+
+[assets]
+binding = "ASSETS"
+directory = ".svelte-kit/cloudflare"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "storied-db"
+database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
+migrations_dir = "migrations"
+
+[vars]
+
+
+[[routes]]
+pattern = "discuss.bermudatrianglesociety.com"
+custom_domain = true
+
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["notify@discuss.bermudatrianglesociety.com"]
