@@ -1,4 +1,13 @@
-import { integer, sqliteTable, text, uniqueIndex, index, unique } from 'drizzle-orm/sqlite-core';
+import {
+	integer,
+	real,
+	sqliteTable,
+	text,
+	uniqueIndex,
+	index,
+	unique,
+	primaryKey
+} from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 // Helper for ISO-8601 timestamp default.
@@ -299,19 +308,42 @@ export const books = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
-// book_sources  (external source links)
+// series  (collection of books)
 // ──────────────────────────────────────────────
-export const bookSources = sqliteTable(
-	'book_sources',
+export const series = sqliteTable(
+	'series',
 	{
 		id: text('id').primaryKey(),
-		/** Allowed values: 'goodreads' | 'amazon' | 'openlibrary' | 'googlebooks' | 'manual' */
+		slug: text('slug').notNull().unique(),
+		title: text('title').notNull(),
+		authorText: text('author_text'),
+		description: text('description'),
+		coverUrl: text('cover_url'),
+		amazonAsin: text('amazon_asin'),
+		goodreadsUrl: text('goodreads_url'),
+		/** 0 = ongoing, 1 = complete */
+		isComplete: integer('is_complete').notNull().default(0),
+		bookCount: integer('book_count'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_series_slug').on(table.slug), index('idx_series_title').on(table.title)]
+);
+
+// ──────────────────────────────────────────────
+// subject_sources  (external source links for books or series)
+// ──────────────────────────────────────────────
+export const subjectSources = sqliteTable(
+	'subject_sources',
+	{
+		id: text('id').primaryKey(),
+		/** Allowed values: 'goodreads' | 'goodreads-series' | 'amazon' | 'openlibrary' | 'googlebooks' | 'manual' */
 		sourceType: text('source_type').notNull(),
 		sourceUrl: text('source_url').notNull(),
 		sourceKey: text('source_key').notNull(),
-		canonicalBookId: text('canonical_book_id').references(() => books.id, {
-			onDelete: 'set null'
-		}),
+		/** Allowed values: 'book' | 'series' */
+		subjectType: text('subject_type'),
+		subjectId: text('subject_id'),
 		rawMetadata: text('raw_metadata'),
 		/** Allowed values: 'pending' | 'resolved' | 'failed' | 'ignored' */
 		fetchStatus: text('fetch_status').notNull().default('pending'),
@@ -320,52 +352,120 @@ export const bookSources = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		unique('book_sources_type_key_unique').on(table.sourceType, table.sourceKey),
-		index('idx_book_sources_status').on(table.fetchStatus, table.updatedAt),
-		index('idx_book_sources_book').on(table.canonicalBookId)
+		unique('subject_sources_type_key_unique').on(table.sourceType, table.sourceKey),
+		index('idx_subject_sources_status').on(table.fetchStatus, table.updatedAt),
+		index('idx_subject_sources_subject').on(table.subjectType, table.subjectId)
 	]
 );
 
 // ──────────────────────────────────────────────
-// post_books  (junction between posts/threads and books)
+// thread_subjects  (junction between threads and books/series)
 // ──────────────────────────────────────────────
-export const postBooks = sqliteTable(
-	'post_books',
+export const threadSubjects = sqliteTable(
+	'thread_subjects',
 	{
 		id: text('id').primaryKey(),
-		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),
-		threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
-		bookId: text('book_id')
+		threadId: text('thread_id')
 			.notNull()
-			.references(() => books.id, { onDelete: 'cascade' }),
-		bookSourceId: text('book_source_id').references(() => bookSources.id, {
-			onDelete: 'set null'
-		}),
+			.references(() => threads.id, { onDelete: 'cascade' }),
+		postId: text('post_id').references(() => posts.id, { onDelete: 'set null' }),
+		/** Allowed values: 'book' | 'series' */
+		subjectType: text('subject_type').notNull(),
+		subjectId: text('subject_id').notNull(),
 		displayOrder: integer('display_order').notNull().default(0),
 		/** Allowed values: 'linked' | 'mentioned' | 'recommended' */
 		context: text('context').notNull().default('linked'),
-		createdAt: text('created_at').notNull().default(timestampDefault)
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		addedBy: text('added_by').references(() => users.id, { onDelete: 'set null' })
 	},
 	(table) => [
-		index('idx_post_books_thread').on(table.threadId, table.displayOrder),
-		index('idx_post_books_post').on(table.postId, table.displayOrder),
-		index('idx_post_books_book').on(table.bookId, table.createdAt)
+		unique('thread_subjects_thread_subject_unique').on(
+			table.threadId,
+			table.subjectType,
+			table.subjectId
+		),
+		index('idx_thread_subjects_thread').on(table.threadId, table.displayOrder),
+		index('idx_thread_subjects_subject').on(table.subjectType, table.subjectId, table.createdAt)
 	]
 );
 
 // ──────────────────────────────────────────────
-// user_books  (personal member relationship to a book)
+// genres  (hierarchical genre taxonomy)
 // ──────────────────────────────────────────────
-export const userBooks = sqliteTable(
-	'user_books',
+export const genres = sqliteTable(
+	'genres',
 	{
-		id: text('id').primaryKey(),
-		userId: text('user_id')
+		id: integer('id').primaryKey(),
+		name: text('name').notNull(),
+		slug: text('slug').notNull().unique(),
+		parentId: integer('parent_id'),
+		description: text('description'),
+		/** 0 = mainstream, 1 = speculative */
+		isSpeculative: integer('is_speculative').notNull().default(1),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_genres_parent').on(table.parentId, table.name)]
+);
+
+// ──────────────────────────────────────────────
+// genre_links  (polymorphic genre assignment)
+// ──────────────────────────────────────────────
+export const genreLinks = sqliteTable(
+	'genre_links',
+	{
+		genreId: integer('genre_id')
 			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
+			.references(() => genres.id, { onDelete: 'cascade' }),
+		/** Allowed values: 'book' | 'series' */
+		subjectType: text('subject_type').notNull(),
+		subjectId: text('subject_id').notNull(),
+		/** Allowed values: 'manual' | 'inferred' | 'imported' */
+		confidence: text('confidence').notNull(),
+		linkedAt: text('linked_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.genreId, table.subjectType, table.subjectId] }),
+		index('idx_genre_links_subject').on(table.subjectType, table.subjectId)
+	]
+);
+
+// ──────────────────────────────────────────────
+// series_books  (ordered books within a series)
+// ──────────────────────────────────────────────
+export const seriesBooks = sqliteTable(
+	'series_books',
+	{
+		seriesId: text('series_id')
+			.notNull()
+			.references(() => series.id, { onDelete: 'cascade' }),
 		bookId: text('book_id')
 			.notNull()
 			.references(() => books.id, { onDelete: 'cascade' }),
+		positionSort: real('position_sort'),
+		position: text('position'),
+		linkedAt: text('linked_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.seriesId, table.bookId] }),
+		index('idx_series_books_series').on(table.seriesId, table.positionSort),
+		index('idx_series_books_book').on(table.bookId)
+	]
+);
+
+// ──────────────────────────────────────────────
+// user_subjects  (personal member relationship to a book or series)
+// ──────────────────────────────────────────────
+export const userSubjects = sqliteTable(
+	'user_subjects',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		/** Allowed values: 'book' | 'series' */
+		subjectType: text('subject_type').notNull(),
+		subjectId: text('subject_id').notNull(),
+		/** Allowed values: 'want_to_read' | 'reading' | 'read' | 'did_not_finish' */
 		readingStatus: text('reading_status').notNull().default('want_to_read'),
 		/** 0 = not recommended, 1 = recommended */
 		isRecommended: integer('is_recommended').notNull().default(0),
@@ -376,29 +476,27 @@ export const userBooks = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		uniqueIndex('user_books_user_book_unique').on(table.userId, table.bookId),
-		index('idx_user_books_user').on(table.userId, table.updatedAt),
-		index('idx_user_books_book').on(table.bookId)
+		primaryKey({ columns: [table.userId, table.subjectType, table.subjectId] }),
+		index('idx_user_subjects_user').on(table.userId, table.updatedAt),
+		index('idx_user_subjects_subject').on(table.subjectType, table.subjectId)
 	]
 );
 
 // ──────────────────────────────────────────────
-// session_books  (session-level relationship to a book)
+// session_subjects  (session-level relationship to a book or series)
 // ──────────────────────────────────────────────
-export const sessionBooks = sqliteTable(
-	'session_books',
+export const sessionSubjects = sqliteTable(
+	'session_subjects',
 	{
-		id: text('id').primaryKey(),
 		sessionId: text('session_id')
 			.notNull()
 			.references(() => sessions.id, { onDelete: 'cascade' }),
-		bookId: text('book_id')
-			.notNull()
-			.references(() => books.id, { onDelete: 'cascade' }),
+		/** Allowed values: 'book' | 'series' */
+		subjectType: text('subject_type').notNull(),
+		subjectId: text('subject_id').notNull(),
+		/** Allowed values: 'mentioned' | 'featured' | 'selected' */
 		status: text('status').notNull().default('mentioned'),
-		sourceThreadId: text('source_thread_id').references(() => threads.id, {
-			onDelete: 'set null'
-		}),
+		note: text('note'),
 		addedByUserId: text('added_by_user_id').references(() => users.id, {
 			onDelete: 'set null'
 		}),
@@ -406,8 +504,8 @@ export const sessionBooks = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		uniqueIndex('session_books_session_book_unique').on(table.sessionId, table.bookId),
-		index('idx_session_books_session').on(table.sessionId, table.status, table.createdAt),
-		index('idx_session_books_book').on(table.bookId)
+		primaryKey({ columns: [table.sessionId, table.subjectType, table.subjectId] }),
+		index('idx_session_subjects_session').on(table.sessionId, table.status, table.createdAt),
+		index('idx_session_subjects_subject').on(table.subjectType, table.subjectId)
 	]
 );

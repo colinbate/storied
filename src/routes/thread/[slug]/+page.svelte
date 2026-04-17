@@ -499,15 +499,36 @@
 		{/if}
 	</div>
 
-	{#if data.books.length > 0}
+	{#if data.books.length > 0 || data.series.length > 0}
 		<aside class="w-full shrink-0 lg:w-64">
-			<div class="sticky top-20">
-				<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Books Mentioned</h3>
-				<div class="space-y-2">
-					{#each data.books as book (book.id)}
-						<BookCard {book} compact />
-					{/each}
-				</div>
+			<div class="sticky top-20 space-y-6">
+				{#if data.series.length > 0}
+					<div>
+						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>
+						<div class="space-y-2">
+							{#each data.series as s (s.id)}
+								<div class="rounded-lg border p-2 text-sm">
+									<a class="leading-tight font-medium" rel="external" href={s.goodreadsUrl}
+										>{s.title}</a
+									>
+									{#if s.authorText}
+										<p class="mt-0.5 text-xs text-muted-foreground">{s.authorText}</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+				{#if data.books.length > 0}
+					<div>
+						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Books Mentioned</h3>
+						<div class="space-y-2">
+							{#each data.books as book (book.id)}
+								<BookCard {book} compact />
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</aside>
 	{/if}

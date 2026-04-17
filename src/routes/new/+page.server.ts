@@ -1,12 +1,18 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-import { categories, threads, subscriptions, bookSources, postBooks } from '$lib/server/db/schema';
+import {
+	categories,
+	threads,
+	subscriptions,
+	subjectSources,
+	threadSubjects
+} from '$lib/server/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { renderMarkdown } from '$lib/server/markdown';
-import { detectBookLinks } from '$lib/server/book-links';
+import { detectSubjectLinks } from '$lib/server/book-links';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _eq: any = eq;
@@ -107,34 +113,36 @@ export const actions: Actions = {
 			mode: 'immediate'
 		});
 
-		// Detect and process book links
-		const detectedLinks = detectBookLinks(bodySource);
+		// Detect and process subject links (books and series)
+		const detectedLinks = detectSubjectLinks(bodySource);
 		for (let i = 0; i < detectedLinks.length; i++) {
 			const link = detectedLinks[i];
 
 			// Check if we already have this source
 			const existingSource = await locals.db
 				.select()
-				.from(bookSources)
+				.from(subjectSources)
 				.where(
 					_and(
-						_eq(bookSources.sourceType, link.sourceType),
-						_eq(bookSources.sourceKey, link.sourceKey)
+						_eq(subjectSources.sourceType, link.sourceType),
+						_eq(subjectSources.sourceKey, link.sourceKey)
 					)
 				)
 				.get();
 
 			let sourceId: string;
-			let bookId: string | null = null;
+			let resolvedSubjectType: string | null = null;
+			let resolvedSubjectId: string | null = null;
 
 			if (existingSource) {
 				sourceId = existingSource.id;
-				bookId = existingSource.canonicalBookId;
+				resolvedSubjectType = existingSource.subjectType;
+				resolvedSubjectId = existingSource.subjectId;
 
 				// Source exists but not yet resolved — re-enqueue
-				if (!existingSource.canonicalBookId && platform?.env.BOOK_QUEUE) {
-					await platform.env.BOOK_QUEUE.send({
-						bookSourceId: existingSource.id,
+				if (!resolvedSubjectId && platform?.env.SUBJECT_QUEUE) {
+					await platform.env.SUBJECT_QUEUE.send({
+						subjectSourceId: existingSource.id,
 						sourceType: link.sourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
@@ -143,7 +151,7 @@ export const actions: Actions = {
 				}
 			} else {
 				sourceId = newId();
-				await locals.db.insert(bookSources).values({
+				await locals.db.insert(subjectSources).values({
 					id: sourceId,
 					sourceType: link.sourceType,
 					sourceUrl: link.url,
@@ -152,9 +160,9 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				if (platform?.env.BOOK_QUEUE) {
-					await platform.env.BOOK_QUEUE.send({
-						bookSourceId: sourceId,
+				if (platform?.env.SUBJECT_QUEUE) {
+					await platform.env.SUBJECT_QUEUE.send({
+						subjectSourceId: sourceId,
 						sourceType: link.sourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
@@ -163,16 +171,20 @@ export const actions: Actions = {
 				}
 			}
 
-			// Link to thread if book is already resolved
-			if (bookId) {
-				await locals.db.insert(postBooks).values({
-					id: newId(),
-					threadId,
-					bookId,
-					bookSourceId: sourceId,
-					displayOrder: i,
-					context: 'linked'
-				});
+			// Link thread to subject if already resolved
+			if (resolvedSubjectType && resolvedSubjectId) {
+				await locals.db
+					.insert(threadSubjects)
+					.values({
+						id: newId(),
+						threadId,
+						subjectType: resolvedSubjectType,
+						subjectId: resolvedSubjectId,
+						displayOrder: i,
+						context: 'linked',
+						addedBy: locals.user.id
+					})
+					.onConflictDoNothing();
 			}
 		}
 

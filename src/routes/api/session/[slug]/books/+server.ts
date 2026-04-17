@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { sessions, sessionBooks, books, userBooks } from '$lib/server/db/schema';
+import { sessions, sessionSubjects, books, userSubjects } from '$lib/server/db/schema';
 import { eq, and, count } from 'drizzle-orm';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -9,6 +9,8 @@ const _eq: any = eq;
 const _and: any = and;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _count: any = count;
+
+const SUBJECT = 'book';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const session = await locals.db
@@ -21,20 +23,31 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	const sessionBookRows = await locals.db
 		.select({
-			sessionBook: sessionBooks,
+			sessionSubject: sessionSubjects,
 			book: books
 		})
-		.from(sessionBooks)
-		.innerJoin(books, _eq(sessionBooks.bookId, books.id))
-		.where(_eq(sessionBooks.sessionId, session.id))
+		.from(sessionSubjects)
+		.innerJoin(books, _eq(sessionSubjects.subjectId, books.id))
+		.where(
+			_and(
+				_eq(sessionSubjects.sessionId, session.id),
+				_eq(sessionSubjects.subjectType, SUBJECT)
+			)
+		)
 		.all();
 
 	const result = await Promise.all(
-		sessionBookRows.map(async ({ sessionBook, book }) => {
+		sessionBookRows.map(async ({ sessionSubject, book }) => {
 			const [recCount] = await locals.db
 				.select({ count: _count() })
-				.from(userBooks)
-				.where(_and(_eq(userBooks.bookId, book.id), _eq(userBooks.isRecommended, 1)));
+				.from(userSubjects)
+				.where(
+					_and(
+						_eq(userSubjects.subjectType, SUBJECT),
+						_eq(userSubjects.subjectId, book.id),
+						_eq(userSubjects.isRecommended, 1)
+					)
+				);
 
 			return {
 				id: book.id,
@@ -44,7 +57,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				coverUrl: book.coverUrl,
 				isbn13: book.isbn13,
 				goodreadsUrl: book.goodreadsUrl,
-				sessionStatus: sessionBook.status,
+				sessionStatus: sessionSubject.status,
 				recommendations: recCount.count
 			};
 		})

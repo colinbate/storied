@@ -1,33 +1,36 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { books, subjectSources } from '$lib/server/db/schema';
+import { series, subjectSources } from '$lib/server/db/schema';
 import { eq, desc, isNull, and } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 
 export const load: PageServerLoad = async (event) => {
-	requirePermission(event.locals, 'book:edit');
-	const allBooks = await event.locals.db.select().from(books).orderBy(desc(books.createdAt)).all();
+	requirePermission(event.locals, 'series:edit');
+	const allSeries = await event.locals.db
+		.select()
+		.from(series)
+		.orderBy(desc(series.createdAt))
+		.all();
 
-	// Unresolved sources whose subject kind is (or will be) a book
+	// Unresolved sources producing series
 	const unresolvedSources = await event.locals.db
 		.select()
 		.from(subjectSources)
 		.where(
 			and(
 				isNull(subjectSources.subjectId),
-				// Only book-producing source types
-				eq(subjectSources.sourceType, 'goodreads')
+				eq(subjectSources.sourceType, 'goodreads-series')
 			)
 		)
 		.orderBy(desc(subjectSources.createdAt))
 		.all();
 
-	return { books: allBooks, unresolvedSources };
+	return { series: allSeries, unresolvedSources };
 };
 
 export const actions: Actions = {
 	retrySource: async ({ request, locals }) => {
-		requirePermission(locals, 'book:edit');
+		requirePermission(locals, 'series:edit');
 
 		const data = await request.formData();
 		const sourceId = data.get('sourceId')?.toString();
@@ -42,7 +45,7 @@ export const actions: Actions = {
 	},
 
 	ignoreSource: async ({ request, locals }) => {
-		requirePermission(locals, 'book:edit');
+		requirePermission(locals, 'series:edit');
 
 		const data = await request.formData();
 		const sourceId = data.get('sourceId')?.toString();

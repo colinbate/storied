@@ -1,8 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { books, userBooks, postBooks, threads, users } from '$lib/server/db/schema';
+import { books, userSubjects, threadSubjects, threads, users } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, count } from 'drizzle-orm';
-import { newId } from '$lib/server/ids';
 
 // pnpm resolves two drizzle-orm copies (D1 vs libsql peer variants) whose private types
 // are structurally identical but nominally incompatible. The cast avoids the TS2345 mismatch.
@@ -17,16 +16,14 @@ const _desc: any = desc;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _count: any = count;
 
+const SUBJECT = 'book';
+
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const book = await locals.db
-		.select()
-		.from(books)
-		.where(_eq(books.slug, params.slug))
-		.get();
+	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
 	if (!book) {
 		throw error(404, 'Book not found');
@@ -35,11 +32,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Load user's personal relationship to this book
 	const myBookRelation = await locals.db
 		.select()
-		.from(userBooks)
-		.where(_and(_eq(userBooks.userId, locals.user.id), _eq(userBooks.bookId, book.id)))
+		.from(userSubjects)
+		.where(
+			_and(
+				_eq(userSubjects.userId, locals.user.id),
+				_eq(userSubjects.subjectType, SUBJECT),
+				_eq(userSubjects.subjectId, book.id)
+			)
+		)
 		.get();
 
-	// Load threads that reference this book (through post_books)
+	// Load threads that reference this book (through thread_subjects)
 	const relatedThreads = await locals.db
 		.select({
 			thread: {
@@ -55,14 +58,20 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				avatarUrl: users.avatarUrl
 			}
 		})
-		.from(postBooks)
-		.innerJoin(threads, _eq(postBooks.threadId, threads.id))
+		.from(threadSubjects)
+		.innerJoin(threads, _eq(threadSubjects.threadId, threads.id))
 		.innerJoin(users, _eq(threads.authorUserId, users.id))
-		.where(_and(_eq(postBooks.bookId, book.id), _isNull(threads.deletedAt)))
+		.where(
+			_and(
+				_eq(threadSubjects.subjectType, SUBJECT),
+				_eq(threadSubjects.subjectId, book.id),
+				_isNull(threads.deletedAt)
+			)
+		)
 		.orderBy(_desc(threads.createdAt))
 		.all();
 
-	// Deduplicate threads (a book may appear in multiple posts within the same thread)
+	// Deduplicate threads (same thread shouldn't appear twice now, but keep for safety)
 	const seenIds = new Set<string>();
 	const uniqueThreads = relatedThreads.filter(({ thread }) => {
 		if (seenIds.has(thread.id)) return false;
@@ -73,13 +82,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Aggregate stats: how many members recommend, have read, etc.
 	const [recommendCount] = await locals.db
 		.select({ count: _count() })
-		.from(userBooks)
-		.where(_and(_eq(userBooks.bookId, book.id), _eq(userBooks.isRecommended, 1)));
+		.from(userSubjects)
+		.where(
+			_and(
+				_eq(userSubjects.subjectType, SUBJECT),
+				_eq(userSubjects.subjectId, book.id),
+				_eq(userSubjects.isRecommended, 1)
+			)
+		);
 
 	const [readCount] = await locals.db
 		.select({ count: _count() })
-		.from(userBooks)
-		.where(_and(_eq(userBooks.bookId, book.id), _eq(userBooks.readingStatus, 'read')));
+		.from(userSubjects)
+		.where(
+			_and(
+				_eq(userSubjects.subjectType, SUBJECT),
+				_eq(userSubjects.subjectId, book.id),
+				_eq(userSubjects.readingStatus, 'read')
+			)
+		);
 
 	return {
 		book,
@@ -105,11 +126,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Missing reading status.' });
 		}
 
-		const book = await locals.db
-			.select()
-			.from(books)
-			.where(_eq(books.slug, params.slug))
-			.get();
+		const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
 		if (!book) {
 			throw error(404, 'Book not found');
@@ -117,20 +134,32 @@ export const actions: Actions = {
 
 		const existing = await locals.db
 			.select()
-			.from(userBooks)
-			.where(_and(_eq(userBooks.userId, locals.user.id), _eq(userBooks.bookId, book.id)))
+			.from(userSubjects)
+			.where(
+				_and(
+					_eq(userSubjects.userId, locals.user.id),
+					_eq(userSubjects.subjectType, SUBJECT),
+					_eq(userSubjects.subjectId, book.id)
+				)
+			)
 			.get();
 
 		if (existing) {
 			await locals.db
-				.update(userBooks)
+				.update(userSubjects)
 				.set({ readingStatus, updatedAt: new Date().toISOString() })
-				.where(_eq(userBooks.id, existing.id));
+				.where(
+					_and(
+						_eq(userSubjects.userId, locals.user.id),
+						_eq(userSubjects.subjectType, SUBJECT),
+						_eq(userSubjects.subjectId, book.id)
+					)
+				);
 		} else {
-			await locals.db.insert(userBooks).values({
-				id: newId(),
+			await locals.db.insert(userSubjects).values({
 				userId: locals.user.id,
-				bookId: book.id,
+				subjectType: SUBJECT,
+				subjectId: book.id,
 				readingStatus
 			});
 		}
@@ -143,11 +172,7 @@ export const actions: Actions = {
 			throw redirect(302, '/auth/login');
 		}
 
-		const book = await locals.db
-			.select()
-			.from(books)
-			.where(_eq(books.slug, params.slug))
-			.get();
+		const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
 		if (!book) {
 			throw error(404, 'Book not found');
@@ -155,23 +180,35 @@ export const actions: Actions = {
 
 		const existing = await locals.db
 			.select()
-			.from(userBooks)
-			.where(_and(_eq(userBooks.userId, locals.user.id), _eq(userBooks.bookId, book.id)))
+			.from(userSubjects)
+			.where(
+				_and(
+					_eq(userSubjects.userId, locals.user.id),
+					_eq(userSubjects.subjectType, SUBJECT),
+					_eq(userSubjects.subjectId, book.id)
+				)
+			)
 			.get();
 
 		if (existing) {
 			await locals.db
-				.update(userBooks)
+				.update(userSubjects)
 				.set({
 					isRecommended: existing.isRecommended ? 0 : 1,
 					updatedAt: new Date().toISOString()
 				})
-				.where(_eq(userBooks.id, existing.id));
+				.where(
+					_and(
+						_eq(userSubjects.userId, locals.user.id),
+						_eq(userSubjects.subjectType, SUBJECT),
+						_eq(userSubjects.subjectId, book.id)
+					)
+				);
 		} else {
-			await locals.db.insert(userBooks).values({
-				id: newId(),
+			await locals.db.insert(userSubjects).values({
 				userId: locals.user.id,
-				bookId: book.id,
+				subjectType: SUBJECT,
+				subjectId: book.id,
 				isRecommended: 1
 			});
 		}

@@ -5,6 +5,8 @@
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import LibraryIcon from '@lucide/svelte/icons/library';
+	import TagIcon from '@lucide/svelte/icons/tag';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
@@ -34,6 +36,18 @@
 			label: 'Books',
 			icon: BookOpenIcon,
 			show: data.permissions.has('book:edit')
+		},
+		{
+			href: '/admin/series',
+			label: 'Series',
+			icon: LibraryIcon,
+			show: data.permissions.has('series:edit')
+		},
+		{
+			href: '/admin/genres',
+			label: 'Genres',
+			icon: TagIcon,
+			show: data.permissions.has('genre:edit')
 		}
 	] as const);
 </script>

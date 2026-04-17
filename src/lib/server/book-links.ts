@@ -1,33 +1,56 @@
-export interface DetectedBookLink {
+export type SubjectSourceType = 'goodreads' | 'goodreads-series';
+export type SubjectKind = 'book' | 'series';
+
+export interface DetectedSubjectLink {
 	url: string;
-	sourceType: 'goodreads'; // expand later
-	sourceKey: string; // e.g. "12345678" for goodreads
+	sourceType: SubjectSourceType;
+	sourceKey: string;
+	subjectKind: SubjectKind;
 }
 
+/** Back-compat alias for the old name. */
+export type DetectedBookLink = DetectedSubjectLink;
+
 /**
- * Scan text (markdown source) for supported book links.
+ * Scan text (markdown source) for supported book or series links.
  * Returns deduplicated list of detected links.
  */
-export function detectBookLinks(text: string): DetectedBookLink[] {
-	const links: DetectedBookLink[] = [];
+export function detectSubjectLinks(text: string): DetectedSubjectLink[] {
+	const links: DetectedSubjectLink[] = [];
 	const seen = new Set<string>();
 
-	// Match Goodreads book URLs
-	// Pattern: https://(www.)goodreads.com/book/show/<id>...
-	const goodreadsRegex = /https?:\/\/(?:www\.)?goodreads\.com\/book\/show\/(\d+)[\w.-]*/gi;
-	let match;
-	while ((match = goodreadsRegex.exec(text)) !== null) {
-		const sourceKey = match[1];
-		const key = `goodreads:${sourceKey}`;
-		if (!seen.has(key)) {
-			seen.add(key);
-			links.push({
-				url: match[0],
-				sourceType: 'goodreads',
-				sourceKey
-			});
-		}
+	const push = (link: DetectedSubjectLink) => {
+		const key = `${link.sourceType}:${link.sourceKey}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		links.push(link);
+	};
+
+	// Goodreads book URLs: https://(www.)goodreads.com/book/show/<id>...
+	const bookRegex = /https?:\/\/(?:www\.)?goodreads\.com\/book\/show\/(\d+)[\w.-]*/gi;
+	let match: RegExpExecArray | null;
+	while ((match = bookRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'goodreads',
+			sourceKey: match[1],
+			subjectKind: 'book'
+		});
+	}
+
+	// Goodreads series URLs: https://(www.)goodreads.com/series/<id>[-slug]
+	const seriesRegex = /https?:\/\/(?:www\.)?goodreads\.com\/series\/(\d+)[\w.-]*/gi;
+	while ((match = seriesRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'goodreads-series',
+			sourceKey: match[1],
+			subjectKind: 'series'
+		});
 	}
 
 	return links;
 }
+
+/** @deprecated Use detectSubjectLinks. Retained for compatibility. */
+export const detectBookLinks = detectSubjectLinks;

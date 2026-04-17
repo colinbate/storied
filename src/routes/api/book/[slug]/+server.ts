@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { books, userBooks } from '$lib/server/db/schema';
+import { books, userSubjects } from '$lib/server/db/schema';
 import { eq, and, count } from 'drizzle-orm';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,6 +10,8 @@ const _and: any = and;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _count: any = count;
 
+const SUBJECT = 'book';
+
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
@@ -17,13 +19,25 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	const [recCount] = await locals.db
 		.select({ count: _count() })
-		.from(userBooks)
-		.where(_and(_eq(userBooks.bookId, book.id), _eq(userBooks.isRecommended, 1)));
+		.from(userSubjects)
+		.where(
+			_and(
+				_eq(userSubjects.subjectType, SUBJECT),
+				_eq(userSubjects.subjectId, book.id),
+				_eq(userSubjects.isRecommended, 1)
+			)
+		);
 
 	const [readCount] = await locals.db
 		.select({ count: _count() })
-		.from(userBooks)
-		.where(_and(_eq(userBooks.bookId, book.id), _eq(userBooks.readingStatus, 'read')));
+		.from(userSubjects)
+		.where(
+			_and(
+				_eq(userSubjects.subjectType, SUBJECT),
+				_eq(userSubjects.subjectId, book.id),
+				_eq(userSubjects.readingStatus, 'read')
+			)
+		);
 
 	return json(
 		{

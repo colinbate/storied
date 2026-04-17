@@ -7,16 +7,17 @@ import {
 	subscriptions,
 	notificationEvents,
 	books,
-	bookSources,
-	postBooks,
+	series,
+	subjectSources,
+	threadSubjects,
 	sessions,
 	moderationEvents
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { sendReplyNotificationEmail } from '$lib/server/email';
-import { detectBookLinks } from '$lib/server/book-links';
+import { detectSubjectLinks } from '$lib/server/book-links';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -75,27 +76,57 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		)
 		.get();
 
-	// Load books linked to this thread
-	const threadBooks = await locals.db
-		.select({
-			book: books,
-			postBook: postBooks
-		})
-		.from(postBooks)
-		.innerJoin(books, eq(postBooks.bookId, books.id))
-		.where(eq(postBooks.threadId, thread.thread.id))
-		.orderBy(asc(postBooks.displayOrder))
+	// Load subjects (books or series) linked to this thread
+	const subjectLinks = await locals.db
+		.select()
+		.from(threadSubjects)
+		.where(eq(threadSubjects.threadId, thread.thread.id))
+		.orderBy(asc(threadSubjects.displayOrder))
 		.all();
 
-	// Deduplicate books (same book might be linked from multiple posts)
-	const seenBookIds = new Set<string>();
-	const uniqueBooks = threadBooks
-		.filter(({ book }) => {
-			if (seenBookIds.has(book.id)) return false;
-			seenBookIds.add(book.id);
-			return true;
+	const linkedBookIds = subjectLinks
+		.filter((l) => l.subjectType === 'book')
+		.map((l) => l.subjectId);
+	const linkedSeriesIds = subjectLinks
+		.filter((l) => l.subjectType === 'series')
+		.map((l) => l.subjectId);
+
+	const bookRows = linkedBookIds.length
+		? await locals.db
+				.select()
+				.from(books)
+				.where(inArray(books.id, linkedBookIds))
+				.all()
+		: [];
+	const seriesRows = linkedSeriesIds.length
+		? await locals.db
+				.select()
+				.from(series)
+				.where(inArray(series.id, linkedSeriesIds))
+				.all()
+		: [];
+
+	const bookMap = new Map(bookRows.map((b) => [b.id, b]));
+	const seriesMap = new Map(seriesRows.map((s) => [s.id, s]));
+
+	// Preserve display_order across both subject kinds.
+	const linkedSubjects = subjectLinks
+		.map((l) => {
+			if (l.subjectType === 'book') {
+				const book = bookMap.get(l.subjectId);
+				return book ? { kind: 'book' as const, book } : null;
+			}
+			if (l.subjectType === 'series') {
+				const s = seriesMap.get(l.subjectId);
+				return s ? { kind: 'series' as const, series: s } : null;
+			}
+			return null;
 		})
-		.map(({ book }) => book);
+		.filter((s): s is NonNullable<typeof s> => s !== null);
+
+	const uniqueBooks = linkedSubjects
+		.filter((s) => s.kind === 'book')
+		.map((s) => s.book);
 
 	// Load linked session if present
 	let session: { id: string; slug: string; title: string } | null = null;
@@ -124,6 +155,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		posts: threadPosts,
 		isSubscribed: !!subscription,
 		books: uniqueBooks,
+		series: linkedSubjects.filter((s) => s.kind === 'series').map((s) => s.series),
 		session,
 		canModerate,
 		allSessions,
@@ -199,33 +231,35 @@ export const actions: Actions = {
 			});
 		}
 
-		// Detect and process book links
-		const detectedLinks = detectBookLinks(bodySource);
+		// Detect and process subject links (books and series)
+		const detectedLinks = detectSubjectLinks(bodySource);
 		for (let i = 0; i < detectedLinks.length; i++) {
 			const link = detectedLinks[i];
 
 			const existingSource = await locals.db
 				.select()
-				.from(bookSources)
+				.from(subjectSources)
 				.where(
 					and(
-						eq(bookSources.sourceType, link.sourceType),
-						eq(bookSources.sourceKey, link.sourceKey)
+						eq(subjectSources.sourceType, link.sourceType),
+						eq(subjectSources.sourceKey, link.sourceKey)
 					)
 				)
 				.get();
 
 			let sourceId: string;
-			let bookId: string | null = null;
+			let resolvedSubjectType: string | null = null;
+			let resolvedSubjectId: string | null = null;
 
 			if (existingSource) {
 				sourceId = existingSource.id;
-				bookId = existingSource.canonicalBookId;
+				resolvedSubjectType = existingSource.subjectType;
+				resolvedSubjectId = existingSource.subjectId;
 
 				// Source exists but not yet resolved — re-enqueue
-				if (!bookId && platform?.env.BOOK_QUEUE) {
-					await platform.env.BOOK_QUEUE.send({
-						bookSourceId: existingSource.id,
+				if (!resolvedSubjectId && platform?.env.SUBJECT_QUEUE) {
+					await platform.env.SUBJECT_QUEUE.send({
+						subjectSourceId: existingSource.id,
 						sourceType: link.sourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
@@ -235,7 +269,7 @@ export const actions: Actions = {
 				}
 			} else {
 				sourceId = newId();
-				await locals.db.insert(bookSources).values({
+				await locals.db.insert(subjectSources).values({
 					id: sourceId,
 					sourceType: link.sourceType,
 					sourceUrl: link.url,
@@ -244,9 +278,9 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				if (platform?.env.BOOK_QUEUE) {
-					await platform.env.BOOK_QUEUE.send({
-						bookSourceId: sourceId,
+				if (platform?.env.SUBJECT_QUEUE) {
+					await platform.env.SUBJECT_QUEUE.send({
+						subjectSourceId: sourceId,
 						sourceType: link.sourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
@@ -256,16 +290,20 @@ export const actions: Actions = {
 				}
 			}
 
-			if (bookId) {
-				await locals.db.insert(postBooks).values({
-					id: newId(),
-					postId,
-					threadId: thread.id,
-					bookId,
-					bookSourceId: sourceId,
-					displayOrder: i,
-					context: 'linked'
-				});
+			if (resolvedSubjectType && resolvedSubjectId) {
+				await locals.db
+					.insert(threadSubjects)
+					.values({
+						id: newId(),
+						threadId: thread.id,
+						postId,
+						subjectType: resolvedSubjectType,
+						subjectId: resolvedSubjectId,
+						displayOrder: i,
+						context: 'linked',
+						addedBy: locals.user.id
+					})
+					.onConflictDoNothing();
 			}
 		}
 
