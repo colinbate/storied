@@ -1,148 +1,131 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import PinIcon from '@lucide/svelte/icons/pin';
-	import PinOffIcon from '@lucide/svelte/icons/pin-off';
-	import LockIcon from '@lucide/svelte/icons/lock';
-	import UnlockIcon from '@lucide/svelte/icons/lock-open';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
+	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
+	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data } = $props();
+
+	const restoreEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				toast.success('Restored.');
+			}
+		};
+	};
 </script>
 
 <svelte:head>
 	<title>Moderation — Admin — Storied</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<h1 class="text-2xl font-bold">Moderation</h1>
+<div class="space-y-8">
+	<div>
+		<h1 class="text-2xl font-bold">Moderation</h1>
+		<p class="mt-1 text-sm text-muted-foreground">
+			Deleted threads and posts deleted within the last 7 days. Moderation actions on live content
+			are available in place on the thread itself.
+		</p>
+	</div>
 
-	<Card.Root>
-		<Card.Content class="p-0">
-			<div class="divide-y">
-				{#each data.threads as { thread, author } (thread.id)}
-					<div class="flex items-center justify-between gap-4 px-4 py-3">
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
-								<a
-									href={resolve(`/thread/${thread.slug}`)}
-									class="truncate font-medium hover:underline"
-								>
-									{thread.title}
-								</a>
-								{#if thread.isPinned}
-									<Badge variant="secondary" class="shrink-0">Pinned</Badge>
-								{/if}
-								{#if thread.isLocked}
-									<Badge variant="outline" class="shrink-0">Locked</Badge>
-								{/if}
-								{#if thread.deletedAt}
-									<Badge variant="destructive" class="shrink-0">Deleted</Badge>
-								{/if}
-							</div>
-							<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-								<span
-									>by {author.displayName} · {new Date(thread.createdAt).toLocaleDateString()}</span
-								>
-							</div>
-						</div>
-						<div class="flex shrink-0 items-center gap-1">
-							<form
-								method="POST"
-								action="?/linkSession"
-								use:enhance={() => {
-									return async ({ result, update }) => {
-										await update();
-										if (result.type === 'success') {
-											toast.success('Session link updated.');
-										}
-									};
-								}}
-								class="inline-flex items-center gap-1"
-							>
-								<input type="hidden" name="threadId" value={thread.id} />
-								<CalendarIcon class="h-3.5 w-3.5 shrink-0" />
-								<select
-									name="sessionId"
-									class="rounded border border-input bg-transparent px-1.5 pr-8 text-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
-									onchange={(e) => e.currentTarget.form?.requestSubmit()}
-								>
-									<option value="" selected={!thread.sessionId}>No session</option>
-									{#each data.sessions as session (session.id)}
-										<option value={session.id} selected={thread.sessionId === session.id}>
-											{session.title}
-										</option>
-									{/each}
-								</select>
-							</form>
-							<form method="POST" action="?/togglePin" use:enhance>
-								<input type="hidden" name="threadId" value={thread.id} />
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8"
-									type="submit"
-									title={thread.isPinned ? 'Unpin' : 'Pin'}
-								>
-									{#if thread.isPinned}
-										<PinOffIcon class="h-4 w-4" />
-									{:else}
-										<PinIcon class="h-4 w-4" />
-									{/if}
-								</Button>
-							</form>
-							<form method="POST" action="?/toggleLock" use:enhance>
-								<input type="hidden" name="threadId" value={thread.id} />
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8"
-									type="submit"
-									title={thread.isLocked ? 'Unlock' : 'Lock'}
-								>
-									{#if thread.isLocked}
-										<UnlockIcon class="h-4 w-4" />
-									{:else}
-										<LockIcon class="h-4 w-4" />
-									{/if}
-								</Button>
-							</form>
-							{#if thread.deletedAt}
-								<form method="POST" action="?/restore" use:enhance>
-									<input type="hidden" name="threadId" value={thread.id} />
-									<Button variant="ghost" size="icon" class="h-8 w-8" type="submit" title="Restore">
-										<RotateCcwIcon class="h-4 w-4" />
-									</Button>
-								</form>
-							{:else}
-								<form method="POST" action="?/softDelete" use:enhance>
-									<input type="hidden" name="threadId" value={thread.id} />
-									<Button
-										variant="ghost"
-										size="icon"
-										class="h-8 w-8 text-destructive hover:text-destructive"
-										type="submit"
-										title="Delete"
+	<section class="space-y-3">
+		<h2 class="text-lg font-semibold">Deleted Threads</h2>
+		<Card.Root>
+			<Card.Content class="p-0">
+				<div class="divide-y">
+					{#each data.deletedThreads as { thread, author } (thread.id)}
+						<div class="flex items-center justify-between gap-4 px-4 py-3">
+							<div class="min-w-0 flex-1">
+								<div class="flex items-center gap-2">
+									<a
+										href={resolve(`/thread/${thread.slug}`)}
+										class="truncate font-medium hover:underline"
 									>
-										<TrashIcon class="h-4 w-4" />
-									</Button>
-								</form>
-							{/if}
+										{thread.title}
+									</a>
+									<Badge variant="destructive" class="shrink-0">Deleted</Badge>
+								</div>
+								<div class="mt-0.5 text-sm text-muted-foreground">
+									by {author.displayName} · deleted {thread.deletedAt
+										? new Date(thread.deletedAt).toLocaleString()
+										: ''}
+								</div>
+							</div>
+							<ConfirmButton
+								confirmText="Restore this thread?"
+								formAction="?/restoreThread"
+								formData={{ threadId: thread.id }}
+								enhance={restoreEnhance}
+								variant="outline"
+								size="sm"
+							>
+								<RotateCcwIcon class="h-4 w-4" />
+								Restore
+							</ConfirmButton>
 						</div>
-					</div>
-				{/each}
-				{#if data.threads.length === 0}
-					<div class="py-12 text-center text-muted-foreground">
-						<p>No threads to moderate.</p>
-					</div>
-				{/if}
-			</div>
-		</Card.Content>
-	</Card.Root>
+					{:else}
+						<div class="py-8 text-center text-sm text-muted-foreground">
+							No deleted threads.
+						</div>
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
+	</section>
+
+	<section class="space-y-3">
+		<h2 class="text-lg font-semibold">Recently Deleted Posts</h2>
+		<p class="text-sm text-muted-foreground">
+			Posts deleted within the last 7 days can be restored.
+		</p>
+		<Card.Root>
+			<Card.Content class="p-0">
+				<div class="divide-y">
+					{#each data.deletedPosts as { post, thread, author } (post.id)}
+						<div class="flex items-start justify-between gap-4 px-4 py-3">
+							<div class="min-w-0 flex-1">
+								<div class="flex items-center gap-2">
+									<span class="text-sm text-muted-foreground">in</span>
+									<a
+										href={resolve(`/thread/${thread.slug}`)}
+										class="truncate text-sm font-medium hover:underline"
+									>
+										{thread.title}
+									</a>
+								</div>
+								<div class="mt-0.5 text-sm text-muted-foreground">
+									by {author.displayName} · deleted {post.deletedAt
+										? new Date(post.deletedAt).toLocaleString()
+										: ''}
+								</div>
+								<div class="prose prose-sm mt-2 max-w-none text-muted-foreground dark:prose-invert">
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									{@html post.bodyHtml}
+								</div>
+							</div>
+							<ConfirmButton
+								confirmText="Restore this post?"
+								formAction="?/restorePost"
+								formData={{ postId: post.id }}
+								enhance={restoreEnhance}
+								variant="outline"
+								size="sm"
+							>
+								<RotateCcwIcon class="h-4 w-4" />
+								Restore
+							</ConfirmButton>
+						</div>
+					{:else}
+						<div class="py-8 text-center text-sm text-muted-foreground">
+							No recently deleted posts.
+						</div>
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
+	</section>
 </div>

@@ -9,7 +9,8 @@ import {
 	books,
 	bookSources,
 	postBooks,
-	sessions
+	sessions,
+	moderationEvents
 } from '$lib/server/db/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
@@ -17,16 +18,15 @@ import { renderMarkdown } from '$lib/server/markdown';
 import { sendReplyNotificationEmail } from '$lib/server/email';
 import { detectBookLinks } from '$lib/server/book-links';
 
-// pnpm resolves two drizzle-orm copies (D1 vs libsql peer variants) whose private types
-// are structurally identical but nominally incompatible. The cast avoids the TS2345 mismatch.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _isNull: any = isNull;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _asc: any = asc;
+/** How long after posting a user can edit their own post or thread. */
+const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function canEditContent(authorId: string, createdAt: string, userId: string | undefined) {
+	if (!userId || authorId !== userId) return false;
+	const created = Date.parse(createdAt);
+	if (Number.isNaN(created)) return false;
+	return Date.now() - created < POST_EDIT_WINDOW_MS;
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -43,8 +43,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}
 		})
 		.from(threads)
-		.innerJoin(users, _eq(threads.authorUserId, users.id))
-		.where(_and(_eq(threads.slug, params.slug), _isNull(threads.deletedAt)))
+		.innerJoin(users, eq(threads.authorUserId, users.id))
+		.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
 		.get();
 
 	if (!thread) {
@@ -61,9 +61,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}
 		})
 		.from(posts)
-		.innerJoin(users, _eq(posts.authorUserId, users.id))
-		.where(_and(_eq(posts.threadId, thread.thread.id), _isNull(posts.deletedAt)))
-		.orderBy(_asc(posts.createdAt))
+		.innerJoin(users, eq(posts.authorUserId, users.id))
+		.where(and(eq(posts.threadId, thread.thread.id), isNull(posts.deletedAt)))
+		.orderBy(asc(posts.createdAt))
 		.all();
 
 	// Check if user is subscribed
@@ -71,7 +71,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select()
 		.from(subscriptions)
 		.where(
-			_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.thread.id))
+			and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.thread.id))
 		)
 		.get();
 
@@ -82,9 +82,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			postBook: postBooks
 		})
 		.from(postBooks)
-		.innerJoin(books, _eq(postBooks.bookId, books.id))
-		.where(_eq(postBooks.threadId, thread.thread.id))
-		.orderBy(_asc(postBooks.displayOrder))
+		.innerJoin(books, eq(postBooks.bookId, books.id))
+		.where(eq(postBooks.threadId, thread.thread.id))
+		.orderBy(asc(postBooks.displayOrder))
 		.all();
 
 	// Deduplicate books (same book might be linked from multiple posts)
@@ -103,9 +103,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		const row = await locals.db
 			.select({ id: sessions.id, slug: sessions.slug, title: sessions.title })
 			.from(sessions)
-			.where(_eq(sessions.id, thread.thread.sessionId))
+			.where(eq(sessions.id, thread.thread.sessionId))
 			.get();
 		session = row ?? null;
+	}
+
+	const canModerate = locals.permissions.has('moderate');
+	let allSessions: { id: string; title: string }[] = [];
+	if (canModerate) {
+		allSessions = await locals.db
+			.select({ id: sessions.id, title: sessions.title })
+			.from(sessions)
+			.orderBy(asc(sessions.title))
+			.all();
 	}
 
 	return {
@@ -114,7 +124,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		posts: threadPosts,
 		isSubscribed: !!subscription,
 		books: uniqueBooks,
-		session
+		session,
+		canModerate,
+		allSessions,
+		postEditWindowMs: POST_EDIT_WINDOW_MS
 	};
 };
 
@@ -136,7 +149,7 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(_and(_eq(threads.slug, params.slug), _isNull(threads.deletedAt)))
+			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
 			.get();
 
 		if (!thread) {
@@ -168,15 +181,13 @@ export const actions: Actions = {
 				lastPostAt: now,
 				updatedAt: now
 			})
-			.where(_eq(threads.id, thread.id));
+			.where(eq(threads.id, thread.id));
 
 		// Auto-subscribe the replier to the thread (if not already)
 		const existingSub = await locals.db
 			.select()
 			.from(subscriptions)
-			.where(
-				_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.id))
-			)
+			.where(and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id)))
 			.get();
 
 		if (!existingSub) {
@@ -197,9 +208,9 @@ export const actions: Actions = {
 				.select()
 				.from(bookSources)
 				.where(
-					_and(
-						_eq(bookSources.sourceType, link.sourceType),
-						_eq(bookSources.sourceKey, link.sourceKey)
+					and(
+						eq(bookSources.sourceType, link.sourceType),
+						eq(bookSources.sourceKey, link.sourceKey)
 					)
 				)
 				.get();
@@ -266,8 +277,8 @@ export const actions: Actions = {
 					email: users.email
 				})
 				.from(subscriptions)
-				.innerJoin(users, _eq(subscriptions.userId, users.id))
-				.where(_and(_eq(subscriptions.threadId, thread.id), _eq(subscriptions.mode, 'immediate')))
+				.innerJoin(users, eq(subscriptions.userId, users.id))
+				.where(and(eq(subscriptions.threadId, thread.id), eq(subscriptions.mode, 'immediate')))
 				.all();
 
 			const baseUrl = url.origin;
@@ -311,7 +322,7 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(_eq(threads.slug, params.slug))
+			.where(eq(threads.slug, params.slug))
 			.get();
 
 		if (!thread) {
@@ -321,14 +332,12 @@ export const actions: Actions = {
 		const existing = await locals.db
 			.select()
 			.from(subscriptions)
-			.where(
-				_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.id))
-			)
+			.where(and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id)))
 			.get();
 
 		if (existing) {
 			// Unsubscribe
-			await locals.db.delete(subscriptions).where(_eq(subscriptions.id, existing.id));
+			await locals.db.delete(subscriptions).where(eq(subscriptions.id, existing.id));
 		} else {
 			// Subscribe
 			await locals.db.insert(subscriptions).values({
@@ -340,5 +349,240 @@ export const actions: Actions = {
 		}
 
 		return { subscribed: !existing };
+	},
+
+	togglePin: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('moderate')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const threadId = data.get('threadId')?.toString();
+		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
+
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
+		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
+
+		const newPinned = thread.isPinned ? 0 : 1;
+		const now = new Date().toISOString();
+		await locals.db
+			.update(threads)
+			.set({ isPinned: newPinned, updatedAt: now })
+			.where(eq(threads.id, threadId));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user!.id,
+			targetType: 'thread',
+			targetId: threadId,
+			action: newPinned ? 'pin' : 'unpin'
+		});
+
+		return { success: true };
+	},
+
+	toggleLock: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('moderate')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const threadId = data.get('threadId')?.toString();
+		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
+
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
+		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
+
+		const newLocked = thread.isLocked ? 0 : 1;
+		const now = new Date().toISOString();
+		await locals.db
+			.update(threads)
+			.set({ isLocked: newLocked, updatedAt: now })
+			.where(eq(threads.id, threadId));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user!.id,
+			targetType: 'thread',
+			targetId: threadId,
+			action: newLocked ? 'lock' : 'unlock'
+		});
+
+		return { success: true };
+	},
+
+	linkSession: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('moderate')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const threadId = data.get('threadId')?.toString();
+		const rawSessionId = data.get('sessionId')?.toString();
+		const sessionId = rawSessionId && rawSessionId.length > 0 ? rawSessionId : null;
+		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
+
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
+		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
+
+		const now = new Date().toISOString();
+		await locals.db
+			.update(threads)
+			.set({ sessionId, updatedAt: now })
+			.where(eq(threads.id, threadId));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user!.id,
+			targetType: 'thread',
+			targetId: threadId,
+			action: sessionId ? 'link_session' : 'unlink_session',
+			reason: sessionId ?? undefined
+		});
+
+		return { success: true };
+	},
+
+	deleteThread: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('moderate')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const threadId = data.get('threadId')?.toString();
+		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
+
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
+		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
+
+		const now = new Date().toISOString();
+		await locals.db
+			.update(threads)
+			.set({ deletedAt: now, updatedAt: now })
+			.where(eq(threads.id, threadId));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user!.id,
+			targetType: 'thread',
+			targetId: threadId,
+			action: 'soft_delete'
+		});
+
+		throw redirect(303, '/');
+	},
+
+	deletePost: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('moderate')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const postId = data.get('postId')?.toString();
+		if (!postId) return fail(400, { error: 'Missing post ID.' });
+
+		const post = await locals.db.select().from(posts).where(eq(posts.id, postId)).get();
+		if (!post) return fail(404, { error: 'Post not found.' });
+
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(eq(threads.id, post.threadId))
+			.get();
+		if (!thread || thread.slug !== params.slug)
+			return fail(404, { error: 'Post not in this thread.' });
+
+		const now = new Date().toISOString();
+		await locals.db
+			.update(posts)
+			.set({ deletedAt: now, updatedAt: now })
+			.where(eq(posts.id, postId));
+
+		await locals.db
+			.update(threads)
+			.set({ replyCount: Math.max(0, thread.replyCount - 1), updatedAt: now })
+			.where(eq(threads.id, thread.id));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user!.id,
+			targetType: 'post',
+			targetId: postId,
+			action: 'soft_delete'
+		});
+
+		return { success: true };
+	},
+
+	editThread: async ({ request, locals, params }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const data = await request.formData();
+		const body = data.get('body')?.toString()?.trim();
+		if (!body) {
+			return fail(400, { error: 'Content cannot be empty.' });
+		}
+
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.get();
+		if (!thread) throw error(404, 'Thread not found');
+
+		if (!canEditContent(thread.authorUserId, thread.createdAt, locals.user.id)) {
+			return fail(403, { error: 'Edit window has passed.' });
+		}
+
+		const bodyHtml = renderMarkdown(body);
+		const now = new Date().toISOString();
+		await locals.db
+			.update(threads)
+			.set({ bodySource: body, bodyHtml, updatedAt: now })
+			.where(eq(threads.id, thread.id));
+
+		return { edited: true };
+	},
+
+	editPost: async ({ request, locals, params }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const data = await request.formData();
+		const postId = data.get('postId')?.toString();
+		const body = data.get('body')?.toString()?.trim();
+		if (!postId) return fail(400, { error: 'Missing post ID.' });
+		if (!body) return fail(400, { error: 'Content cannot be empty.' });
+
+		const post = await locals.db.select().from(posts).where(eq(posts.id, postId)).get();
+		if (!post) return fail(404, { error: 'Post not found.' });
+
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(eq(threads.id, post.threadId))
+			.get();
+		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Post not found.' });
+
+		if (!canEditContent(post.authorUserId, post.createdAt, locals.user.id)) {
+			return fail(403, { error: 'Edit window has passed.' });
+		}
+
+		const bodyHtml = renderMarkdown(body);
+		const now = new Date().toISOString();
+		await locals.db
+			.update(posts)
+			.set({
+				bodySource: body,
+				bodyHtml,
+				editCount: post.editCount + 1,
+				updatedAt: now
+			})
+			.where(eq(posts.id, postId));
+
+		return { edited: true };
 	}
 };

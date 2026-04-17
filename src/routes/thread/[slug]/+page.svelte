@@ -6,26 +6,99 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import BookCard from '$lib/components/BookCard.svelte';
+	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import BellIcon from '@lucide/svelte/icons/bell';
 	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import PinIcon from '@lucide/svelte/icons/pin';
+	import PinOffIcon from '@lucide/svelte/icons/pin-off';
 	import LockIcon from '@lucide/svelte/icons/lock';
+	import UnlockIcon from '@lucide/svelte/icons/lock-open';
 	import ReplyIcon from '@lucide/svelte/icons/reply';
 	import GlobeIcon from '@lucide/svelte/icons/globe';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import ShieldIcon from '@lucide/svelte/icons/shield';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import TrashIcon from '@lucide/svelte/icons/trash-2';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
 	let replyBody = $state('');
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
 
+	/** Post id currently being edited (empty string = editing the thread opener) */
+	let editingId = $state<string | null>(null);
+	let editBody = $state('');
+	let editSaving = $state(false);
+
+	const currentUserId = $derived(data.user?.id ?? null);
+	const editWindowMs = $derived(data.postEditWindowMs ?? 24 * 60 * 60 * 1000);
+
+	function canEdit(authorId: string, createdAt: string): boolean {
+		if (!currentUserId || currentUserId !== authorId) return false;
+		const created = Date.parse(createdAt);
+		if (Number.isNaN(created)) return false;
+		return Date.now() - created < editWindowMs;
+	}
+
+	function startEditThread() {
+		editingId = '';
+		editBody = data.thread.bodySource;
+	}
+
+	function startEditPost(postId: string, bodySource: string) {
+		editingId = postId;
+		editBody = bodySource;
+	}
+
+	function cancelEdit() {
+		editingId = null;
+		editBody = '';
+	}
+
 	function getInitial(name: string) {
 		return name.charAt(0).toUpperCase();
 	}
+
+	const editEnhance: SubmitFunction = () => {
+		editSaving = true;
+		return async ({ result, update }) => {
+			editSaving = false;
+			await update();
+			if (result.type === 'success' && result.data?.edited) {
+				toast.success('Updated.');
+				editingId = null;
+				editBody = '';
+			}
+		};
+	};
+
+	const modEnhance: (msg: string) => SubmitFunction = (msg) => () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				toast.success(msg);
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
+
+	const deletePostEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				toast.success('Post deleted.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -94,6 +167,94 @@
 			</div>
 		</div>
 
+		<!-- Moderation widget -->
+		{#if data.canModerate}
+			<Card.Root class="border-dashed">
+				<Card.Content class="flex flex-wrap items-center gap-3 px-4 text-sm">
+					<div class="flex items-center gap-2 text-muted-foreground">
+						<ShieldIcon class="h-4 w-4" />
+						<span class="font-medium">Moderator</span>
+					</div>
+
+					<form
+						method="POST"
+						action="?/togglePin"
+						use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
+					>
+						<input type="hidden" name="threadId" value={data.thread.id} />
+						<Button variant="outline" size="sm" type="submit">
+							{#if data.thread.isPinned}
+								<PinOffIcon class="h-4 w-4" />
+								Unpin
+							{:else}
+								<PinIcon class="h-4 w-4" />
+								Pin
+							{/if}
+						</Button>
+					</form>
+
+					<form
+						method="POST"
+						action="?/toggleLock"
+						use:enhance={modEnhance(data.thread.isLocked ? 'Unlocked.' : 'Locked.')}
+					>
+						<input type="hidden" name="threadId" value={data.thread.id} />
+						<Button variant="outline" size="sm" type="submit">
+							{#if data.thread.isLocked}
+								<UnlockIcon class="h-4 w-4" />
+								Unlock
+							{:else}
+								<LockIcon class="h-4 w-4" />
+								Lock
+							{/if}
+						</Button>
+					</form>
+
+					<form
+						method="POST"
+						action="?/linkSession"
+						use:enhance={modEnhance('Session link updated.')}
+						class="inline-flex items-center gap-2"
+					>
+						<input type="hidden" name="threadId" value={data.thread.id} />
+						<label for="session-select" class="flex items-center gap-1 text-muted-foreground">
+							<CalendarIcon class="h-4 w-4" />
+							Session
+						</label>
+						<select
+							id="session-select"
+							name="sessionId"
+							class="rounded-lg border border-input bg-transparent pr-10 pl-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+							onchange={(e) => {
+								(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+							}}
+						>
+							<option value="" selected={!data.thread.sessionId}>No session</option>
+							{#each data.allSessions as session (session.id)}
+								<option value={session.id} selected={data.thread.sessionId === session.id}>
+									{session.title}
+								</option>
+							{/each}
+						</select>
+					</form>
+
+					<div class="ml-auto">
+						<ConfirmButton
+							confirmText="Delete this thread?"
+							formAction="?/deleteThread"
+							formData={{ threadId: data.thread.id }}
+							variant="outline"
+							size="sm"
+							class="text-destructive hover:text-destructive"
+						>
+							<TrashIcon class="h-4 w-4" />
+							Delete Thread
+						</ConfirmButton>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		{/if}
+
 		<!-- Thread body (the opening post) -->
 		<Card.Root>
 			<Card.Content class="pt-4">
@@ -110,11 +271,42 @@
 							<span class="text-xs text-muted-foreground"
 								>{new Date(data.thread.createdAt).toLocaleString()}</span
 							>
+							{#if editingId !== '' && canEdit(data.author.id, data.thread.createdAt)}
+								<button
+									type="button"
+									class="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
+									onclick={startEditThread}
+								>
+									<PencilIcon class="mr-1 inline h-3 w-3" />
+									Edit
+								</button>
+							{/if}
 						</div>
-						<div class="prose prose-sm max-w-none dark:prose-invert">
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							{@html data.thread.bodyHtml}
-						</div>
+						{#if editingId === ''}
+							<form method="POST" action="?/editThread" use:enhance={editEnhance} class="space-y-2">
+								<Textarea name="body" rows={6} bind:value={editBody} required />
+								<div class="flex justify-end gap-2">
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										onclick={cancelEdit}
+										disabled={editSaving}
+									>
+										<XIcon class="h-4 w-4" />
+										Cancel
+									</Button>
+									<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
+										{editSaving ? 'Saving…' : 'Save'}
+									</Button>
+								</div>
+							</form>
+						{:else}
+							<div class="prose prose-sm max-w-none dark:prose-invert">
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html data.thread.bodyHtml}
+							</div>
+						{/if}
 					</div>
 				</div>
 			</Card.Content>
@@ -146,6 +338,9 @@
 										<span class="text-xs text-muted-foreground"
 											>{new Date(post.createdAt).toLocaleString()}</span
 										>
+										{#if post.editCount > 0}
+											<span class="text-xs text-muted-foreground italic">(edited)</span>
+										{/if}
 										{#if post.parentPostId}
 											<a
 												href="#post-{post.parentPostId}"
@@ -155,21 +350,74 @@
 											</a>
 										{/if}
 									</div>
-									<div class="prose prose-sm max-w-none dark:prose-invert">
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-										{@html post.bodyHtml}
-									</div>
-									{#if !data.thread.isLocked}
-										<button
-											type="button"
-											class="mt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-											onclick={() => {
-												replyingTo = replyingTo === post.id ? null : post.id;
-											}}
+									{#if editingId === post.id}
+										<form
+											method="POST"
+											action="?/editPost"
+											use:enhance={editEnhance}
+											class="space-y-2"
 										>
-											<ReplyIcon class="mr-1 inline h-3 w-3" />
-											Reply
-										</button>
+											<input type="hidden" name="postId" value={post.id} />
+											<Textarea name="body" rows={4} bind:value={editBody} required />
+											<div class="flex justify-end gap-2">
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													onclick={cancelEdit}
+													disabled={editSaving}
+												>
+													<XIcon class="h-4 w-4" />
+													Cancel
+												</Button>
+												<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
+													{editSaving ? 'Saving…' : 'Save'}
+												</Button>
+											</div>
+										</form>
+									{:else}
+										<div class="prose prose-sm max-w-none dark:prose-invert">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											{@html post.bodyHtml}
+										</div>
+										<div class="mt-2 flex flex-wrap items-center gap-3">
+											{#if !data.thread.isLocked}
+												<button
+													type="button"
+													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
+													onclick={() => {
+														replyingTo = replyingTo === post.id ? null : post.id;
+													}}
+												>
+													<ReplyIcon class="mr-1 inline h-3 w-3" />
+													Reply
+												</button>
+											{/if}
+											{#if canEdit(author.id, post.createdAt)}
+												<button
+													type="button"
+													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
+													onclick={() => startEditPost(post.id, post.bodySource)}
+												>
+													<PencilIcon class="mr-1 inline h-3 w-3" />
+													Edit
+												</button>
+											{/if}
+											{#if data.canModerate}
+												<ConfirmButton
+													confirmText="Delete this post?"
+													formAction="?/deletePost"
+													formData={{ postId: post.id }}
+													enhance={deletePostEnhance}
+													variant="ghost"
+													size="sm"
+													class="h-auto px-0 py-0 text-xs text-muted-foreground hover:bg-transparent hover:text-destructive"
+												>
+													<TrashIcon class="mr-1 inline h-3 w-3" />
+													Delete
+												</ConfirmButton>
+											{/if}
+										</div>
 									{/if}
 								</div>
 							</div>

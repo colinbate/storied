@@ -4,11 +4,12 @@ import type { ORM } from './db';
 import { users, authMagicLinks, userSessions } from './db/schema';
 import { error, type RequestEvent } from '@sveltejs/kit';
 
+const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
-export { SESSION_COOKIE_NAME };
+export { SESSION_COOKIE_NAME, REDIR_COOKIE_NAME };
 
 /** Hash a token using Web Crypto (available in CF Workers) */
 async function hashToken(token: string): Promise<string> {
@@ -76,9 +77,18 @@ export async function verifyMagicLink(
 }
 
 /** Create or find a user by email. If new, creates with 'active' status and the email as display name. */
+export type UserRole = 'member' | 'moderator' | 'admin';
+
+export const USER_ROLES: UserRole[] = ['member', 'moderator', 'admin'];
+
+export function isUserRole(value: unknown): value is UserRole {
+	return typeof value === 'string' && (USER_ROLES as string[]).includes(value);
+}
+
 export async function findOrCreateUser(
 	db: ORM,
-	email: string
+	email: string,
+	role: UserRole = 'member'
 ): Promise<{ id: string; isNew: boolean }> {
 	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
 	if (existing) return { id: existing.id, isNew: false };
@@ -89,7 +99,7 @@ export async function findOrCreateUser(
 		id,
 		email: email.toLowerCase(),
 		displayName,
-		role: 'member',
+		role,
 		status: 'active'
 	});
 

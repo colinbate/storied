@@ -4,20 +4,26 @@ import {
 	verifyMagicLink,
 	findOrCreateUser,
 	createSession,
-	SESSION_COOKIE_NAME
+	SESSION_COOKIE_NAME,
+	REDIR_COOKIE_NAME
 } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	const token = url.searchParams.get('token');
 
 	if (!token) {
-		throw redirect(302, '/auth/login?error=missing_token');
+		redirect(302, '/auth/login?error=missing_token');
 	}
 
 	const result = await verifyMagicLink(locals.db, token);
 
 	if (!result) {
-		throw redirect(302, '/auth/login?error=invalid_token');
+		redirect(302, '/auth/login?error=invalid_token');
+	}
+
+	const redir = cookies.get(REDIR_COOKIE_NAME);
+	if (redir) {
+		cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
 	}
 
 	// Find or create the user
@@ -34,5 +40,8 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		expires: session.expiresAt
 	});
 
-	throw redirect(302, '/');
+	if (redir && redir.startsWith('/')) {
+		redirect(302, redir);
+	}
+	redirect(302, '/');
 };

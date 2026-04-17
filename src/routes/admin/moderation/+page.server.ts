@@ -1,13 +1,27 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { threads, users, moderationEvents, sessions } from '$lib/server/db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { threads, posts, users, moderationEvents } from '$lib/server/db/schema';
+import { eq, desc, isNotNull, and, gte } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { requirePermission } from '$lib/server/auth';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _eq: any = eq;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _and: any = and;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _desc: any = desc;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _isNotNull: any = isNotNull;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _gte: any = gte;
+
+const RECENT_POST_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'moderate');
-	const allThreads = await locals.db
+
+	const deletedThreads = await locals.db
 		.select({
 			thread: threads,
 			author: {
@@ -16,71 +30,38 @@ export const load: PageServerLoad = async ({ locals }) => {
 			}
 		})
 		.from(threads)
-		.innerJoin(users, eq(threads.authorUserId, users.id))
-		.orderBy(desc(threads.createdAt))
+		.innerJoin(users, _eq(threads.authorUserId, users.id))
+		.where(_isNotNull(threads.deletedAt))
+		.orderBy(_desc(threads.deletedAt))
 		.all();
 
-	const allSessions = await locals.db.select().from(sessions).orderBy(asc(sessions.title)).all();
+	const cutoffIso = new Date(Date.now() - RECENT_POST_WINDOW_MS).toISOString();
 
-	return { threads: allThreads, sessions: allSessions };
+	const deletedPosts = await locals.db
+		.select({
+			post: posts,
+			thread: {
+				id: threads.id,
+				slug: threads.slug,
+				title: threads.title
+			},
+			author: {
+				id: users.id,
+				displayName: users.displayName
+			}
+		})
+		.from(posts)
+		.innerJoin(threads, _eq(posts.threadId, threads.id))
+		.innerJoin(users, _eq(posts.authorUserId, users.id))
+		.where(_and(_isNotNull(posts.deletedAt), _gte(posts.deletedAt, cutoffIso)))
+		.orderBy(_desc(posts.deletedAt))
+		.all();
+
+	return { deletedThreads, deletedPosts };
 };
 
 export const actions: Actions = {
-	toggleLock: async ({ request, locals }) => {
-		requirePermission(locals, 'moderate');
-
-		const data = await request.formData();
-		const threadId = data.get('threadId')?.toString();
-		if (!threadId) return fail(400, { error: 'Missing thread ID' });
-
-		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
-		if (!thread) return fail(404, { error: 'Thread not found' });
-
-		const newLocked = thread.isLocked ? 0 : 1;
-		await locals.db
-			.update(threads)
-			.set({ isLocked: newLocked, updatedAt: new Date().toISOString() })
-			.where(eq(threads.id, threadId));
-
-		await locals.db.insert(moderationEvents).values({
-			id: newId(),
-			actorUserId: locals.user!.id,
-			targetType: 'thread',
-			targetId: threadId,
-			action: newLocked ? 'lock' : 'unlock'
-		});
-
-		return { success: true };
-	},
-
-	togglePin: async ({ request, locals }) => {
-		requirePermission(locals, 'moderate');
-
-		const data = await request.formData();
-		const threadId = data.get('threadId')?.toString();
-		if (!threadId) return fail(400, { error: 'Missing thread ID' });
-
-		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
-		if (!thread) return fail(404, { error: 'Thread not found' });
-
-		const newPinned = thread.isPinned ? 0 : 1;
-		await locals.db
-			.update(threads)
-			.set({ isPinned: newPinned, updatedAt: new Date().toISOString() })
-			.where(eq(threads.id, threadId));
-
-		await locals.db.insert(moderationEvents).values({
-			id: newId(),
-			actorUserId: locals.user!.id,
-			targetType: 'thread',
-			targetId: threadId,
-			action: newPinned ? 'pin' : 'unpin'
-		});
-
-		return { success: true };
-	},
-
-	softDelete: async ({ request, locals }) => {
+	restoreThread: async ({ request, locals }) => {
 		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
@@ -90,62 +71,54 @@ export const actions: Actions = {
 		const now = new Date().toISOString();
 		await locals.db
 			.update(threads)
-			.set({ deletedAt: now, updatedAt: now })
-			.where(eq(threads.id, threadId));
+			.set({ deletedAt: null, updatedAt: now })
+			.where(_eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
 			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
-			action: 'soft_delete'
+			action: 'restore'
 		});
 
 		return { success: true };
 	},
 
-	linkSession: async ({ request, locals }) => {
+	restorePost: async ({ request, locals }) => {
 		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
-		const threadId = data.get('threadId')?.toString();
-		const sessionId = data.get('sessionId')?.toString() || null;
-		if (!threadId) return fail(400, { error: 'Missing thread ID' });
+		const postId = data.get('postId')?.toString();
+		if (!postId) return fail(400, { error: 'Missing post ID' });
 
+		const post = await locals.db.select().from(posts).where(_eq(posts.id, postId)).get();
+		if (!post) return fail(404, { error: 'Post not found' });
+
+		const now = new Date().toISOString();
 		await locals.db
-			.update(threads)
-			.set({ sessionId: sessionId || null, updatedAt: new Date().toISOString() })
-			.where(eq(threads.id, threadId));
+			.update(posts)
+			.set({ deletedAt: null, updatedAt: now })
+			.where(_eq(posts.id, postId));
+
+		// Re-increment thread reply count
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(_eq(threads.id, post.threadId))
+			.get();
+		if (thread) {
+			await locals.db
+				.update(threads)
+				.set({ replyCount: thread.replyCount + 1, updatedAt: now })
+				.where(_eq(threads.id, thread.id));
+		}
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
 			actorUserId: locals.user!.id,
-			targetType: 'thread',
-			targetId: threadId,
-			action: sessionId ? 'link_session' : 'unlink_session',
-			reason: sessionId ?? undefined
-		});
-
-		return { success: true };
-	},
-
-	restore: async ({ request, locals }) => {
-		requirePermission(locals, 'moderate');
-
-		const data = await request.formData();
-		const threadId = data.get('threadId')?.toString();
-		if (!threadId) return fail(400, { error: 'Missing thread ID' });
-
-		await locals.db
-			.update(threads)
-			.set({ deletedAt: null, updatedAt: new Date().toISOString() })
-			.where(eq(threads.id, threadId));
-
-		await locals.db.insert(moderationEvents).values({
-			id: newId(),
-			actorUserId: locals.user!.id,
-			targetType: 'thread',
-			targetId: threadId,
+			targetType: 'post',
+			targetId: postId,
 			action: 'restore'
 		});
 
