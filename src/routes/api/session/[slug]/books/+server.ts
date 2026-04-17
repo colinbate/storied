@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sessions, sessionSubjects, books, userSubjects } from '$lib/server/db/schema';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, isNull } from 'drizzle-orm';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _eq: any = eq;
@@ -9,6 +9,8 @@ const _eq: any = eq;
 const _and: any = and;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _count: any = count;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _isNull: any = isNull;
 
 const SUBJECT = 'book';
 
@@ -31,7 +33,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		.where(
 			_and(
 				_eq(sessionSubjects.sessionId, session.id),
-				_eq(sessionSubjects.subjectType, SUBJECT)
+				_eq(sessionSubjects.subjectType, SUBJECT),
+				_isNull(books.deletedAt)
 			)
 		)
 		.all();

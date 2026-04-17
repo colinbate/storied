@@ -15,7 +15,7 @@ const SUBJECT = 'book';
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
-	if (!book) throw error(404, 'Book not found');
+	if (!book || book.deletedAt) throw error(404, 'Book not found');
 
 	const [recCount] = await locals.db
 		.select({ count: _count() })

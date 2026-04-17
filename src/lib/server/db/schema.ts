@@ -301,10 +301,15 @@ export const books = sqliteTable(
 		goodreadsUrl: text('goodreads_url'),
 		firstPublishYear: integer('first_publish_year'),
 		description: text('description'),
+		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
-	(table) => [index('idx_books_slug').on(table.slug), index('idx_books_title').on(table.title)]
+	(table) => [
+		index('idx_books_slug').on(table.slug),
+		index('idx_books_title').on(table.title),
+		index('idx_books_deleted_at').on(table.deletedAt)
+	]
 );
 
 // ──────────────────────────────────────────────
@@ -324,10 +329,15 @@ export const series = sqliteTable(
 		/** 0 = ongoing, 1 = complete */
 		isComplete: integer('is_complete').notNull().default(0),
 		bookCount: integer('book_count'),
+		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
-	(table) => [index('idx_series_slug').on(table.slug), index('idx_series_title').on(table.title)]
+	(table) => [
+		index('idx_series_slug').on(table.slug),
+		index('idx_series_title').on(table.title),
+		index('idx_series_deleted_at').on(table.deletedAt)
+	]
 );
 
 // ──────────────────────────────────────────────

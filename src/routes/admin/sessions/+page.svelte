@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -9,6 +10,7 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import XIcon from '@lucide/svelte/icons/x';
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -213,15 +215,26 @@
 									<span class="font-mono text-xs text-muted-foreground/60">{session.slug}</span>
 								</div>
 							</div>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								onclick={() => {
-									editingId = session.id;
-								}}
-							>
-								<PencilIcon class="h-4 w-4" />
-							</Button>
+							<div class="flex items-center gap-1">
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									href={resolve('/admin/sessions/[slug]', { slug: session.slug })}
+									title="Details"
+								>
+									<ExternalLinkIcon class="h-4 w-4" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									onclick={() => {
+										editingId = session.id;
+									}}
+									title="Edit"
+								>
+									<PencilIcon class="h-4 w-4" />
+								</Button>
+							</div>
 						</div>
 					{/if}
 				{:else}

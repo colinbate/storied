@@ -95,14 +95,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		? await locals.db
 				.select()
 				.from(books)
-				.where(inArray(books.id, linkedBookIds))
+				.where(and(inArray(books.id, linkedBookIds), isNull(books.deletedAt)))
 				.all()
 		: [];
 	const seriesRows = linkedSeriesIds.length
 		? await locals.db
 				.select()
 				.from(series)
-				.where(inArray(series.id, linkedSeriesIds))
+				.where(and(inArray(series.id, linkedSeriesIds), isNull(series.deletedAt)))
 				.all()
 		: [];
 

@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
 
-	if (!book) {
+	if (!book || book.deletedAt) {
 		throw error(404, 'Book not found');
 	}
 

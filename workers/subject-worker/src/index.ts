@@ -18,6 +18,23 @@ interface SubjectResolveMessage {
 	sourceKey: string;
 	threadId?: string;
 	postId?: string;
+	sessionLink?: {
+		sessionId: string;
+		status: string;
+		note?: string | null;
+		addedByUserId?: string | null;
+	};
+	/**
+	 * If set, once the subject resolves we'll add a series_books row.
+	 * For a book URL: seriesId is provided, bookId is filled in from the resolved book.
+	 * For a series URL: bookId is provided, seriesId is filled in from the resolved series.
+	 */
+	seriesBookLink?: {
+		seriesId?: string;
+		bookId?: string;
+		position?: string | null;
+		positionSort?: number | null;
+	};
 }
 
 interface GoodreadsBookMetadata {
@@ -317,12 +334,86 @@ async function linkThreadSubject(
 		.run();
 }
 
+async function linkSessionSubject(
+	db: D1Database,
+	subjectType: SubjectType,
+	subjectId: string,
+	sessionLink?: {
+		sessionId: string;
+		status: string;
+		note?: string | null;
+		addedByUserId?: string | null;
+	}
+): Promise<void> {
+	if (!sessionLink) return;
+
+	const now = new Date().toISOString();
+	await db
+		.prepare(
+			`INSERT OR IGNORE INTO session_subjects (session_id, subject_type, subject_id, status, note, added_by_user_id, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.bind(
+			sessionLink.sessionId,
+			subjectType,
+			subjectId,
+			sessionLink.status,
+			sessionLink.note ?? null,
+			sessionLink.addedByUserId ?? null,
+			now,
+			now
+		)
+		.run();
+}
+
+async function linkSeriesBook(
+	db: D1Database,
+	resolvedKind: SubjectType,
+	resolvedId: string,
+	seriesBookLink?: {
+		seriesId?: string;
+		bookId?: string;
+		position?: string | null;
+		positionSort?: number | null;
+	}
+): Promise<void> {
+	if (!seriesBookLink) return;
+
+	let seriesId: string | undefined;
+	let bookId: string | undefined;
+	if (resolvedKind === 'book') {
+		seriesId = seriesBookLink.seriesId;
+		bookId = resolvedId;
+	} else if (resolvedKind === 'series') {
+		seriesId = resolvedId;
+		bookId = seriesBookLink.bookId;
+	}
+	if (!seriesId || !bookId) return;
+
+	const now = new Date().toISOString();
+	await db
+		.prepare(
+			`INSERT OR IGNORE INTO series_books (series_id, book_id, position, position_sort, linked_at)
+				VALUES (?, ?, ?, ?, ?)`
+		)
+		.bind(
+			seriesId,
+			bookId,
+			seriesBookLink.position ?? null,
+			seriesBookLink.positionSort ?? null,
+			now
+		)
+		.run();
+}
+
 async function resolveGoodreadsBook(
 	subjectSourceId: string,
 	sourceUrl: string,
 	env: Env,
 	threadId?: string,
-	postId?: string
+	postId?: string,
+	sessionLink?: SubjectResolveMessage['sessionLink'],
+	seriesBookLink?: SubjectResolveMessage['seriesBookLink']
 ): Promise<{ ok: boolean; subjectId?: string; error?: string }> {
 	const metadata = await scrapeGoodreadsBook(sourceUrl);
 	if (!metadata) {
@@ -381,6 +472,8 @@ async function resolveGoodreadsBook(
 		.run();
 
 	await linkThreadSubject(env.DB, 'book', bookId, threadId, postId);
+	await linkSessionSubject(env.DB, 'book', bookId, sessionLink);
+	await linkSeriesBook(env.DB, 'book', bookId, seriesBookLink);
 	return { ok: true, subjectId: bookId };
 }
 
@@ -389,7 +482,9 @@ async function resolveGoodreadsSeries(
 	sourceUrl: string,
 	env: Env,
 	threadId?: string,
-	postId?: string
+	postId?: string,
+	sessionLink?: SubjectResolveMessage['sessionLink'],
+	seriesBookLink?: SubjectResolveMessage['seriesBookLink']
 ): Promise<{ ok: boolean; subjectId?: string; error?: string }> {
 	const metadata = await scrapeGoodreadsSeries(sourceUrl);
 	if (!metadata) {
@@ -449,6 +544,8 @@ async function resolveGoodreadsSeries(
 		.run();
 
 	await linkThreadSubject(env.DB, 'series', seriesId, threadId, postId);
+	await linkSessionSubject(env.DB, 'series', seriesId, sessionLink);
+	await linkSeriesBook(env.DB, 'series', seriesId, seriesBookLink);
 	return { ok: true, subjectId: seriesId };
 }
 
@@ -470,7 +567,15 @@ async function resolveSubjectSource(
 	msg: Message<SubjectResolveMessage>,
 	env: Env
 ): Promise<{ ok: boolean; subjectId?: string; error?: string }> {
-	const { subjectSourceId, sourceType, sourceUrl, threadId, postId } = msg.body;
+	const {
+		subjectSourceId,
+		sourceType,
+		sourceUrl,
+		threadId,
+		postId,
+		sessionLink,
+		seriesBookLink
+	} = msg.body;
 
 	try {
 		const source = await env.DB.prepare(
@@ -490,7 +595,7 @@ async function resolveSubjectSource(
 			return { ok: false, error: 'Source not found' };
 		}
 
-		// Already resolved — just link to the thread if needed.
+		// Already resolved — just link to any pending side-effects (thread/session/series).
 		if (source.fetch_status === 'resolved' && source.subject_type && source.subject_id) {
 			await linkThreadSubject(
 				env.DB,
@@ -499,15 +604,43 @@ async function resolveSubjectSource(
 				threadId,
 				postId
 			);
+			await linkSessionSubject(
+				env.DB,
+				source.subject_type as SubjectType,
+				source.subject_id,
+				sessionLink
+			);
+			await linkSeriesBook(
+				env.DB,
+				source.subject_type as SubjectType,
+				source.subject_id,
+				seriesBookLink
+			);
 			msg.ack();
 			return { ok: true, subjectId: source.subject_id };
 		}
 
 		let result: { ok: boolean; subjectId?: string; error?: string };
 		if (sourceType === 'goodreads') {
-			result = await resolveGoodreadsBook(subjectSourceId, sourceUrl, env, threadId, postId);
+			result = await resolveGoodreadsBook(
+				subjectSourceId,
+				sourceUrl,
+				env,
+				threadId,
+				postId,
+				sessionLink,
+				seriesBookLink
+			);
 		} else if (sourceType === 'goodreads-series') {
-			result = await resolveGoodreadsSeries(subjectSourceId, sourceUrl, env, threadId, postId);
+			result = await resolveGoodreadsSeries(
+				subjectSourceId,
+				sourceUrl,
+				env,
+				threadId,
+				postId,
+				sessionLink,
+				seriesBookLink
+			);
 		} else {
 			console.log(`[RESOLVER] Unknown source type: ${sourceType}`);
 			msg.ack();
