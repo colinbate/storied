@@ -5,16 +5,25 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
+	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import UploadIcon from '@lucide/svelte/icons/upload';
 	import { toast } from 'svelte-sonner';
 
 	let { data, form } = $props();
 	let loading = $state(false);
+	let avatarLoading = $state(false);
+	let avatarPreview: string | null = $state(null);
 
-	$effect(() => {
-		if (form?.success) {
-			toast.success('Profile updated!');
+	function handleFileChange(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (file) {
+			const url = URL.createObjectURL(file);
+			avatarPreview = url;
+		} else {
+			avatarPreview = null;
 		}
-	});
+	}
 </script>
 
 <svelte:head>
@@ -38,9 +47,12 @@
 				action="?/updateProfile"
 				use:enhance={() => {
 					loading = true;
-					return async ({ update }) => {
+					return async ({ result, update }) => {
 						loading = false;
 						await update();
+						if (result.type === 'success') {
+							toast.success('Profile updated!');
+						}
 					};
 				}}
 				class="space-y-4"
@@ -73,8 +85,63 @@
 
 	<Card.Root>
 		<Card.Header>
+			<Card.Title>Avatar</Card.Title>
+			<Card.Description>Upload a profile picture. PNG, JPG, or WEBP, max 1MB.</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/uploadAvatar"
+				enctype="multipart/form-data"
+				use:enhance={() => {
+					avatarLoading = true;
+					return async ({ result, update }) => {
+						avatarLoading = false;
+						await update();
+						if (result.type === 'success') {
+							toast.success('Avatar updated!');
+							avatarPreview = null;
+						}
+					};
+				}}
+				class="space-y-4"
+			>
+				<div class="flex items-center gap-4">
+					<Avatar.Root class="h-16 w-16" size="lg">
+						{#if avatarPreview}
+							<Avatar.Image src={avatarPreview} alt="Preview" />
+						{:else if data.user.avatarUrl}
+							<Avatar.Image src={data.user.avatarUrl} alt={data.user.displayName} />
+						{/if}
+						<Avatar.Fallback class="text-lg"
+							>{data.user.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
+						>
+					</Avatar.Root>
+					<div class="flex-1 space-y-2">
+						<Label for="avatar">Image file</Label>
+						<Input
+							id="avatar"
+							name="avatar"
+							type="file"
+							accept="image/png,image/jpeg,image/webp"
+							onchange={handleFileChange}
+						/>
+					</div>
+				</div>
+				{#if form?.avatarError}
+					<p class="text-sm text-destructive">{form.avatarError}</p>
+				{/if}
+				<Button type="submit" disabled={avatarLoading}>
+					<UploadIcon />
+					{avatarLoading ? 'Uploading…' : 'Upload Avatar'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
 			<Card.Title>Account</Card.Title>
-			<Card.Description>Manage your account.</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<p class="mb-3 text-sm text-muted-foreground">

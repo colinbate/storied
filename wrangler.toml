@@ -17,12 +17,19 @@ migrations_dir = "migrations"
 
 [vars]
 SEND_EMAILS = ""
+FILE_BASE_URL = "https://assets.bermudatrianglesociety.com"
 
-
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "storied"
 
 [[routes]]
 pattern = "discuss.bermudatrianglesociety.com"
 custom_domain = true
+
+[[queues.producers]]
+binding = "BOOK_QUEUE"
+queue = "storied-book-resolve"
 
 [[send_email]]
 name = "EMAIL"

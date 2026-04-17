@@ -3,6 +3,8 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import { resolve } from '$app/paths';
 
 	let { children } = $props();
@@ -10,7 +12,9 @@
 	const navItems = [
 		{ href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
 		{ href: '/admin/members', label: 'Members', icon: UsersIcon },
-		{ href: '/admin/moderation', label: 'Moderation', icon: ShieldIcon }
+		{ href: '/admin/moderation', label: 'Moderation', icon: ShieldIcon },
+		{ href: '/admin/sessions', label: 'Sessions', icon: CalendarIcon },
+		{ href: '/admin/books', label: 'Books', icon: BookOpenIcon }
 	] as const;
 </script>
 

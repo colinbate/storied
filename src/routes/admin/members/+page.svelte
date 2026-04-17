@@ -12,13 +12,6 @@
 	let loading = $state(false);
 	let showAddForm = $state(false);
 
-	$effect(() => {
-		if (form?.memberAdded) {
-			toast.success(`Member ${form.addedEmail} added!`);
-			showAddForm = false;
-		}
-	});
-
 	function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
 		if (role === 'admin') return 'default';
 		if (role === 'moderator') return 'secondary';
@@ -58,9 +51,13 @@
 					action="?/addMember"
 					use:enhance={() => {
 						loading = true;
-						return async ({ update }) => {
+						return async ({ result, update }) => {
 							loading = false;
 							await update();
+							if (result.type === 'success' && result.data?.memberAdded) {
+								toast.success(`Member ${result.data.addedEmail} added!`);
+								showAddForm = false;
+							}
 						};
 					}}
 					class="flex items-end gap-3"

@@ -9,7 +9,9 @@
 	import UnlockIcon from '@lucide/svelte/icons/lock-open';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { resolve } from '$app/paths';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 </script>
@@ -44,11 +46,41 @@
 									<Badge variant="destructive" class="shrink-0">Deleted</Badge>
 								{/if}
 							</div>
-							<p class="text-sm text-muted-foreground">
-								by {author.displayName} · {new Date(thread.createdAt).toLocaleDateString()}
-							</p>
+							<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+								<span
+									>by {author.displayName} · {new Date(thread.createdAt).toLocaleDateString()}</span
+								>
+							</div>
 						</div>
 						<div class="flex shrink-0 items-center gap-1">
+							<form
+								method="POST"
+								action="?/linkSession"
+								use:enhance={() => {
+									return async ({ result, update }) => {
+										await update();
+										if (result.type === 'success') {
+											toast.success('Session link updated.');
+										}
+									};
+								}}
+								class="inline-flex items-center gap-1"
+							>
+								<input type="hidden" name="threadId" value={thread.id} />
+								<CalendarIcon class="h-3.5 w-3.5 shrink-0" />
+								<select
+									name="sessionId"
+									class="rounded border border-input bg-transparent px-1.5 pr-8 text-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+									onchange={(e) => e.currentTarget.form?.requestSubmit()}
+								>
+									<option value="" selected={!thread.sessionId}>No session</option>
+									{#each data.sessions as session (session.id)}
+										<option value={session.id} selected={thread.sessionId === session.id}>
+											{session.title}
+										</option>
+									{/each}
+								</select>
+							</form>
 							<form method="POST" action="?/togglePin" use:enhance>
 								<input type="hidden" name="threadId" value={thread.id} />
 								<Button

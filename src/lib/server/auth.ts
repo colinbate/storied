@@ -9,18 +9,6 @@ const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 export { SESSION_COOKIE_NAME };
 
-// pnpm resolves two drizzle-orm copies (D1 vs libsql peer variants) whose private SQL types
-// are structurally identical but nominally incompatible. The `as any` casts below silence the
-// TS2345 mismatch between the two copies – the same workaround used in schema.ts.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _gt: any = gt;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _isNull: any = isNull;
-
 /** Hash a token using Web Crypto (available in CF Workers) */
 async function hashToken(token: string): Promise<string> {
 	const encoded = new TextEncoder().encode(token);
@@ -44,7 +32,7 @@ export async function createMagicLink(
 	const existingUser = await db
 		.select({ id: users.id })
 		.from(users)
-		.where(_eq(users.email, email.toLowerCase()))
+		.where(eq(users.email, email.toLowerCase()))
 		.get();
 
 	await db.insert(authMagicLinks).values({
@@ -70,10 +58,10 @@ export async function verifyMagicLink(
 		.select()
 		.from(authMagicLinks)
 		.where(
-			_and(
-				_eq(authMagicLinks.tokenHash, tokenHash),
-				_gt(authMagicLinks.expiresAt, now),
-				_isNull(authMagicLinks.consumedAt)
+			and(
+				eq(authMagicLinks.tokenHash, tokenHash),
+				gt(authMagicLinks.expiresAt, now),
+				isNull(authMagicLinks.consumedAt)
 			)
 		)
 		.get();
@@ -81,7 +69,7 @@ export async function verifyMagicLink(
 	if (!link) return null;
 
 	// Consume the link
-	await db.update(authMagicLinks).set({ consumedAt: now }).where(_eq(authMagicLinks.id, link.id));
+	await db.update(authMagicLinks).set({ consumedAt: now }).where(eq(authMagicLinks.id, link.id));
 
 	return { email: link.email, userId: link.userId };
 }
@@ -91,7 +79,7 @@ export async function findOrCreateUser(
 	db: ORM,
 	email: string
 ): Promise<{ id: string; isNew: boolean }> {
-	const existing = await db.select().from(users).where(_eq(users.email, email.toLowerCase())).get();
+	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
 	if (existing) return { id: existing.id, isNew: false };
 
 	const id = nanoid();
@@ -141,8 +129,8 @@ export async function validateSession(
 			user: users
 		})
 		.from(userSessions)
-		.innerJoin(users, _eq(userSessions.userId, users.id))
-		.where(_and(_eq(userSessions.tokenHash, tokenHash), _gt(userSessions.expiresAt, now)))
+		.innerJoin(users, eq(userSessions.userId, users.id))
+		.where(and(eq(userSessions.tokenHash, tokenHash), gt(userSessions.expiresAt, now)))
 		.get();
 
 	if (!result) return null;
@@ -152,5 +140,5 @@ export async function validateSession(
 /** Invalidate a session. */
 export async function invalidateSession(db: ORM, token: string): Promise<void> {
 	const tokenHash = await hashToken(token);
-	await db.delete(userSessions).where(_eq(userSessions.tokenHash, tokenHash));
+	await db.delete(userSessions).where(eq(userSessions.tokenHash, tokenHash));
 }

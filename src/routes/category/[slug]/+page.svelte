@@ -33,7 +33,7 @@
 					<p class="text-muted-foreground">{data.category.description}</p>
 				{/if}
 			</div>
-			<Button href="/new?category={data.category.slug}">
+			<Button href={resolve(`/new?category=${data.category.slug}`)}>
 				<PlusIcon class="h-4 w-4" />
 				New Thread
 			</Button>

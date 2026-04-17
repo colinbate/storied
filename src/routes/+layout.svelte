@@ -1,6 +1,5 @@
 <script lang="ts">
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import { goto } from '$app/navigation';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
@@ -12,16 +11,11 @@
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
-	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
 </script>
-
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
 
 <ModeWatcher />
 <Toaster richColors />
@@ -33,7 +27,7 @@
 				href={resolve('/')}
 				class="flex items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
 			>
-				<MessageSquareIcon class="h-5 w-5 text-primary" />
+				<img src="/favicon.svg" class="size-5" alt="logo of two message bubbles containing books" />
 				<span>Bermuda Triangle Society</span>
 			</a>
 

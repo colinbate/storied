@@ -1,0 +1,15 @@
+{
+	"name": "storied-book-resolver",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --persist-to=../../.wrangler/state",
+		"deploy": "wrangler deploy"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260416.2",
+		"wrangler": "^4.83.0",
+		"typescript": "^5.9.3"
+	}
+}

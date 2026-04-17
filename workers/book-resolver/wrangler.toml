@@ -1,0 +1,19 @@
+name = "storied-book-resolver"
+compatibility_date = "2026-04-16"
+main = "src/index.ts"
+workers_dev = false
+[dev]
+port = 5501
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "storied-db"
+database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
+
+[[queues.consumers]]
+queue = "storied-book-resolve"
+max_batch_size = 10
+max_batch_timeout = 30

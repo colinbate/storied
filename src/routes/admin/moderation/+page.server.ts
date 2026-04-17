@@ -1,13 +1,15 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { threads, users, moderationEvents } from '$lib/server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { threads, users, moderationEvents, sessions } from '$lib/server/db/schema';
+import { eq, desc, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _eq: any = eq;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _desc: any = desc;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _asc: any = asc;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const allThreads = await locals.db
@@ -23,7 +25,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(_desc(threads.createdAt))
 		.all();
 
-	return { threads: allThreads };
+	const allSessions = await locals.db.select().from(sessions).orderBy(_asc(sessions.title)).all();
+
+	return { threads: allThreads, sessions: allSessions };
 };
 
 export const actions: Actions = {
@@ -36,11 +40,7 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID' });
 
-		const thread = await locals.db
-			.select()
-			.from(threads)
-			.where(_eq(threads.id, threadId))
-			.get();
+		const thread = await locals.db.select().from(threads).where(_eq(threads.id, threadId)).get();
 		if (!thread) return fail(404, { error: 'Thread not found' });
 
 		const newLocked = thread.isLocked ? 0 : 1;
@@ -69,11 +69,7 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID' });
 
-		const thread = await locals.db
-			.select()
-			.from(threads)
-			.where(_eq(threads.id, threadId))
-			.get();
+		const thread = await locals.db.select().from(threads).where(_eq(threads.id, threadId)).get();
 		if (!thread) return fail(404, { error: 'Thread not found' });
 
 		const newPinned = thread.isPinned ? 0 : 1;
@@ -114,6 +110,33 @@ export const actions: Actions = {
 			targetType: 'thread',
 			targetId: threadId,
 			action: 'soft_delete'
+		});
+
+		return { success: true };
+	},
+
+	linkSession: async ({ request, locals }) => {
+		if (!locals.user || (locals.user.role !== 'admin' && locals.user.role !== 'moderator')) {
+			return fail(403, { error: 'Forbidden' });
+		}
+
+		const data = await request.formData();
+		const threadId = data.get('threadId')?.toString();
+		const sessionId = data.get('sessionId')?.toString() || null;
+		if (!threadId) return fail(400, { error: 'Missing thread ID' });
+
+		await locals.db
+			.update(threads)
+			.set({ sessionId: sessionId || null, updatedAt: new Date().toISOString() })
+			.where(_eq(threads.id, threadId));
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user.id,
+			targetType: 'thread',
+			targetId: threadId,
+			action: sessionId ? 'link_session' : 'unlink_session',
+			reason: sessionId ?? undefined
 		});
 
 		return { success: true };

@@ -5,12 +5,17 @@ import {
 	posts,
 	users,
 	subscriptions,
-	notificationEvents
+	notificationEvents,
+	books,
+	bookSources,
+	postBooks,
+	sessions
 } from '$lib/server/db/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { sendReplyNotificationEmail } from '$lib/server/email';
+import { detectBookLinks } from '$lib/server/book-links';
 
 // pnpm resolves two drizzle-orm copies (D1 vs libsql peer variants) whose private types
 // are structurally identical but nominally incompatible. The cast avoids the TS2345 mismatch.
@@ -66,18 +71,50 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select()
 		.from(subscriptions)
 		.where(
-			_and(
-				_eq(subscriptions.userId, locals.user.id),
-				_eq(subscriptions.threadId, thread.thread.id)
-			)
+			_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.thread.id))
 		)
 		.get();
+
+	// Load books linked to this thread
+	const threadBooks = await locals.db
+		.select({
+			book: books,
+			postBook: postBooks
+		})
+		.from(postBooks)
+		.innerJoin(books, _eq(postBooks.bookId, books.id))
+		.where(_eq(postBooks.threadId, thread.thread.id))
+		.orderBy(_asc(postBooks.displayOrder))
+		.all();
+
+	// Deduplicate books (same book might be linked from multiple posts)
+	const seenBookIds = new Set<string>();
+	const uniqueBooks = threadBooks
+		.filter(({ book }) => {
+			if (seenBookIds.has(book.id)) return false;
+			seenBookIds.add(book.id);
+			return true;
+		})
+		.map(({ book }) => book);
+
+	// Load linked session if present
+	let session: { id: string; slug: string; title: string } | null = null;
+	if (thread.thread.sessionId) {
+		const row = await locals.db
+			.select({ id: sessions.id, slug: sessions.slug, title: sessions.title })
+			.from(sessions)
+			.where(_eq(sessions.id, thread.thread.sessionId))
+			.get();
+		session = row ?? null;
+	}
 
 	return {
 		thread: thread.thread,
 		author: thread.author,
 		posts: threadPosts,
-		isSubscribed: !!subscription
+		isSubscribed: !!subscription,
+		books: uniqueBooks,
+		session
 	};
 };
 
@@ -138,10 +175,7 @@ export const actions: Actions = {
 			.select()
 			.from(subscriptions)
 			.where(
-				_and(
-					_eq(subscriptions.userId, locals.user.id),
-					_eq(subscriptions.threadId, thread.id)
-				)
+				_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.id))
 			)
 			.get();
 
@@ -154,6 +188,76 @@ export const actions: Actions = {
 			});
 		}
 
+		// Detect and process book links
+		const detectedLinks = detectBookLinks(bodySource);
+		for (let i = 0; i < detectedLinks.length; i++) {
+			const link = detectedLinks[i];
+
+			const existingSource = await locals.db
+				.select()
+				.from(bookSources)
+				.where(
+					_and(
+						_eq(bookSources.sourceType, link.sourceType),
+						_eq(bookSources.sourceKey, link.sourceKey)
+					)
+				)
+				.get();
+
+			let sourceId: string;
+			let bookId: string | null = null;
+
+			if (existingSource) {
+				sourceId = existingSource.id;
+				bookId = existingSource.canonicalBookId;
+
+				// Source exists but not yet resolved — re-enqueue
+				if (!bookId && platform?.env.BOOK_QUEUE) {
+					await platform.env.BOOK_QUEUE.send({
+						bookSourceId: existingSource.id,
+						sourceType: link.sourceType,
+						sourceUrl: link.url,
+						sourceKey: link.sourceKey,
+						threadId: thread.id,
+						postId
+					});
+				}
+			} else {
+				sourceId = newId();
+				await locals.db.insert(bookSources).values({
+					id: sourceId,
+					sourceType: link.sourceType,
+					sourceUrl: link.url,
+					sourceKey: link.sourceKey,
+					fetchStatus: 'pending'
+				});
+
+				// Enqueue for resolution
+				if (platform?.env.BOOK_QUEUE) {
+					await platform.env.BOOK_QUEUE.send({
+						bookSourceId: sourceId,
+						sourceType: link.sourceType,
+						sourceUrl: link.url,
+						sourceKey: link.sourceKey,
+						threadId: thread.id,
+						postId
+					});
+				}
+			}
+
+			if (bookId) {
+				await locals.db.insert(postBooks).values({
+					id: newId(),
+					postId,
+					threadId: thread.id,
+					bookId,
+					bookSourceId: sourceId,
+					displayOrder: i,
+					context: 'linked'
+				});
+			}
+		}
+
 		// Send notifications to subscribers (excluding the replier)
 		if (platform) {
 			const subs = await locals.db
@@ -163,12 +267,7 @@ export const actions: Actions = {
 				})
 				.from(subscriptions)
 				.innerJoin(users, _eq(subscriptions.userId, users.id))
-				.where(
-					_and(
-						_eq(subscriptions.threadId, thread.id),
-						_eq(subscriptions.mode, 'immediate')
-					)
-				)
+				.where(_and(_eq(subscriptions.threadId, thread.id), _eq(subscriptions.mode, 'immediate')))
 				.all();
 
 			const baseUrl = url.origin;
@@ -223,10 +322,7 @@ export const actions: Actions = {
 			.select()
 			.from(subscriptions)
 			.where(
-				_and(
-					_eq(subscriptions.userId, locals.user.id),
-					_eq(subscriptions.threadId, thread.id)
-				)
+				_and(_eq(subscriptions.userId, locals.user.id), _eq(subscriptions.threadId, thread.id))
 			)
 			.get();
 
