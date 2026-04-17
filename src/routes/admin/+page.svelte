@@ -25,7 +25,7 @@
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 		{#each statCards as stat (stat.label)}
 			<Card.Root>
-				<Card.Content class="flex items-center gap-3 pt-6">
+				<Card.Content class="flex items-center gap-3">
 					<div class="rounded-lg bg-primary/10 p-2">
 						<stat.icon class="h-5 w-5 text-primary" />
 					</div>

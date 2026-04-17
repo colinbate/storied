@@ -3,15 +3,10 @@ import type { Actions, PageServerLoad } from './$types';
 import { threads, users, moderationEvents, sessions } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _desc: any = desc;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _asc: any = asc;
+import { requirePermission } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	requirePermission(locals, 'moderate');
 	const allThreads = await locals.db
 		.select({
 			thread: threads,
@@ -21,37 +16,35 @@ export const load: PageServerLoad = async ({ locals }) => {
 			}
 		})
 		.from(threads)
-		.innerJoin(users, _eq(threads.authorUserId, users.id))
-		.orderBy(_desc(threads.createdAt))
+		.innerJoin(users, eq(threads.authorUserId, users.id))
+		.orderBy(desc(threads.createdAt))
 		.all();
 
-	const allSessions = await locals.db.select().from(sessions).orderBy(_asc(sessions.title)).all();
+	const allSessions = await locals.db.select().from(sessions).orderBy(asc(sessions.title)).all();
 
 	return { threads: allThreads, sessions: allSessions };
 };
 
 export const actions: Actions = {
 	toggleLock: async ({ request, locals }) => {
-		if (!locals.user || (locals.user.role !== 'admin' && locals.user.role !== 'moderator')) {
-			return fail(403, { error: 'Forbidden' });
-		}
+		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID' });
 
-		const thread = await locals.db.select().from(threads).where(_eq(threads.id, threadId)).get();
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread) return fail(404, { error: 'Thread not found' });
 
 		const newLocked = thread.isLocked ? 0 : 1;
 		await locals.db
 			.update(threads)
 			.set({ isLocked: newLocked, updatedAt: new Date().toISOString() })
-			.where(_eq(threads.id, threadId));
+			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
-			actorUserId: locals.user.id,
+			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
 			action: newLocked ? 'lock' : 'unlock'
@@ -61,26 +54,24 @@ export const actions: Actions = {
 	},
 
 	togglePin: async ({ request, locals }) => {
-		if (!locals.user || (locals.user.role !== 'admin' && locals.user.role !== 'moderator')) {
-			return fail(403, { error: 'Forbidden' });
-		}
+		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID' });
 
-		const thread = await locals.db.select().from(threads).where(_eq(threads.id, threadId)).get();
+		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread) return fail(404, { error: 'Thread not found' });
 
 		const newPinned = thread.isPinned ? 0 : 1;
 		await locals.db
 			.update(threads)
 			.set({ isPinned: newPinned, updatedAt: new Date().toISOString() })
-			.where(_eq(threads.id, threadId));
+			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
-			actorUserId: locals.user.id,
+			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
 			action: newPinned ? 'pin' : 'unpin'
@@ -90,9 +81,7 @@ export const actions: Actions = {
 	},
 
 	softDelete: async ({ request, locals }) => {
-		if (!locals.user || (locals.user.role !== 'admin' && locals.user.role !== 'moderator')) {
-			return fail(403, { error: 'Forbidden' });
-		}
+		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
 		const threadId = data.get('threadId')?.toString();
@@ -102,11 +91,11 @@ export const actions: Actions = {
 		await locals.db
 			.update(threads)
 			.set({ deletedAt: now, updatedAt: now })
-			.where(_eq(threads.id, threadId));
+			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
-			actorUserId: locals.user.id,
+			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
 			action: 'soft_delete'
@@ -116,9 +105,7 @@ export const actions: Actions = {
 	},
 
 	linkSession: async ({ request, locals }) => {
-		if (!locals.user || (locals.user.role !== 'admin' && locals.user.role !== 'moderator')) {
-			return fail(403, { error: 'Forbidden' });
-		}
+		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
 		const threadId = data.get('threadId')?.toString();
@@ -128,11 +115,11 @@ export const actions: Actions = {
 		await locals.db
 			.update(threads)
 			.set({ sessionId: sessionId || null, updatedAt: new Date().toISOString() })
-			.where(_eq(threads.id, threadId));
+			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
-			actorUserId: locals.user.id,
+			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
 			action: sessionId ? 'link_session' : 'unlink_session',
@@ -143,9 +130,7 @@ export const actions: Actions = {
 	},
 
 	restore: async ({ request, locals }) => {
-		if (!locals.user || locals.user.role !== 'admin') {
-			return fail(403, { error: 'Forbidden' });
-		}
+		requirePermission(locals, 'moderate');
 
 		const data = await request.formData();
 		const threadId = data.get('threadId')?.toString();
@@ -154,11 +139,11 @@ export const actions: Actions = {
 		await locals.db
 			.update(threads)
 			.set({ deletedAt: null, updatedAt: new Date().toISOString() })
-			.where(_eq(threads.id, threadId));
+			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
-			actorUserId: locals.user.id,
+			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
 			action: 'restore'

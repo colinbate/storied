@@ -69,7 +69,7 @@
 								<SettingsIcon class="h-4 w-4" />
 								Settings
 							</DropdownMenu.Item>
-							{#if user.role === 'admin' || user.role === 'moderator'}
+							{#if data.permissions.has('admin:view')}
 								<DropdownMenu.Item onSelect={() => goto(resolve('/admin'))}>
 									<ShieldIcon class="h-4 w-4" />
 									Admin

@@ -2,20 +2,18 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { users } from '$lib/server/db/schema';
 import { desc } from 'drizzle-orm';
-import { findOrCreateUser } from '$lib/server/auth';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _desc: any = desc;
+import { findOrCreateUser, requirePermission } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const allUsers = await locals.db.select().from(users).orderBy(_desc(users.createdAt)).all();
+	requirePermission(locals, 'members:edit');
+	const allUsers = await locals.db.select().from(users).orderBy(desc(users.createdAt)).all();
 
 	return { members: allUsers };
 };
 
 export const actions: Actions = {
 	addMember: async ({ request, locals }) => {
-		if (locals.user?.role !== 'admin') return fail(403, { error: 'Forbidden' });
+		requirePermission(locals, 'members:edit');
 
 		const data = await request.formData();
 		const email = data.get('email')?.toString()?.trim()?.toLowerCase();

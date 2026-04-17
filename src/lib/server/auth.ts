@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import type { ORM } from './db';
 import { users, authMagicLinks, userSessions } from './db/schema';
+import { error, type RequestEvent } from '@sveltejs/kit';
 
 const SESSION_COOKIE_NAME = 'storied_session';
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -141,4 +142,10 @@ export async function validateSession(
 export async function invalidateSession(db: ORM, token: string): Promise<void> {
 	const tokenHash = await hashToken(token);
 	await db.delete(userSessions).where(eq(userSessions.tokenHash, tokenHash));
+}
+
+export function requirePermission(locals: RequestEvent['locals'], permission: string) {
+	if (!locals.permissions.has(permission)) {
+		error(403, 'Unauthorized');
+	}
 }

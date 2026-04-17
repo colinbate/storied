@@ -8,6 +8,7 @@ declare global {
 			db: ORM;
 			user: typeof users.$inferSelect | null;
 			sessionId: string | null;
+			permissions: Set<string>;
 		}
 		// interface PageData {}
 		// interface PageState {}

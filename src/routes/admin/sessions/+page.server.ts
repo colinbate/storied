@@ -4,17 +4,14 @@ import { sessions } from '$lib/server/db/schema';
 import { desc, eq } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _desc: any = desc;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
+import { requirePermission } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	requirePermission(locals, 'sessions:edit');
 	const allSessions = await locals.db
 		.select()
 		.from(sessions)
-		.orderBy(_desc(sessions.createdAt))
+		.orderBy(desc(sessions.createdAt))
 		.all();
 
 	return { sessions: allSessions };
@@ -22,7 +19,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (locals.user?.role !== 'admin') return fail(403, { error: 'Forbidden' });
+		requirePermission(locals, 'sessions:edit');
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
@@ -50,7 +47,7 @@ export const actions: Actions = {
 	},
 
 	update: async ({ request, locals }) => {
-		if (locals.user?.role !== 'admin') return fail(403, { error: 'Forbidden' });
+		requirePermission(locals, 'sessions:edit');
 
 		const data = await request.formData();
 		const id = data.get('id')?.toString();
@@ -65,7 +62,7 @@ export const actions: Actions = {
 		await locals.db
 			.update(sessions)
 			.set({ title, theme, startsAt, astroPath, externalUrl, updatedAt: new Date().toISOString() })
-			.where(_eq(sessions.id, id));
+			.where(eq(sessions.id, id));
 
 		return { updated: true };
 	}

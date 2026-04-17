@@ -1,7 +1,36 @@
 import { getDb } from '$lib/server/db';
 import { validateSession, SESSION_COOKIE_NAME } from '$lib/server/auth';
-import { error, type Handle } from '@sveltejs/kit';
+import { error, redirect, type Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
+
+const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?: boolean }[] = [
+	{ route: '/api/', isPrefix: true, perms: undefined },
+	{ route: '/auth/', isPrefix: true, perms: undefined },
+	{ route: '/admin', isPrefix: true, perms: 'admin:view' },
+	{ route: '/books/', isPrefix: true, perms: 'access:general' },
+	{ route: '/category/', isPrefix: true, perms: 'access:general' },
+	{ route: '/new', isPrefix: false, perms: 'access:general' },
+	{ route: '/settings', isPrefix: true, perms: 'access:general' },
+	{ route: '/thread', isPrefix: true, perms: 'access:general' },
+	{ route: '/', isPrefix: false, perms: 'access:general' },
+	{ route: '/', isPrefix: true, perms: undefined }
+];
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+	member: ['access:general'],
+	moderator: ['access:general', 'admin:view', 'moderate', 'book:edit'],
+	admin: ['access:general', 'admin:view', 'moderate', 'book:edit', 'members:edit', 'sessions:edit']
+};
+
+function canAccess(path: string, permissions: Set<string>) {
+	for (const ra of ROUTE_ACCESS) {
+		const isMatch = ra.isPrefix ? path.startsWith(ra.route) : path === ra.route;
+		if (isMatch) {
+			return ra.perms ? permissions.has(ra.perms) : true;
+		}
+	}
+	return false;
+}
 
 const handleDb: Handle = async ({ event, resolve }) => {
 	if (!event.platform?.env.DB) {
@@ -15,6 +44,7 @@ const handleDb: Handle = async ({ event, resolve }) => {
 const handleAuth: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.sessionId = null;
+	event.locals.permissions = new Set();
 
 	const token = event.cookies.get(SESSION_COOKIE_NAME);
 	if (token) {
@@ -22,6 +52,16 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 		if (result) {
 			event.locals.user = result.user;
 			event.locals.sessionId = result.sessionId;
+			event.locals.permissions = new Set(ROLE_PERMISSIONS[result.user.role] ?? []);
+		} else {
+			event.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+		}
+	}
+	if (!canAccess(event.url.pathname, event.locals.permissions)) {
+		if (!event.locals.user) {
+			redirect(303, `/auth/login?redirect=${event.url.pathname}`);
+		} else {
+			error(403, 'Unauthorized');
 		}
 	}
 
