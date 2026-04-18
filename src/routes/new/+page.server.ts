@@ -14,13 +14,6 @@ import { slugify } from '$lib/server/slugify';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _asc: any = asc;
-
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
@@ -29,7 +22,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const allCategories = await locals.db
 		.select()
 		.from(categories)
-		.orderBy(_asc(categories.sortOrder))
+		.orderBy(asc(categories.sortOrder))
 		.all();
 
 	const preselectedCategory = url.searchParams.get('category') ?? '';
@@ -77,7 +70,7 @@ export const actions: Actions = {
 		const category = await locals.db
 			.select()
 			.from(categories)
-			.where(_eq(categories.id, categoryId))
+			.where(eq(categories.id, categoryId))
 			.get();
 
 		if (!category) {
@@ -123,9 +116,9 @@ export const actions: Actions = {
 				.select()
 				.from(subjectSources)
 				.where(
-					_and(
-						_eq(subjectSources.sourceType, link.sourceType),
-						_eq(subjectSources.sourceKey, link.sourceKey)
+					and(
+						eq(subjectSources.sourceType, link.sourceType),
+						eq(subjectSources.sourceKey, link.sourceKey)
 					)
 				)
 				.get();

@@ -3,39 +3,32 @@ import type { RequestHandler } from './$types';
 import { books, userSubjects } from '$lib/server/db/schema';
 import { eq, and, count } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _count: any = count;
-
 const SUBJECT = 'book';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
+	const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
 
 	if (!book || book.deletedAt) throw error(404, 'Book not found');
 
 	const [recCount] = await locals.db
-		.select({ count: _count() })
+		.select({ count: count() })
 		.from(userSubjects)
 		.where(
-			_and(
-				_eq(userSubjects.subjectType, SUBJECT),
-				_eq(userSubjects.subjectId, book.id),
-				_eq(userSubjects.isRecommended, 1)
+			and(
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id),
+				eq(userSubjects.isRecommended, 1)
 			)
 		);
 
 	const [readCount] = await locals.db
-		.select({ count: _count() })
+		.select({ count: count() })
 		.from(userSubjects)
 		.where(
-			_and(
-				_eq(userSubjects.subjectType, SUBJECT),
-				_eq(userSubjects.subjectId, book.id),
-				_eq(userSubjects.readingStatus, 'read')
+			and(
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id),
+				eq(userSubjects.readingStatus, 'read')
 			)
 		);
 

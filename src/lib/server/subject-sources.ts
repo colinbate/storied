@@ -36,11 +36,6 @@ export interface SubjectQueueBinding {
 	SUBJECT_QUEUE?: { send: (msg: SubjectQueueMessage) => Promise<void> } | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-
 export interface ResolveOrEnqueueResult {
 	sourceId: string;
 	resolvedSubjectType: 'book' | 'series' | null;
@@ -70,9 +65,9 @@ export async function ensureSubjectSource(
 		.select()
 		.from(subjectSources)
 		.where(
-			_and(
-				_eq(subjectSources.sourceType, link.sourceType),
-				_eq(subjectSources.sourceKey, link.sourceKey)
+			and(
+				eq(subjectSources.sourceType, link.sourceType),
+				eq(subjectSources.sourceKey, link.sourceKey)
 			)
 		)
 		.get();

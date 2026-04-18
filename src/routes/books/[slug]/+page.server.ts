@@ -3,19 +3,6 @@ import type { Actions, PageServerLoad } from './$types';
 import { books, userSubjects, threadSubjects, threads, users } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, count } from 'drizzle-orm';
 
-// pnpm resolves two drizzle-orm copies (D1 vs libsql peer variants) whose private types
-// are structurally identical but nominally incompatible. The cast avoids the TS2345 mismatch.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _isNull: any = isNull;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _desc: any = desc;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _count: any = count;
-
 const SUBJECT = 'book';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -23,7 +10,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw redirect(302, '/auth/login');
 	}
 
-	const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
+	const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
 
 	if (!book || book.deletedAt) {
 		throw error(404, 'Book not found');
@@ -34,10 +21,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select()
 		.from(userSubjects)
 		.where(
-			_and(
-				_eq(userSubjects.userId, locals.user.id),
-				_eq(userSubjects.subjectType, SUBJECT),
-				_eq(userSubjects.subjectId, book.id)
+			and(
+				eq(userSubjects.userId, locals.user.id),
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id)
 			)
 		)
 		.get();
@@ -59,16 +46,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}
 		})
 		.from(threadSubjects)
-		.innerJoin(threads, _eq(threadSubjects.threadId, threads.id))
-		.innerJoin(users, _eq(threads.authorUserId, users.id))
+		.innerJoin(threads, eq(threadSubjects.threadId, threads.id))
+		.innerJoin(users, eq(threads.authorUserId, users.id))
 		.where(
-			_and(
-				_eq(threadSubjects.subjectType, SUBJECT),
-				_eq(threadSubjects.subjectId, book.id),
-				_isNull(threads.deletedAt)
+			and(
+				eq(threadSubjects.subjectType, SUBJECT),
+				eq(threadSubjects.subjectId, book.id),
+				isNull(threads.deletedAt)
 			)
 		)
-		.orderBy(_desc(threads.createdAt))
+		.orderBy(desc(threads.createdAt))
 		.all();
 
 	// Deduplicate threads (same thread shouldn't appear twice now, but keep for safety)
@@ -81,24 +68,24 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Aggregate stats: how many members recommend, have read, etc.
 	const [recommendCount] = await locals.db
-		.select({ count: _count() })
+		.select({ count: count() })
 		.from(userSubjects)
 		.where(
-			_and(
-				_eq(userSubjects.subjectType, SUBJECT),
-				_eq(userSubjects.subjectId, book.id),
-				_eq(userSubjects.isRecommended, 1)
+			and(
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id),
+				eq(userSubjects.isRecommended, 1)
 			)
 		);
 
 	const [readCount] = await locals.db
-		.select({ count: _count() })
+		.select({ count: count() })
 		.from(userSubjects)
 		.where(
-			_and(
-				_eq(userSubjects.subjectType, SUBJECT),
-				_eq(userSubjects.subjectId, book.id),
-				_eq(userSubjects.readingStatus, 'read')
+			and(
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id),
+				eq(userSubjects.readingStatus, 'read')
 			)
 		);
 
@@ -126,7 +113,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Missing reading status.' });
 		}
 
-		const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
+		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
 
 		if (!book) {
 			throw error(404, 'Book not found');
@@ -136,10 +123,10 @@ export const actions: Actions = {
 			.select()
 			.from(userSubjects)
 			.where(
-				_and(
-					_eq(userSubjects.userId, locals.user.id),
-					_eq(userSubjects.subjectType, SUBJECT),
-					_eq(userSubjects.subjectId, book.id)
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.subjectType, SUBJECT),
+					eq(userSubjects.subjectId, book.id)
 				)
 			)
 			.get();
@@ -149,10 +136,10 @@ export const actions: Actions = {
 				.update(userSubjects)
 				.set({ readingStatus, updatedAt: new Date().toISOString() })
 				.where(
-					_and(
-						_eq(userSubjects.userId, locals.user.id),
-						_eq(userSubjects.subjectType, SUBJECT),
-						_eq(userSubjects.subjectId, book.id)
+					and(
+						eq(userSubjects.userId, locals.user.id),
+						eq(userSubjects.subjectType, SUBJECT),
+						eq(userSubjects.subjectId, book.id)
 					)
 				);
 		} else {
@@ -172,7 +159,7 @@ export const actions: Actions = {
 			throw redirect(302, '/auth/login');
 		}
 
-		const book = await locals.db.select().from(books).where(_eq(books.slug, params.slug)).get();
+		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
 
 		if (!book) {
 			throw error(404, 'Book not found');
@@ -182,10 +169,10 @@ export const actions: Actions = {
 			.select()
 			.from(userSubjects)
 			.where(
-				_and(
-					_eq(userSubjects.userId, locals.user.id),
-					_eq(userSubjects.subjectType, SUBJECT),
-					_eq(userSubjects.subjectId, book.id)
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.subjectType, SUBJECT),
+					eq(userSubjects.subjectId, book.id)
 				)
 			)
 			.get();
@@ -198,10 +185,10 @@ export const actions: Actions = {
 					updatedAt: new Date().toISOString()
 				})
 				.where(
-					_and(
-						_eq(userSubjects.userId, locals.user.id),
-						_eq(userSubjects.subjectType, SUBJECT),
-						_eq(userSubjects.subjectId, book.id)
+					and(
+						eq(userSubjects.userId, locals.user.id),
+						eq(userSubjects.subjectType, SUBJECT),
+						eq(userSubjects.subjectId, book.id)
 					)
 				);
 		} else {

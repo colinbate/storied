@@ -3,20 +3,11 @@ import type { RequestHandler } from './$types';
 import { sessions, threads, users } from '$lib/server/db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _eq: any = eq;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _and: any = and;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _isNull: any = isNull;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _desc: any = desc;
-
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const session = await locals.db
 		.select()
 		.from(sessions)
-		.where(_eq(sessions.slug, params.slug))
+		.where(eq(sessions.slug, params.slug))
 		.get();
 
 	if (!session) throw error(404, 'Session not found');
@@ -31,9 +22,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			authorName: users.displayName
 		})
 		.from(threads)
-		.innerJoin(users, _eq(threads.authorUserId, users.id))
-		.where(_and(_eq(threads.sessionId, session.id), _isNull(threads.deletedAt)))
-		.orderBy(_desc(threads.createdAt))
+		.innerJoin(users, eq(threads.authorUserId, users.id))
+		.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
+		.orderBy(desc(threads.createdAt))
 		.all();
 
 	return json(sessionThreads, {
