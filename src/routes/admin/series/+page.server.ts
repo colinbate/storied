@@ -6,6 +6,8 @@ import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
+import type { SubjectSourceType } from '$shared/worker-messages';
 
 export const load: PageServerLoad = async (event) => {
 	requirePermission(event.locals, 'series:edit');
@@ -19,9 +21,7 @@ export const load: PageServerLoad = async (event) => {
 	const unresolvedSources = await event.locals.db
 		.select()
 		.from(subjectSources)
-		.where(
-			and(isNull(subjectSources.subjectId), eq(subjectSources.sourceType, 'goodreads-series'))
-		)
+		.where(and(isNull(subjectSources.subjectId), eq(subjectSources.sourceType, 'goodreads-series')))
 		.orderBy(desc(subjectSources.createdAt))
 		.all();
 
@@ -48,14 +48,12 @@ export const actions: Actions = {
 			.set({ fetchStatus: 'pending', updatedAt: new Date().toISOString() })
 			.where(eq(subjectSources.id, sourceId));
 
-		if (platform?.env.SUBJECT_QUEUE) {
-			await platform.env.SUBJECT_QUEUE.send({
-				subjectSourceId: source.id,
-				sourceType: source.sourceType,
-				sourceUrl: source.sourceUrl,
-				sourceKey: source.sourceKey
-			});
-		}
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+			subjectSourceId: source.id,
+			sourceType: source.sourceType as SubjectSourceType,
+			sourceUrl: source.sourceUrl,
+			sourceKey: source.sourceKey
+		});
 
 		return { retried: true };
 	},

@@ -1,12 +1,16 @@
-name = "storied-subject-worker"
+name = "storied-worker"
 compatibility_date = "2026-04-16"
 main = "src/index.ts"
 workers_dev = false
+
 [dev]
 port = 5501
 
 [observability]
 enabled = true
+
+[vars]
+SEND_EMAILS = ""
 
 [[d1_databases]]
 binding = "DB"
@@ -14,6 +18,14 @@ database_name = "storied-db"
 database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
 
 [[queues.consumers]]
-queue = "storied-subject-resolve"
+queue = "storied-worker-tasks"
 max_batch_size = 10
 max_batch_timeout = 30
+
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["notify@discuss.bermudatrianglesociety.com"]
+
+# Cron triggers — handlers wired in src/index.ts#scheduled, uncomment as jobs land.
+# [triggers]
+# crons = []

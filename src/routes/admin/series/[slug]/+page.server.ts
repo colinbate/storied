@@ -13,6 +13,8 @@ import {
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
+import type { SubjectSourceType } from '$shared/worker-messages';
 
 const SUBJECT = 'series' as const;
 
@@ -319,7 +321,10 @@ export const actions: Actions = {
 		if (!row) return fail(404, { error: 'Series not found' });
 
 		const now = new Date().toISOString();
-		await locals.db.update(series).set({ deletedAt: now, updatedAt: now }).where(eq(series.id, row.id));
+		await locals.db
+			.update(series)
+			.set({ deletedAt: now, updatedAt: now })
+			.where(eq(series.id, row.id));
 		return { softDeleted: true };
 	},
 
@@ -329,7 +334,10 @@ export const actions: Actions = {
 		if (!row) return fail(404, { error: 'Series not found' });
 
 		const now = new Date().toISOString();
-		await locals.db.update(series).set({ deletedAt: null, updatedAt: now }).where(eq(series.id, row.id));
+		await locals.db
+			.update(series)
+			.set({ deletedAt: null, updatedAt: now })
+			.where(eq(series.id, row.id));
 		return { restored: true };
 	},
 
@@ -351,14 +359,12 @@ export const actions: Actions = {
 			.set({ fetchStatus: 'pending', updatedAt: new Date().toISOString() })
 			.where(eq(subjectSources.id, sourceId));
 
-		if (platform?.env.SUBJECT_QUEUE) {
-			await platform.env.SUBJECT_QUEUE.send({
-				subjectSourceId: source.id,
-				sourceType: source.sourceType,
-				sourceUrl: source.sourceUrl,
-				sourceKey: source.sourceKey
-			});
-		}
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+			subjectSourceId: source.id,
+			sourceType: source.sourceType as SubjectSourceType,
+			sourceUrl: source.sourceUrl,
+			sourceKey: source.sourceKey
+		});
 
 		return { retried: true };
 	}

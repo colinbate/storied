@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ESNext"],
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"types": ["@cloudflare/workers-types"],
+		"baseUrl": ".",
+		"paths": {
+			"$shared/*": ["../../shared/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "../../shared/**/*.ts"]
+}

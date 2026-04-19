@@ -3,37 +3,19 @@ import type { ORM } from './db';
 import { subjectSources, threadSubjects, sessionSubjects, seriesBooks } from './db/schema';
 import { newId } from './ids';
 import { detectSubjectLinks, type DetectedSubjectLink } from './book-links';
+import { publishWorkerMessage, type WorkerQueueBinding } from './worker-queue';
+import type {
+	SubjectResolvePayload,
+	SubjectSessionLink,
+	SubjectSeriesBookLink,
+	SubjectSourceType
+} from '$shared/worker-messages';
 
-// Match the worker's queue message shape.
-export interface SubjectQueueMessage {
-	subjectSourceId: string;
-	sourceType: string;
-	sourceUrl: string;
-	sourceKey: string;
-	threadId?: string;
-	postId?: string;
-	sessionLink?: {
-		sessionId: string;
-		status: string;
-		note?: string | null;
-		addedByUserId?: string | null;
-	};
-	/**
-	 * Auto-link a series_books row once the subject resolves. For a book URL, pass
-	 * seriesId. For a series URL, pass bookId. The worker fills in the other side
-	 * from the resolved subject.
-	 */
-	seriesBookLink?: {
-		seriesId?: string;
-		bookId?: string;
-		position?: string | null;
-		positionSort?: number | null;
-	};
-}
+export type { SubjectSessionLink, SubjectSeriesBookLink } from '$shared/worker-messages';
 
-// Bindings we expect on platform.env (subset of Cloudflare.Env).
-export interface SubjectQueueBinding {
-	SUBJECT_QUEUE?: { send: (msg: SubjectQueueMessage) => Promise<void> } | null;
+/** Env subset we need to enqueue worker messages. */
+export interface WorkerQueueEnv {
+	WORKER_QUEUE?: WorkerQueueBinding | null;
 }
 
 export interface ResolveOrEnqueueResult {
@@ -44,21 +26,19 @@ export interface ResolveOrEnqueueResult {
 }
 
 /**
- * Given a detected URL link, ensure a subject_sources row exists and enqueue
- * a resolution message. If the source is already resolved, no enqueue happens.
- *
- * Optional sideEffects for thread/session linking are forwarded to the worker
- * queue message so it can attach once the subject resolves.
+ * Given a detected URL link, ensure a subject_sources row exists and enqueue a
+ * resolution message. If the source is already resolved, no enqueue happens
+ * and any side-effect links are performed inline.
  */
 export async function ensureSubjectSource(
 	db: ORM,
 	link: DetectedSubjectLink,
-	env: SubjectQueueBinding | undefined,
+	env: WorkerQueueEnv | undefined,
 	sideEffects: {
 		threadId?: string;
 		postId?: string;
-		sessionLink?: SubjectQueueMessage['sessionLink'];
-		seriesBookLink?: SubjectQueueMessage['seriesBookLink'];
+		sessionLink?: SubjectSessionLink;
+		seriesBookLink?: SubjectSeriesBookLink;
 	} = {}
 ): Promise<ResolveOrEnqueueResult> {
 	const existing = await db
@@ -94,17 +74,18 @@ export async function ensureSubjectSource(
 	}
 
 	// If not yet resolved, enqueue (or re-enqueue) for the worker.
-	if (!resolvedSubjectId && env?.SUBJECT_QUEUE) {
-		await env.SUBJECT_QUEUE.send({
+	if (!resolvedSubjectId) {
+		const payload: SubjectResolvePayload = {
 			subjectSourceId: sourceId,
-			sourceType: link.sourceType,
+			sourceType: link.sourceType as SubjectSourceType,
 			sourceUrl: link.url,
 			sourceKey: link.sourceKey,
 			threadId: sideEffects.threadId,
 			postId: sideEffects.postId,
 			sessionLink: sideEffects.sessionLink,
 			seriesBookLink: sideEffects.seriesBookLink
-		});
+		};
+		await publishWorkerMessage(env?.WORKER_QUEUE, 'subject.resolve', payload);
 	}
 
 	// If already resolved, perform the side-effect linking now.
