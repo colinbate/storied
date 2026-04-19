@@ -10,7 +10,7 @@ port = 5501
 enabled = true
 
 [vars]
-SEND_EMAILS = ""
+SEND_EMAILS = "yes"
 
 [[d1_databases]]
 binding = "DB"
