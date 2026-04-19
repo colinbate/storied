@@ -2,6 +2,8 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	createMagicLink,
+	verifyMagicLinkCode,
+	completeMagicLinkLogin,
 	REDIR_COOKIE_NAME,
 	TIMEZONE_COOKIE_NAME,
 	TIMEZONE_COOKIE_MAX_AGE_S
@@ -21,13 +23,23 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	};
 };
 
-export const actions: Actions = {
-	default: async ({ request, locals, platform, url, cookies }) => {
-		const data = await request.formData();
-		const email = data.get('email')?.toString()?.trim()?.toLowerCase();
+function normalizeEmail(raw: FormDataEntryValue | null): string | null {
+	const email = raw?.toString()?.trim()?.toLowerCase();
+	if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+	return email;
+}
 
-		if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-			return fail(400, { error: 'Please enter a valid email address.', email: email ?? '' });
+export const actions: Actions = {
+	login: async ({ request, locals, platform, url, cookies }) => {
+		const data = await request.formData();
+		const rawEmail = data.get('email');
+		const email = normalizeEmail(rawEmail);
+
+		if (!email) {
+			return fail(400, {
+				error: 'Please enter a valid email address.',
+				email: rawEmail?.toString() ?? ''
+			});
 		}
 
 		const redir = url.searchParams.get('redirect');
@@ -54,9 +66,9 @@ export const actions: Actions = {
 		}
 
 		try {
-			const { token } = await createMagicLink(locals.db, email);
+			const { token, code } = await createMagicLink(locals.db, email);
 			if (platform) {
-				await sendMagicLinkEmail(platform, email, token, url.origin);
+				await sendMagicLinkEmail(platform, email, token, code, url.origin);
 			}
 		} catch (err) {
 			console.error('Magic link error:', err);
@@ -64,5 +76,39 @@ export const actions: Actions = {
 		}
 
 		return { success: true, email };
+	},
+
+	code: async ({ request, locals, platform, cookies }) => {
+		const data = await request.formData();
+		const rawEmail = data.get('email');
+		const email = normalizeEmail(rawEmail);
+		const code = data.get('code')?.toString()?.replace(/\s+/g, '') ?? '';
+
+		if (!email) {
+			return fail(400, {
+				codeError: 'Please enter a valid email address.',
+				email: rawEmail?.toString() ?? '',
+				success: true
+			});
+		}
+		if (!/^\d{6}$/.test(code)) {
+			return fail(400, {
+				codeError: 'Enter the 6-digit code from the email.',
+				email,
+				success: true
+			});
+		}
+
+		const result = await verifyMagicLinkCode(locals.db, email, code);
+
+		if ('error' in result) {
+			const msg =
+				result.error === 'locked'
+					? 'Too many incorrect attempts. Request a new code.'
+					: 'That code is incorrect or expired.';
+			return fail(400, { codeError: msg, email, success: true });
+		}
+
+		await completeMagicLinkLogin(locals.db, cookies, platform, result);
 	}
 };

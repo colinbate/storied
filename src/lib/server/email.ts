@@ -51,14 +51,16 @@ export async function sendMagicLinkEmail(
 	platform: App.Platform,
 	email: string,
 	token: string,
+	code: string,
 	baseUrl: string
 ): Promise<{ success: boolean; error?: string }> {
 	const magicUrl = `${baseUrl}/auth/verify?token=${encodeURIComponent(token)}`;
+	const displayCode = `${code.slice(0, 3)} ${code.slice(3)}`;
 
 	return sendEmail(platform, {
 		to: email,
 		subject: 'Sign in to Bermuda Triangle Society Discussions',
-		textBody: `Click the link below to sign in:\n\n${magicUrl}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, you can safely ignore this email.`,
+		textBody: `Click the link below to sign in:\n\n${magicUrl}\n\nOr enter this code on the sign-in page if you're on a different device:\n\n${displayCode}\n\nThe link and code expire in 15 minutes and can only be used once.\n\nIf you didn't request this, you can safely ignore this email.`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color: #1a1a2e; margin-bottom: 24px;">Sign in to Bermuda Triangle Society</h2>
@@ -68,11 +70,17 @@ export async function sendMagicLinkEmail(
             Sign In
           </a>
         </div>
+        <p style="color: #444; line-height: 1.6; text-align: center; margin: 32px 0 8px;">
+          Or if you are on a different device, enter this code on the sign-in page:
+        </p>
+        <p style="text-align: center; font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #1a1a2e; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 32px;">
+          ${displayCode}
+        </p>
         <p style="color: #888; font-size: 14px; line-height: 1.5;">
           Or copy and paste this URL into your browser:<br>
           <a href="${magicUrl}" style="color: #6d28d9; word-break: break-all;">${magicUrl}</a>
         </p>
-        <p style="color: #888; font-size: 13px; margin-top: 32px;">This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.</p>
+        <p style="color: #888; font-size: 13px; margin-top: 32px;">The link and code expire in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.</p>
       </div>
     `.trim()
 	});

@@ -240,6 +240,8 @@ export const authMagicLinks = sqliteTable(
 		id: text('id').primaryKey(),
 		email: text('email').notNull(),
 		tokenHash: text('token_hash').notNull().unique(),
+		codeHash: text('code_hash'),
+		failedAttempts: integer('failed_attempts').notNull().default(0),
 		userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
 		expiresAt: text('expires_at').notNull(),
 		consumedAt: text('consumed_at'),

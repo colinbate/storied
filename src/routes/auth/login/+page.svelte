@@ -8,6 +8,7 @@
 
 	let { form, data } = $props();
 	let loading = $state(false);
+	let verifying = $state(false);
 	let browserTimezone = $state('');
 
 	if (typeof window !== 'undefined') {
@@ -51,25 +52,67 @@
 		</Card.Header>
 		<Card.Content>
 			{#if form?.success}
-				<div class="space-y-4 text-center">
-					<div
-						class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
-					>
-						<MailIcon class="h-6 w-6 text-primary" />
-					</div>
-					<div>
-						<p class="font-medium">Check your inbox</p>
-						<p class="mt-1 text-sm text-muted-foreground">
-							We sent a sign-in link to <strong>{form.email}</strong>
+				<div class="space-y-5">
+					<div class="space-y-3 text-center">
+						<div
+							class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+						>
+							<MailIcon class="h-6 w-6 text-primary" />
+						</div>
+						<div>
+							<p class="font-medium">Check your inbox</p>
+							<p class="mt-1 text-sm text-muted-foreground">
+								We sent a sign-in link to <strong>{form.email}</strong>
+							</p>
+						</div>
+						<p class="text-xs text-muted-foreground">
+							Click the link in the email, or enter the 6-digit code below. The link and code expire
+							in 15 minutes.
 						</p>
 					</div>
-					<p class="text-xs text-muted-foreground">
-						The link expires in 15 minutes. Check your spam folder if you don't see it.
-					</p>
+					<form
+						method="POST"
+						action="?/code"
+						use:enhance={() => {
+							verifying = true;
+							return async ({ update }) => {
+								verifying = false;
+								await update();
+							};
+						}}
+						class="space-y-4"
+					>
+						<input type="hidden" name="email" value={form.email} />
+						<div class="space-y-2">
+							<Label for="code">Sign-in code</Label>
+							<Input
+								id="code"
+								name="code"
+								type="text"
+								inputmode="numeric"
+								maxlength={7}
+								autocomplete="one-time-code"
+								placeholder="123 456"
+								required
+								class="text-center text-lg tracking-[0.4em]"
+							/>
+						</div>
+						{#if form?.codeError}
+							<p class="text-sm text-destructive">{form.codeError}</p>
+						{/if}
+						<Button type="submit" class="w-full" disabled={verifying}>
+							{#if verifying}
+								Verifying…
+							{:else}
+								Continue
+							{/if}
+						</Button>
+					</form>
 				</div>
 			{:else}
 				<form
 					method="POST"
+					action="?/login"
 					use:enhance={() => {
 						loading = true;
 						return async ({ update }) => {
