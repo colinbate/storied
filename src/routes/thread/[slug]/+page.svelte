@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as NativeSelect from '$lib/components/ui/native-select';
+	import * as Popover from '$lib/components/ui/popover';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import BookCard from '$lib/components/BookCard.svelte';
@@ -137,7 +138,7 @@
 				Back to Discussions
 			</a>
 
-			<div class="flex items-start justify-between gap-4">
+			<div class="flex flex-col items-start justify-between gap-4 md:flex-row">
 				<div>
 					<div class="flex items-center gap-2">
 						<h1 class="text-2xl font-bold">{data.thread.title}</h1>
@@ -173,121 +174,131 @@
 					</div>
 				</div>
 
-				<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
-					<label for="thread-sub-mode" class="sr-only">Notify me</label>
-					<div class="flex items-center gap-2">
-						{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
-							<BellOffIcon class="h-4 w-4 text-muted-foreground" />
-						{:else}
-							<BellIcon class="h-4 w-4 text-muted-foreground" />
-						{/if}
-						<NativeSelect.Root
-							id="thread-sub-mode"
-							name="mode"
-							value={data.subscriptionMode}
-							onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
-						>
-							<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
-							<NativeSelect.Option value="daily_digest">Notify me: In my digest</NativeSelect.Option
+				<div class="flex flex-row gap-2">
+					<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
+						<label for="thread-sub-mode" class="sr-only">Notify me</label>
+						<div class="flex items-center gap-2">
+							{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
+								<BellOffIcon class="h-4 w-4 text-muted-foreground" />
+							{:else}
+								<BellIcon class="h-4 w-4 text-muted-foreground" />
+							{/if}
+							<NativeSelect.Root
+								id="thread-sub-mode"
+								name="mode"
+								value={data.subscriptionMode}
+								onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
 							>
-							<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
-						</NativeSelect.Root>
-					</div>
-				</form>
+								<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
+								<NativeSelect.Option value="daily_digest"
+									>Notify me: In my digest</NativeSelect.Option
+								>
+								<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
+							</NativeSelect.Root>
+						</div>
+					</form>
+
+					<!-- Moderation widget -->
+					{#if data.canModerate}
+						<Popover.Root>
+							<Popover.Trigger class={buttonVariants({ variant: 'outline' })}
+								><ShieldIcon class="size-4" /></Popover.Trigger
+							>
+							<Popover.Content align="end">
+								<div class="flex items-center gap-2 font-medium">
+									<ShieldIcon class="h-4 w-4" />
+									<span class="font-medium">Moderator Tools</span>
+								</div>
+								<div class="flex gap-2">
+									<form
+										method="POST"
+										action="?/togglePin"
+										use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
+									>
+										<input type="hidden" name="threadId" value={data.thread.id} />
+										<Button variant="outline" size="sm" type="submit">
+											{#if data.thread.isPinned}
+												<PinOffIcon class="h-4 w-4" />
+												Unpin
+											{:else}
+												<PinIcon class="h-4 w-4" />
+												Pin
+											{/if}
+										</Button>
+									</form>
+
+									<form
+										method="POST"
+										action="?/toggleLock"
+										use:enhance={modEnhance(data.thread.isLocked ? 'Unlocked.' : 'Locked.')}
+									>
+										<input type="hidden" name="threadId" value={data.thread.id} />
+										<Button variant="outline" size="sm" type="submit">
+											{#if data.thread.isLocked}
+												<UnlockIcon class="h-4 w-4" />
+												Unlock
+											{:else}
+												<LockIcon class="h-4 w-4" />
+												Lock
+											{/if}
+										</Button>
+									</form>
+									<div class="ml-auto">
+										<ConfirmButton
+											confirmText="Delete this thread?"
+											formAction="?/deleteThread"
+											formData={{ threadId: data.thread.id }}
+											variant="outline"
+											size="sm"
+											class="text-destructive hover:text-destructive"
+										>
+											<TrashIcon class="h-4 w-4" />
+											Delete Thread
+										</ConfirmButton>
+									</div>
+								</div>
+								{#if data.permissions.has('sessions:editx')}
+									<form
+										method="POST"
+										action="?/linkSession"
+										use:enhance={modEnhance('Session link updated.')}
+										class="inline-flex items-center gap-2"
+									>
+										<input type="hidden" name="threadId" value={data.thread.id} />
+										<label
+											for="session-select"
+											class="flex items-center gap-1 text-muted-foreground"
+										>
+											<CalendarIcon class="h-4 w-4" />
+											Session
+										</label>
+										<NativeSelect.Root
+											id="session-select"
+											name="sessionId"
+											onchange={(e) => {
+												(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+											}}
+										>
+											<NativeSelect.Option value="" selected={!data.thread.sessionId}
+												>No session</NativeSelect.Option
+											>
+											{#each data.allSessions as session (session.id)}
+												<NativeSelect.Option
+													value={session.id}
+													selected={data.thread.sessionId === session.id}
+												>
+													{session.title}
+												</NativeSelect.Option>
+											{/each}
+										</NativeSelect.Root>
+									</form>
+								{/if}
+							</Popover.Content>
+						</Popover.Root>
+					{/if}
+				</div>
 			</div>
 		</div>
-
-		<!-- Moderation widget -->
-		{#if data.canModerate}
-			<Card.Root class="border-dashed">
-				<Card.Content class="flex flex-wrap items-center gap-3 px-4 text-sm">
-					<div class="flex items-center gap-2 text-muted-foreground">
-						<ShieldIcon class="h-4 w-4" />
-						<span class="font-medium">Moderator</span>
-					</div>
-
-					<form
-						method="POST"
-						action="?/togglePin"
-						use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
-					>
-						<input type="hidden" name="threadId" value={data.thread.id} />
-						<Button variant="outline" size="sm" type="submit">
-							{#if data.thread.isPinned}
-								<PinOffIcon class="h-4 w-4" />
-								Unpin
-							{:else}
-								<PinIcon class="h-4 w-4" />
-								Pin
-							{/if}
-						</Button>
-					</form>
-
-					<form
-						method="POST"
-						action="?/toggleLock"
-						use:enhance={modEnhance(data.thread.isLocked ? 'Unlocked.' : 'Locked.')}
-					>
-						<input type="hidden" name="threadId" value={data.thread.id} />
-						<Button variant="outline" size="sm" type="submit">
-							{#if data.thread.isLocked}
-								<UnlockIcon class="h-4 w-4" />
-								Unlock
-							{:else}
-								<LockIcon class="h-4 w-4" />
-								Lock
-							{/if}
-						</Button>
-					</form>
-
-					<form
-						method="POST"
-						action="?/linkSession"
-						use:enhance={modEnhance('Session link updated.')}
-						class="inline-flex items-center gap-2"
-					>
-						<input type="hidden" name="threadId" value={data.thread.id} />
-						<label for="session-select" class="flex items-center gap-1 text-muted-foreground">
-							<CalendarIcon class="h-4 w-4" />
-							Session
-						</label>
-						<NativeSelect.Root
-							id="session-select"
-							name="sessionId"
-							onchange={(e) => {
-								(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-							}}
-						>
-							<NativeSelect.Option value="" selected={!data.thread.sessionId}
-								>No session</NativeSelect.Option
-							>
-							{#each data.allSessions as session (session.id)}
-								<NativeSelect.Option
-									value={session.id}
-									selected={data.thread.sessionId === session.id}
-								>
-									{session.title}
-								</NativeSelect.Option>
-							{/each}
-						</NativeSelect.Root>
-					</form>
-
-					<div class="ml-auto">
-						<ConfirmButton
-							confirmText="Delete this thread?"
-							formAction="?/deleteThread"
-							formData={{ threadId: data.thread.id }}
-							variant="outline"
-							size="sm"
-							class="text-destructive hover:text-destructive"
-						>
-							<TrashIcon class="h-4 w-4" />
-							Delete Thread
-						</ConfirmButton>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		{/if}
 
 		<!-- Thread body (the opening post) -->
 		<Card.Root>
@@ -336,7 +347,7 @@
 								</div>
 							</form>
 						{:else}
-							<div class="prose prose-sm max-w-none dark:prose-invert">
+							<div class="prose prose-sm max-w-none wrap-anywhere dark:prose-invert">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html data.thread.bodyHtml}
 							</div>
@@ -410,7 +421,7 @@
 											</div>
 										</form>
 									{:else}
-										<div class="prose prose-sm max-w-none dark:prose-invert">
+										<div class="prose prose-sm max-w-none wrap-anywhere dark:prose-invert">
 											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											{@html post.bodyHtml}
 										</div>

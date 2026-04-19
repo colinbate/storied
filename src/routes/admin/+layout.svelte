@@ -54,7 +54,7 @@
 
 <div class="flex flex-col gap-6 md:flex-row">
 	<aside class="shrink-0 md:w-48">
-		<nav class="flex flex-row gap-1 md:flex-col">
+		<nav class="flex flex-row flex-wrap gap-1 md:flex-col">
 			{#each navItems as item (item.href)}
 				{#if item.show}
 					<a

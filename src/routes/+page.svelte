@@ -37,8 +37,12 @@
 			{#each data.categories as category (category.id)}
 				<a href={resolve(`/category/${category.slug}`)} class="block">
 					<Card.Root class="h-full transition-colors hover:border-primary/50">
-						<Card.Header class="pb-2">
+						<Card.Header class="flex flex-row justify-between pb-2">
 							<Card.Title class="text-base">{category.name}</Card.Title>
+							<Badge variant="secondary" class="px-1.5 py-0 text-xs"
+								>{category.size}
+								{category.size === 1 ? 'thread' : 'threads'}</Badge
+							>
 						</Card.Header>
 						{#if category.description}
 							<Card.Content>

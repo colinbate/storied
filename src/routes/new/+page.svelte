@@ -17,7 +17,7 @@
 	<title>New Thread — Storied</title>
 </svelte:head>
 
-<div class="mx-auto max-w-2xl space-y-6">
+<div class="mx-auto w-full max-w-3xl space-y-6">
 	<div>
 		<a
 			href={resolve('/')}

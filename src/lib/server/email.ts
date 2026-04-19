@@ -22,7 +22,7 @@ export async function sendEmail(
 		console.log('[EMAIL DISABLED] Would send:', {
 			to: options.to,
 			subject: options.subject,
-			text: options.textBody.substring(0, 200)
+			text: options.textBody.substring(0, 220)
 		});
 		return { success: true };
 	}
