@@ -16,7 +16,7 @@ database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
 migrations_dir = "migrations"
 
 [vars]
-SEND_EMAILS = ""
+SEND_EMAILS = "yes"
 FILE_BASE_URL = "https://assets.bermudatrianglesociety.com"
 ALLOW_SIGNUP = "no"
 
