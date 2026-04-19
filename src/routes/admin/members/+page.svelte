@@ -74,7 +74,11 @@
 				>
 					<div class="flex-1 space-y-2" style="min-width: 16rem;">
 						<Label for="email">Email Address</Label>
-						<Input id="email" name="email" type="email" placeholder="person@example.com" required />
+						<Input id="email" name="email" type="email" placeholder="frodo@example.com" required />
+					</div>
+					<div class="flex-1 space-y-2" style="min-width: 16rem;">
+						<Label for="displayName">Display Name</Label>
+						<Input id="displayName" name="displayName" type="text" placeholder="Frodo Baggins" />
 					</div>
 					<div class="space-y-2">
 						<Label for="role">Role</Label>

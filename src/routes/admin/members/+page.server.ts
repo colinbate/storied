@@ -17,6 +17,7 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const email = data.get('email')?.toString()?.trim()?.toLowerCase();
+		const displayName = data.get('displayName')?.toString()?.trim();
 		const roleValue = data.get('role')?.toString();
 
 		if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -25,7 +26,7 @@ export const actions: Actions = {
 
 		const role = isUserRole(roleValue) ? roleValue : 'member';
 
-		const { isNew } = await findOrCreateUser(locals.db, email, { role });
+		const { isNew } = await findOrCreateUser(locals.db, email, { role, name: displayName });
 
 		if (!isNew) {
 			return fail(400, { error: 'A member with this email already exists.' });
