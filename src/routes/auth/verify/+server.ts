@@ -8,7 +8,7 @@ import {
 	REDIR_COOKIE_NAME
 } from '$lib/server/auth';
 
-export const GET: RequestHandler = async ({ url, locals, cookies }) => {
+export const GET: RequestHandler = async ({ url, locals, cookies, platform }) => {
 	const token = url.searchParams.get('token');
 
 	if (!token) {
@@ -27,7 +27,16 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 	}
 
 	// Find or create the user
-	const { id: userId } = await findOrCreateUser(locals.db, result.email);
+	const { id: userId } = await findOrCreateUser(
+		locals.db,
+		result.email,
+		'member',
+		platform?.env.ALLOW_SIGNUP === 'yes'
+	);
+
+	if (!userId) {
+		redirect(302, '/auth/login?error=no_signup');
+	}
 
 	// Create a session
 	const session = await createSession(locals.db, userId);

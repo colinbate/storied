@@ -18,6 +18,7 @@ migrations_dir = "migrations"
 [vars]
 SEND_EMAILS = ""
 FILE_BASE_URL = "https://assets.bermudatrianglesociety.com"
+ALLOW_SIGNUP = "no"
 
 [[r2_buckets]]
 binding = "FILES"

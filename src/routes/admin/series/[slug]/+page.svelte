@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -24,15 +23,9 @@
 
 	let { data } = $props();
 	let saving = $state(false);
-	let isComplete = $state(untrack(() => !!data.series.isComplete));
-	$effect(() => {
-		isComplete = !!data.series.isComplete;
-	});
+	let isComplete = $derived(!!data.series.isComplete);
 
-	let selectedGenreIds = $state<number[]>(untrack(() => data.genreLinks.map((g) => g.genreId)));
-	$effect(() => {
-		selectedGenreIds = data.genreLinks.map((g) => g.genreId);
-	});
+	let selectedGenreIds = $derived(data.genreLinks.map((g) => g.genreId));
 
 	let addBookId = $state<string | undefined>(undefined);
 	let addBookMode = $state<'existing' | 'url'>('existing');
@@ -145,12 +138,7 @@
 						/>
 					</div>
 					<div class="flex items-center gap-2 sm:col-span-2">
-						<input
-							type="checkbox"
-							id="isComplete"
-							bind:checked={isComplete}
-							class="h-4 w-4"
-						/>
+						<input type="checkbox" id="isComplete" bind:checked={isComplete} class="h-4 w-4" />
 						<Label for="isComplete">Series is complete</Label>
 						<input type="hidden" name="isComplete" value={isComplete ? '1' : '0'} />
 					</div>
@@ -229,22 +217,22 @@
 									}
 								};
 							}}
-							class="flex flex-wrap items-center gap-3 px-3 py-2 {m.book.deletedAt ? 'opacity-60' : ''}"
+							class="flex flex-wrap items-center gap-3 px-3 py-2 {m.book.deletedAt
+								? 'opacity-60'
+								: ''}"
 						>
 							<input type="hidden" name="bookId" value={m.book.id} />
 							{#if m.book.coverUrl}
-								<img
-									src={m.book.coverUrl}
-									alt=""
-									class="h-10 w-7 shrink-0 rounded object-cover"
-								/>
+								<img src={m.book.coverUrl} alt="" class="h-10 w-7 shrink-0 rounded object-cover" />
 							{:else}
 								<div class="flex h-10 w-7 shrink-0 items-center justify-center rounded bg-muted">
 									<BookOpenIcon class="h-3 w-3 text-muted-foreground" />
 								</div>
 							{/if}
 							<a
-								class="min-w-0 flex-1 truncate font-medium hover:underline {m.book.deletedAt ? 'line-through' : ''}"
+								class="min-w-0 flex-1 truncate font-medium hover:underline {m.book.deletedAt
+									? 'line-through'
+									: ''}"
 								href={resolve('/admin/books/[slug]', { slug: m.book.slug })}
 							>
 								{m.book.title}
@@ -399,7 +387,8 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="text-base">Sessions</Card.Title>
-			<Card.Description>Sessions where this series has been discussed or featured.</Card.Description>
+			<Card.Description>Sessions where this series has been discussed or featured.</Card.Description
+			>
 		</Card.Header>
 		<Card.Content class="space-y-4 p-4">
 			{#if data.sessionLinks.length > 0}
@@ -423,7 +412,7 @@
 						>
 							<input type="hidden" name="sessionId" value={link.session.id} />
 							<a
-								class="min-w-[10rem] flex-1 truncate font-medium hover:underline"
+								class="min-w-40 flex-1 truncate font-medium hover:underline"
 								href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
 							>
 								{link.session.title}
@@ -441,12 +430,7 @@
 									<option value="selected">selected</option>
 								</select>
 							</div>
-							<Input
-								name="note"
-								class="w-40"
-								placeholder="note"
-								value={link.link.note ?? ''}
-							/>
+							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
 							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
 							<ConfirmButton
 								confirmText="Remove this session link?"
@@ -534,7 +518,7 @@
 								<a
 									href={source.sourceUrl}
 									target="_blank"
-									rel="noopener noreferrer"
+									rel="noopener noreferrer external"
 									class="mt-1 block truncate text-sm text-muted-foreground hover:underline"
 								>
 									{source.sourceUrl}
@@ -574,11 +558,7 @@
 		</Card.Header>
 		<Card.Content>
 			{#if data.series.deletedAt}
-				<ConfirmButton
-					confirmText="Restore this series?"
-					formAction="?/restore"
-					variant="outline"
-				>
+				<ConfirmButton confirmText="Restore this series?" formAction="?/restore" variant="outline">
 					<RotateCcwIcon class="h-4 w-4" />
 					Restore
 				</ConfirmButton>

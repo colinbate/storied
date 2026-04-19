@@ -3,14 +3,15 @@ import type { Actions, PageServerLoad } from './$types';
 import { createMagicLink, REDIR_COOKIE_NAME } from '$lib/server/auth';
 import { sendMagicLinkEmail } from '$lib/server/email';
 
-export const load: PageServerLoad = async ({ locals, url, cookies }) => {
+export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	if (locals.user) {
 		throw redirect(302, '/');
 	}
 	const error = url.searchParams.get('error');
-
+	const canSignup = platform?.env.ALLOW_SIGNUP === 'yes';
 	return {
-		error
+		error,
+		canSignup
 	};
 };
 

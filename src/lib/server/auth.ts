@@ -88,11 +88,12 @@ export function isUserRole(value: unknown): value is UserRole {
 export async function findOrCreateUser(
 	db: ORM,
 	email: string,
-	role: UserRole = 'member'
+	role: UserRole = 'member',
+	allowSignup = true
 ): Promise<{ id: string; isNew: boolean }> {
 	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
 	if (existing) return { id: existing.id, isNew: false };
-
+	if (!allowSignup) return { id: '', isNew: false };
 	const id = nanoid();
 	const displayName = email.split('@')[0];
 	await db.insert(users).values({

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -19,17 +18,13 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import XIcon from '@lucide/svelte/icons/x';
 	import LinkIcon from '@lucide/svelte/icons/link';
-	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 	let saving = $state(false);
 
 	// Genre multi-picker state
-	let selectedGenreIds = $state<number[]>(untrack(() => data.genreLinks.map((g) => g.genreId)));
-	$effect(() => {
-		selectedGenreIds = data.genreLinks.map((g) => g.genreId);
-	});
+	let selectedGenreIds = $derived(data.genreLinks.map((g) => g.genreId));
 
 	// Series add state
 	let addSeriesId = $state<string | undefined>(undefined);
@@ -147,7 +142,12 @@
 					</div>
 					<div class="space-y-2">
 						<Label for="goodreadsUrl">Goodreads URL</Label>
-						<Input id="goodreadsUrl" name="goodreadsUrl" type="url" value={data.book.goodreadsUrl ?? ''} />
+						<Input
+							id="goodreadsUrl"
+							name="goodreadsUrl"
+							type="url"
+							value={data.book.goodreadsUrl ?? ''}
+						/>
 					</div>
 					<div class="space-y-2">
 						<Label for="openLibraryId">Open Library ID</Label>
@@ -159,7 +159,12 @@
 					</div>
 					<div class="space-y-2 sm:col-span-2">
 						<Label for="description">Description</Label>
-						<Textarea id="description" name="description" rows={5} value={data.book.description ?? ''} />
+						<Textarea
+							id="description"
+							name="description"
+							rows={5}
+							value={data.book.description ?? ''}
+						/>
 					</div>
 				</div>
 				<div>
@@ -351,9 +356,7 @@
 								if (result.type === 'success') {
 									if (result.data?.seriesAdded) toast.success('Added to series.');
 									if (result.data?.queuedSeries)
-										toast.success(
-											'Series URL queued. This book will be linked once it resolves.'
-										);
+										toast.success('Series URL queued. This book will be linked once it resolves.');
 									if (result.data?.error) toast.error(String(result.data.error));
 								}
 							};
@@ -412,7 +415,7 @@
 						>
 							<input type="hidden" name="sessionId" value={link.session.id} />
 							<a
-								class="min-w-[10rem] flex-1 truncate font-medium hover:underline"
+								class="min-w-40 flex-1 truncate font-medium hover:underline"
 								href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
 							>
 								{link.session.title}
@@ -430,12 +433,7 @@
 									<option value="selected">selected</option>
 								</select>
 							</div>
-							<Input
-								name="note"
-								class="w-40"
-								placeholder="note"
-								value={link.link.note ?? ''}
-							/>
+							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
 							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
 							<ConfirmButton
 								confirmText="Remove this session link?"
@@ -510,9 +508,7 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="text-base">External Sources</Card.Title>
-				<Card.Description>
-					External references that resolved to this book.
-				</Card.Description>
+				<Card.Description>External references that resolved to this book.</Card.Description>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="divide-y">
@@ -526,7 +522,7 @@
 								<a
 									href={source.sourceUrl}
 									target="_blank"
-									rel="noopener noreferrer"
+									rel="noopener noreferrer external"
 									class="mt-1 block truncate text-sm text-muted-foreground hover:underline"
 								>
 									{source.sourceUrl}
@@ -566,11 +562,7 @@
 		</Card.Header>
 		<Card.Content>
 			{#if data.book.deletedAt}
-				<ConfirmButton
-					confirmText="Restore this book?"
-					formAction="?/restore"
-					variant="outline"
-				>
+				<ConfirmButton confirmText="Restore this book?" formAction="?/restore" variant="outline">
 					<RotateCcwIcon class="h-4 w-4" />
 					Restore
 				</ConfirmButton>
