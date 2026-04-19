@@ -7,6 +7,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
+	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -24,9 +25,6 @@
 		if (role === 'moderator') return 'secondary';
 		return 'outline';
 	}
-
-	const selectClasses =
-		'dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 disabled:bg-input/50 dark:disabled:bg-input/80 rounded-lg border bg-transparent pl-2.5 pr-10 py-1 text-base transition-colors focus-visible:ring-3 md:text-sm text-foreground placeholder:text-muted-foreground min-w-0 outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
 </script>
 
 <svelte:head>
@@ -82,11 +80,13 @@
 					</div>
 					<div class="space-y-2">
 						<Label for="role">Role</Label>
-						<select id="role" name="role" class={selectClasses} disabled={loading}>
+						<NativeSelect id="role" name="role" disabled={loading}>
 							{#each roleOptions as opt (opt.value)}
-								<option value={opt.value} selected={opt.value === 'member'}>{opt.label}</option>
+								<NativeSelectOption value={opt.value} selected={opt.value === 'member'}
+									>{opt.label}</NativeSelectOption
+								>
 							{/each}
-						</select>
+						</NativeSelect>
 					</div>
 					<Button type="submit" disabled={loading}>
 						{loading ? 'Adding…' : 'Add'}
@@ -134,9 +134,8 @@
 								}}
 							>
 								<input type="hidden" name="userId" value={member.id} />
-								<select
+								<NativeSelect
 									name="role"
-									class={selectClasses}
 									value={member.role}
 									disabled={updatingUserId === member.id}
 									onchange={(e) => {
@@ -145,11 +144,11 @@
 									aria-label="Role for {member.displayName}"
 								>
 									{#each roleOptions as opt (opt.value)}
-										<option value={opt.value} selected={opt.value === member.role}
-											>{opt.label}</option
+										<NativeSelectOption value={opt.value} selected={opt.value === member.role}
+											>{opt.label}</NativeSelectOption
 										>
 									{/each}
-								</select>
+								</NativeSelect>
 							</form>
 							<span class="text-xs whitespace-nowrap text-muted-foreground">
 								Joined {new Date(member.createdAt).toLocaleDateString()}

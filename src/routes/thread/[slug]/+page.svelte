@@ -3,6 +3,7 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import * as NativeSelect from '$lib/components/ui/native-select';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import BookCard from '$lib/components/BookCard.svelte';
@@ -180,18 +181,17 @@
 						{:else}
 							<BellIcon class="h-4 w-4 text-muted-foreground" />
 						{/if}
-						<select
+						<NativeSelect.Root
 							id="thread-sub-mode"
 							name="mode"
 							value={data.subscriptionMode}
 							onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
-							class="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
 						>
-							<option value="immediate">Notify me: Immediately</option>
-							<option value="daily_digest">Notify me: In my digest</option>
-							<option value="mute">Notify me: Muted</option>
-							<option value="none">Notify me: Off</option>
-						</select>
+							<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
+							<NativeSelect.Option value="daily_digest">Notify me: In my digest</NativeSelect.Option
+							>
+							<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
+						</NativeSelect.Root>
 					</div>
 				</form>
 			</div>
@@ -251,21 +251,25 @@
 							<CalendarIcon class="h-4 w-4" />
 							Session
 						</label>
-						<select
+						<NativeSelect.Root
 							id="session-select"
 							name="sessionId"
-							class="rounded-lg border border-input bg-transparent pr-10 pl-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
 							onchange={(e) => {
 								(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
 							}}
 						>
-							<option value="" selected={!data.thread.sessionId}>No session</option>
+							<NativeSelect.Option value="" selected={!data.thread.sessionId}
+								>No session</NativeSelect.Option
+							>
 							{#each data.allSessions as session (session.id)}
-								<option value={session.id} selected={data.thread.sessionId === session.id}>
+								<NativeSelect.Option
+									value={session.id}
+									selected={data.thread.sessionId === session.id}
+								>
 									{session.title}
-								</option>
+								</NativeSelect.Option>
 							{/each}
-						</select>
+						</NativeSelect.Root>
 					</form>
 
 					<div class="ml-auto">

@@ -7,6 +7,7 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
+	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -43,23 +44,18 @@
 			>
 				<div class="space-y-2">
 					<Label for="categoryId">Category</Label>
-					<select
-						id="categoryId"
-						name="categoryId"
-						required
-						class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
-					>
-						<option value="">Select a category…</option>
+					<NativeSelect id="categoryId" name="categoryId" required>
+						<NativeSelectOption value="">Select a category…</NativeSelectOption>
 						{#each data.categories as category (category.id)}
-							<option
+							<NativeSelectOption
 								value={category.id}
 								selected={form?.categoryId === category.id ||
 									data.preselectedCategory === category.slug}
 							>
 								{category.name}
-							</option>
+							</NativeSelectOption>
 						{/each}
-					</select>
+					</NativeSelect>
 				</div>
 
 				<div class="space-y-2">

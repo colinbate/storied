@@ -12,6 +12,7 @@
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
 	let { data } = $props();
 
@@ -113,18 +114,19 @@
 					}}
 					class="flex items-center gap-2"
 				>
-					<select
+					<NativeSelect
 						name="readingStatus"
-						class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
 						onchange={(e) => e.currentTarget.form?.requestSubmit()}
 					>
-						<option value="" disabled selected={!data.myBookRelation}>Track this book…</option>
+						<NativeSelectOption value="" disabled selected={!data.myBookRelation}
+							>Track this book…</NativeSelectOption
+						>
 						{#each statusOptions as [value, label] (value)}
-							<option {value} selected={data.myBookRelation?.readingStatus === value}
-								>{label}</option
+							<NativeSelectOption {value} selected={data.myBookRelation?.readingStatus === value}
+								>{label}</NativeSelectOption
 							>
 						{/each}
-					</select>
+					</NativeSelect>
 				</form>
 
 				<form

@@ -16,6 +16,7 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import { toast } from 'svelte-sonner';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
 	let { data } = $props();
 	let saving = $state(false);
@@ -31,9 +32,7 @@
 	const bookPickerItems = $derived(
 		data.allBooks
 			.filter((b) => !b.deletedAt)
-			.filter(
-				(b) => !data.linkedSubjects.some((s) => s.kind === 'book' && s.book.id === b.id)
-			)
+			.filter((b) => !data.linkedSubjects.some((s) => s.kind === 'book' && s.book.id === b.id))
 			.map((b) => ({ id: b.id, title: b.title, authorText: b.authorText }))
 	);
 	const seriesPickerItems = $derived(
@@ -98,12 +97,7 @@
 					</div>
 					<div class="space-y-2">
 						<Label for="startsAt">Starts At</Label>
-						<Input
-							id="startsAt"
-							name="startsAt"
-							type="date"
-							value={data.session.startsAt ?? ''}
-						/>
+						<Input id="startsAt" name="startsAt" type="date" value={data.session.startsAt ?? ''} />
 					</div>
 					<div class="space-y-2">
 						<Label for="astroPath">Astro Path</Label>
@@ -152,7 +146,9 @@
 									}
 								};
 							}}
-							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.book.deletedAt ? 'opacity-60' : ''}"
+							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.book.deletedAt
+								? 'opacity-60'
+								: ''}"
 						>
 							<input type="hidden" name="kind" value="book" />
 							<input type="hidden" name="subjectId" value={entry.book.id} />
@@ -168,7 +164,9 @@
 								</div>
 							{/if}
 							<a
-								class="min-w-[10rem] flex-1 truncate font-medium hover:underline {entry.book.deletedAt ? 'line-through' : ''}"
+								class="min-w-40 flex-1 truncate font-medium hover:underline {entry.book.deletedAt
+									? 'line-through'
+									: ''}"
 								href={resolve('/admin/books/[slug]', { slug: entry.book.slug })}
 							>
 								{entry.book.title}
@@ -178,16 +176,11 @@
 							</a>
 							<div class="flex items-center gap-2">
 								<Label for="status-b-{entry.book.id}" class="text-xs">Status</Label>
-								<select
-									id="status-b-{entry.book.id}"
-									name="status"
-									value={entry.link.status}
-									class="h-8 rounded border bg-background px-2 text-sm"
-								>
-									<option value="mentioned">mentioned</option>
-									<option value="featured">featured</option>
-									<option value="selected">selected</option>
-								</select>
+								<NativeSelect id="status-b-{entry.book.id}" name="status" value={entry.link.status}>
+									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+									<NativeSelectOption value="featured">featured</NativeSelectOption>
+									<NativeSelectOption value="selected">selected</NativeSelectOption>
+								</NativeSelect>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
 							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
@@ -235,7 +228,9 @@
 									}
 								};
 							}}
-							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.series.deletedAt ? 'opacity-60' : ''}"
+							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.series.deletedAt
+								? 'opacity-60'
+								: ''}"
 						>
 							<input type="hidden" name="kind" value="series" />
 							<input type="hidden" name="subjectId" value={entry.series.id} />
@@ -251,26 +246,29 @@
 								</div>
 							{/if}
 							<a
-								class="min-w-[10rem] flex-1 truncate font-medium hover:underline {entry.series.deletedAt ? 'line-through' : ''}"
+								class="min-w-40 flex-1 truncate font-medium hover:underline {entry.series.deletedAt
+									? 'line-through'
+									: ''}"
 								href={resolve('/admin/series/[slug]', { slug: entry.series.slug })}
 							>
 								{entry.series.title}
 								{#if entry.series.authorText}
-									<span class="font-normal text-muted-foreground"> — {entry.series.authorText}</span>
+									<span class="font-normal text-muted-foreground">
+										— {entry.series.authorText}</span
+									>
 								{/if}
 							</a>
 							<div class="flex items-center gap-2">
 								<Label for="status-s-{entry.series.id}" class="text-xs">Status</Label>
-								<select
+								<NativeSelect
 									id="status-s-{entry.series.id}"
 									name="status"
 									value={entry.link.status}
-									class="h-8 rounded border bg-background px-2 text-sm"
 								>
-									<option value="mentioned">mentioned</option>
-									<option value="featured">featured</option>
-									<option value="selected">selected</option>
-								</select>
+									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+									<NativeSelectOption value="featured">featured</NativeSelectOption>
+									<NativeSelectOption value="selected">selected</NativeSelectOption>
+								</NativeSelect>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
 							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
@@ -354,25 +352,17 @@
 				</div>
 				<div class="space-y-1">
 					<Label for="add-status">Status</Label>
-					<select
-						id="add-status"
-						name="status"
-						bind:value={addStatus}
-						class="h-9 rounded border bg-background px-2 text-sm"
-					>
-						<option value="mentioned">mentioned</option>
-						<option value="featured">featured</option>
-						<option value="selected">selected</option>
-					</select>
+					<NativeSelect id="add-status" name="status" bind:value={addStatus}>
+						<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<NativeSelectOption value="featured">featured</NativeSelectOption>
+						<NativeSelectOption value="selected">selected</NativeSelectOption>
+					</NativeSelect>
 				</div>
 				<div class="flex-1 space-y-1">
 					<Label for="add-note">Note</Label>
 					<Input id="add-note" name="note" placeholder="optional" />
 				</div>
-				<Button
-					type="submit"
-					disabled={saving || (addKind === 'book' ? !addBookId : !addSeriesId)}
-				>
+				<Button type="submit" disabled={saving || (addKind === 'book' ? !addBookId : !addSeriesId)}>
 					<PlusIcon class="h-4 w-4" />
 					Link
 				</Button>
@@ -401,7 +391,7 @@
 						if (result.type === 'success') {
 							if (result.data?.linkAddedFromResolved) toast.success('Linked to session.');
 							if (result.data?.linkQueuedFromUrl)
-								toast.success("Queued. Will link to session once resolved.");
+								toast.success('Queued. Will link to session once resolved.');
 							if (result.data?.error) toast.error(String(result.data.error));
 						}
 					};
@@ -420,16 +410,11 @@
 				</div>
 				<div class="space-y-1">
 					<Label for="url-status">Status</Label>
-					<select
-						id="url-status"
-						name="status"
-						bind:value={urlStatus}
-						class="h-9 rounded border bg-background px-2 text-sm"
-					>
-						<option value="mentioned">mentioned</option>
-						<option value="featured">featured</option>
-						<option value="selected">selected</option>
-					</select>
+					<NativeSelect id="url-status" name="status" bind:value={urlStatus}>
+						<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<NativeSelectOption value="featured">featured</NativeSelectOption>
+						<NativeSelectOption value="selected">selected</NativeSelectOption>
+					</NativeSelect>
 				</div>
 				<div class="flex-1 space-y-1">
 					<Label for="url-note">Note</Label>

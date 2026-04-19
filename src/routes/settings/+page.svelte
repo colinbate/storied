@@ -8,6 +8,7 @@
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import { toast } from 'svelte-sonner';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -23,7 +24,8 @@
 		digestHourLocal: number | null;
 	}): 'off' | 'immediate' | 'daily_digest' {
 		if (!prefs.emailEnabled) return 'off';
-		if (prefs.digestHourLocal !== null && prefs.digestHourLocal !== undefined) return 'daily_digest';
+		if (prefs.digestHourLocal !== null && prefs.digestHourLocal !== undefined)
+			return 'daily_digest';
 		return 'immediate';
 	}
 
@@ -248,16 +250,11 @@
 			>
 				<div class="space-y-2">
 					<Label for="timezone">Timezone</Label>
-					<select
-						id="timezone"
-						name="timezone"
-						bind:value={selectedTimezone}
-						class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-					>
+					<NativeSelect id="timezone" name="timezone" bind:value={selectedTimezone}>
 						{#each allTimezones as tz (tz)}
-							<option value={tz}>{tz}</option>
+							<NativeSelectOption value={tz}>{tz}</NativeSelectOption>
 						{/each}
-					</select>
+					</NativeSelect>
 					{#if detectedTimezone && detectedTimezone !== selectedTimezone}
 						<p class="text-xs text-muted-foreground">
 							Detected: <strong>{detectedTimezone}</strong>
@@ -315,9 +312,7 @@
 						/>
 						<span>
 							<span class="block font-medium">Off</span>
-							<span class="block text-xs text-muted-foreground">
-								No emails from the forum.
-							</span>
+							<span class="block text-xs text-muted-foreground"> No emails from the forum. </span>
 						</span>
 					</label>
 					<label class="flex items-start gap-3">
@@ -357,25 +352,16 @@
 				{#if notificationMode === 'daily_digest'}
 					<div class="space-y-2">
 						<Label for="digestHour">Digest time ({data.user.timezone})</Label>
-						<select
-							id="digestHour"
-							name="digestHour"
-							bind:value={digestHour}
-							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-						>
+						<NativeSelect id="digestHour" name="digestHour" bind:value={digestHour}>
 							{#each Array.from({ length: 24 }, (_, i) => i) as h (h)}
-								<option value={h}>{formatHour(h)}</option>
+								<NativeSelectOption value={h}>{formatHour(h)}</NativeSelectOption>
 							{/each}
-						</select>
+						</NativeSelect>
 					</div>
 				{/if}
 
 				<label class="flex items-center gap-2 text-sm">
-					<input
-						type="checkbox"
-						name="autoSubscribe"
-						bind:checked={autoSubscribe}
-					/>
+					<input type="checkbox" name="autoSubscribe" bind:checked={autoSubscribe} />
 					Automatically watch threads I create or reply to
 				</label>
 

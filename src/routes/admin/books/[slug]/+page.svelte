@@ -19,6 +19,7 @@
 	import XIcon from '@lucide/svelte/icons/x';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import { toast } from 'svelte-sonner';
+	import * as NativeSelect from '$lib/components/ui/native-select';
 
 	let { data } = $props();
 	let saving = $state(false);
@@ -422,16 +423,15 @@
 							</a>
 							<div class="flex items-center gap-2">
 								<Label for="status-{link.session.id}" class="text-xs">Status</Label>
-								<select
+								<NativeSelect.Root
 									id="status-{link.session.id}"
 									name="status"
 									value={link.link.status}
-									class="h-8 rounded border bg-background px-2 text-sm"
 								>
-									<option value="mentioned">mentioned</option>
-									<option value="featured">featured</option>
-									<option value="selected">selected</option>
-								</select>
+									<NativeSelect.Option value="mentioned">mentioned</NativeSelect.Option>
+									<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+									<NativeSelect.Option value="selected">selected</NativeSelect.Option>
+								</NativeSelect.Root>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
 							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
@@ -480,16 +480,11 @@
 				</div>
 				<div class="space-y-1">
 					<Label for="add-status">Status</Label>
-					<select
-						id="add-status"
-						name="status"
-						bind:value={addSessionStatus}
-						class="h-9 rounded border bg-background px-2 text-sm"
-					>
-						<option value="mentioned">mentioned</option>
-						<option value="featured">featured</option>
-						<option value="selected">selected</option>
-					</select>
+					<NativeSelect.Root id="add-status" name="status" bind:value={addSessionStatus}>
+						<NativeSelect.Option value="mentioned">mentioned</NativeSelect.Option>
+						<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+						<NativeSelect.Option value="selected">selected</NativeSelect.Option>
+					</NativeSelect.Root>
 				</div>
 				<div class="flex-1 space-y-1">
 					<Label for="add-note">Note</Label>
