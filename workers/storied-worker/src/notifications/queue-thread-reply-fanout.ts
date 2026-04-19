@@ -33,11 +33,18 @@ export async function handleThreadReplyFanout(
 		.first<{ display_name: string }>();
 	if (!author) return;
 
+	// Respect per-user email_enabled. Users who haven't set a preferences row
+	// yet (LEFT JOIN returning NULL) are treated as enabled (matching the
+	// users.email_enabled=1 default on the table).
 	const subsResult = await env.DB.prepare(
 		`SELECT s.user_id AS user_id, u.email AS email
 		 FROM subscriptions s
 		 INNER JOIN users u ON u.id = s.user_id
-		 WHERE s.thread_id = ? AND s.mode = 'immediate' AND s.user_id != ?`
+		 LEFT JOIN notification_preferences np ON np.user_id = s.user_id
+		 WHERE s.thread_id = ?
+		   AND s.mode = 'immediate'
+		   AND s.user_id != ?
+		   AND (np.email_enabled IS NULL OR np.email_enabled = 1)`
 	)
 		.bind(threadId, replyAuthorUserId)
 		.all<{ user_id: string; email: string }>();

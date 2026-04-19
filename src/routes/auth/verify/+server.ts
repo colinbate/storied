@@ -5,8 +5,10 @@ import {
 	findOrCreateUser,
 	createSession,
 	SESSION_COOKIE_NAME,
-	REDIR_COOKIE_NAME
+	REDIR_COOKIE_NAME,
+	TIMEZONE_COOKIE_NAME
 } from '$lib/server/auth';
+import { isValidTimezone } from '$lib/server/notification-preferences';
 
 export const GET: RequestHandler = async ({ url, locals, cookies, platform }) => {
 	const token = url.searchParams.get('token');
@@ -26,13 +28,22 @@ export const GET: RequestHandler = async ({ url, locals, cookies, platform }) =>
 		cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
 	}
 
+	// Read the browser-detected timezone that the login form stashed. If the
+	// magic link is clicked on a different device the cookie won't be there;
+	// we fall back to the users.timezone default. If present but invalid, we
+	// drop it so the default kicks in.
+	const cookieTimezone = cookies.get(TIMEZONE_COOKIE_NAME);
+	if (cookieTimezone) {
+		cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
+	}
+	const timezone = isValidTimezone(cookieTimezone) ? cookieTimezone : undefined;
+
 	// Find or create the user
-	const { id: userId } = await findOrCreateUser(
-		locals.db,
-		result.email,
-		'member',
-		platform?.env.ALLOW_SIGNUP === 'yes'
-	);
+	const { id: userId } = await findOrCreateUser(locals.db, result.email, {
+		role: 'member',
+		allowSignup: platform?.env.ALLOW_SIGNUP === 'yes',
+		timezone
+	});
 
 	if (!userId) {
 		redirect(302, '/auth/login?error=no_signup');

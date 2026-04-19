@@ -17,6 +17,7 @@ import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
+import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import type { SubjectSourceType } from '$shared/worker-messages';
 
 /** How long after posting a user can edit their own post or thread. */
@@ -152,6 +153,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		author: thread.author,
 		posts: threadPosts,
 		isSubscribed: !!subscription,
+		subscriptionMode: (subscription?.mode ?? 'none') as 'immediate' | 'daily_digest' | 'mute' | 'none',
 		books: uniqueBooks,
 		series: linkedSubjects.filter((s) => s.kind === 'series').map((s) => s.series),
 		session,
@@ -213,7 +215,8 @@ export const actions: Actions = {
 			})
 			.where(eq(threads.id, thread.id));
 
-		// Auto-subscribe the replier to the thread (if not already)
+		// Auto-subscribe the replier to the thread (if not already), honoring
+		// the user's notification preferences.
 		const existingSub = await locals.db
 			.select()
 			.from(subscriptions)
@@ -221,12 +224,15 @@ export const actions: Actions = {
 			.get();
 
 		if (!existingSub) {
-			await locals.db.insert(subscriptions).values({
-				id: newId(),
-				userId: locals.user.id,
-				threadId: thread.id,
-				mode: 'immediate'
-			});
+			const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+			if (prefs.autoSubscribeOwn) {
+				await locals.db.insert(subscriptions).values({
+					id: newId(),
+					userId: locals.user.id,
+					threadId: thread.id,
+					mode: prefs.defaultSubMode
+				});
+			}
 		}
 
 		// Detect and process subject links (books and series)
@@ -314,9 +320,15 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	subscribe: async ({ locals, params }) => {
+	setSubscriptionMode: async ({ locals, params, request }) => {
 		if (!locals.user) {
 			throw redirect(302, '/auth/login');
+		}
+
+		const data = await request.formData();
+		const mode = data.get('mode')?.toString();
+		if (mode !== 'immediate' && mode !== 'daily_digest' && mode !== 'mute' && mode !== 'none') {
+			return fail(400, { error: 'Invalid subscription mode.' });
 		}
 
 		const thread = await locals.db
@@ -329,26 +341,31 @@ export const actions: Actions = {
 			throw error(404, 'Thread not found');
 		}
 
-		const existing = await locals.db
-			.select()
-			.from(subscriptions)
-			.where(and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id)))
-			.get();
+		if (mode === 'none') {
+			await locals.db
+				.delete(subscriptions)
+				.where(
+					and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id))
+				);
+			return { subscriptionMode: 'none' as const };
+		}
 
-		if (existing) {
-			// Unsubscribe
-			await locals.db.delete(subscriptions).where(eq(subscriptions.id, existing.id));
-		} else {
-			// Subscribe
-			await locals.db.insert(subscriptions).values({
+		// Upsert via the (user_id, thread_id) unique index.
+		const now = new Date().toISOString();
+		await locals.db
+			.insert(subscriptions)
+			.values({
 				id: newId(),
 				userId: locals.user.id,
 				threadId: thread.id,
-				mode: 'immediate'
+				mode
+			})
+			.onConflictDoUpdate({
+				target: [subscriptions.userId, subscriptions.threadId],
+				set: { mode, updatedAt: now }
 			});
-		}
 
-		return { subscribed: !existing };
+		return { subscriptionMode: mode };
 	},
 
 	togglePin: async ({ request, locals, params }) => {

@@ -26,6 +26,6 @@ max_batch_timeout = 30
 name = "EMAIL"
 allowed_sender_addresses = ["notify@discuss.bermudatrianglesociety.com"]
 
-# Cron triggers — handlers wired in src/index.ts#scheduled, uncomment as jobs land.
-# [triggers]
-# crons = []
+# Cron triggers — handlers wired in src/dispatch.ts#dispatchScheduled.
+[triggers]
+crons = ["0 * * * *"]

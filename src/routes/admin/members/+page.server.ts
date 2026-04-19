@@ -25,7 +25,7 @@ export const actions: Actions = {
 
 		const role = isUserRole(roleValue) ? roleValue : 'member';
 
-		const { isNew } = await findOrCreateUser(locals.db, email, role);
+		const { isNew } = await findOrCreateUser(locals.db, email, { role });
 
 		if (!isNew) {
 			return fail(400, { error: 'A member with this email already exists.' });

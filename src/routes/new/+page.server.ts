@@ -14,6 +14,7 @@ import { slugify } from '$lib/server/slugify';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
+import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import type { SubjectSourceType } from '$shared/worker-messages';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -100,13 +101,16 @@ export const actions: Actions = {
 			lastPostAt: now
 		});
 
-		// Auto-subscribe the thread creator
-		await locals.db.insert(subscriptions).values({
-			id: newId(),
-			userId: locals.user.id,
-			threadId,
-			mode: 'immediate'
-		});
+		// Auto-subscribe the thread creator, honoring their preferences.
+		const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+		if (prefs.autoSubscribeOwn) {
+			await locals.db.insert(subscriptions).values({
+				id: newId(),
+				userId: locals.user.id,
+				threadId,
+				mode: prefs.defaultSubMode
+			});
+		}
 
 		// Detect and process subject links (books and series)
 		const detectedLinks = detectSubjectLinks(bodySource);

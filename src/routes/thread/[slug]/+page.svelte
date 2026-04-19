@@ -99,6 +99,25 @@
 			}
 		};
 	};
+
+	const subscriptionModeLabels: Record<string, string> = {
+		immediate: 'now notifying immediately',
+		daily_digest: 'now in your daily digest',
+		mute: 'muted',
+		none: 'no longer watching'
+	};
+	const subscriptionModeEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				const mode = result.data?.subscriptionMode;
+				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
+				toast.success(label ? `Thread ${label}.` : 'Notification preference updated.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -153,16 +172,27 @@
 					</div>
 				</div>
 
-				<form method="POST" action="?/subscribe" use:enhance>
-					<Button variant="outline" size="sm" type="submit">
-						{#if data.isSubscribed}
-							<BellOffIcon class="h-4 w-4" />
-							Unwatch
+				<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
+					<label for="thread-sub-mode" class="sr-only">Notify me</label>
+					<div class="flex items-center gap-2">
+						{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
+							<BellOffIcon class="h-4 w-4 text-muted-foreground" />
 						{:else}
-							<BellIcon class="h-4 w-4" />
-							Watch
+							<BellIcon class="h-4 w-4 text-muted-foreground" />
 						{/if}
-					</Button>
+						<select
+							id="thread-sub-mode"
+							name="mode"
+							value={data.subscriptionMode}
+							onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
+							class="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+						>
+							<option value="immediate">Notify me: Immediately</option>
+							<option value="daily_digest">Notify me: In my digest</option>
+							<option value="mute">Notify me: Muted</option>
+							<option value="none">Notify me: Off</option>
+						</select>
+					</div>
 				</form>
 			</div>
 		</div>

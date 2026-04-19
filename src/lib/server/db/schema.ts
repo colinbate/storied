@@ -25,6 +25,8 @@ export const users = sqliteTable('users', {
 	role: text('role').notNull().default('member'),
 	/** Allowed values: 'active' | 'pending' | 'suspended' */
 	status: text('status').notNull().default('active'),
+	/** IANA timezone identifier, e.g. 'Atlantic/Bermuda' */
+	timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
 	createdAt: text('created_at').notNull().default(timestampDefault),
 	updatedAt: text('updated_at').notNull().default(timestampDefault)
 });
@@ -167,8 +169,14 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 	emailEnabled: integer('email_enabled').notNull().default(1),
 	/** 0 = disabled, 1 = enabled */
 	marketingEnabled: integer('marketing_enabled').notNull().default(0),
-	/** Hour 0–23 UTC for digest delivery */
-	digestHourUtc: integer('digest_hour_utc'),
+	/** Hour 0–23 in the user's local timezone for digest delivery. NULL = digest disabled. */
+	digestHourLocal: integer('digest_hour_local'),
+	/** Allowed values: 'immediate' | 'daily_digest'. Applied when auto-subscribing. */
+	defaultSubMode: text('default_sub_mode').notNull().default('immediate'),
+	/** 0 = do not auto-subscribe on create/reply, 1 = auto-subscribe. */
+	autoSubscribeOwn: integer('auto_subscribe_own').notNull().default(1),
+	/** ISO-8601 timestamp of the last digest delivery, or NULL if none. */
+	lastDigestAt: text('last_digest_at'),
 	createdAt: text('created_at').notNull().default(timestampDefault),
 	updatedAt: text('updated_at').notNull().default(timestampDefault)
 });

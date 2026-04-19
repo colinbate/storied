@@ -1,6 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { createMagicLink, REDIR_COOKIE_NAME } from '$lib/server/auth';
+import {
+	createMagicLink,
+	REDIR_COOKIE_NAME,
+	TIMEZONE_COOKIE_NAME,
+	TIMEZONE_COOKIE_MAX_AGE_S
+} from '$lib/server/auth';
+import { isValidTimezone } from '$lib/server/notification-preferences';
 import { sendMagicLinkEmail } from '$lib/server/email';
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
@@ -29,6 +35,22 @@ export const actions: Actions = {
 			cookies.set(REDIR_COOKIE_NAME, redir, { path: '/' });
 		} else {
 			cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
+		}
+
+		// Stash the browser-detected timezone in a short-lived cookie so the
+		// magic-link verify handler can apply it when creating a brand-new user.
+		// Safe to skip if missing or invalid — the users.timezone default kicks in.
+		const browserTimezone = data.get('browserTimezone')?.toString()?.trim();
+		if (browserTimezone && isValidTimezone(browserTimezone)) {
+			cookies.set(TIMEZONE_COOKIE_NAME, browserTimezone, {
+				path: '/',
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+			});
+		} else {
+			cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
 		}
 
 		try {

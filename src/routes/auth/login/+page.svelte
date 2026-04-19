@@ -8,6 +8,15 @@
 
 	let { form, data } = $props();
 	let loading = $state(false);
+	let browserTimezone = $state('');
+
+	if (typeof window !== 'undefined') {
+		try {
+			browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+		} catch {
+			browserTimezone = '';
+		}
+	}
 </script>
 
 <svelte:head>
@@ -70,6 +79,7 @@
 					}}
 					class="space-y-4"
 				>
+					<input type="hidden" name="browserTimezone" bind:value={browserTimezone} />
 					<div class="space-y-2">
 						<Label for="email">Email address</Label>
 						<Input

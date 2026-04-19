@@ -1,15 +1,17 @@
 import { nanoid } from 'nanoid';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import type { ORM } from './db';
-import { users, authMagicLinks, userSessions } from './db/schema';
+import { users, authMagicLinks, userSessions, notificationPreferences } from './db/schema';
 import { error, type RequestEvent } from '@sveltejs/kit';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
+const TIMEZONE_COOKIE_NAME = 'storied-signup-tz';
+const TIMEZONE_COOKIE_MAX_AGE_S = 60 * 60; // 1 hour — only needs to outlive the magic-link round-trip
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
-export { SESSION_COOKIE_NAME, REDIR_COOKIE_NAME };
+export { SESSION_COOKIE_NAME, REDIR_COOKIE_NAME, TIMEZONE_COOKIE_NAME, TIMEZONE_COOKIE_MAX_AGE_S };
 
 /** Hash a token using Web Crypto (available in CF Workers) */
 async function hashToken(token: string): Promise<string> {
@@ -85,24 +87,41 @@ export function isUserRole(value: unknown): value is UserRole {
 	return typeof value === 'string' && (USER_ROLES as string[]).includes(value);
 }
 
+export interface FindOrCreateUserOptions {
+	role?: UserRole;
+	allowSignup?: boolean;
+	/** IANA timezone identifier used when creating a brand-new user. */
+	timezone?: string;
+	name?: string;
+}
+
 export async function findOrCreateUser(
 	db: ORM,
 	email: string,
-	role: UserRole = 'member',
-	allowSignup = true
+	opts?: FindOrCreateUserOptions
 ): Promise<{ id: string; isNew: boolean }> {
+	const role: UserRole = opts?.role ?? 'member';
+	const signupAllowed = opts?.allowSignup ?? true;
+	const name = opts?.name;
+
 	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
 	if (existing) return { id: existing.id, isNew: false };
-	if (!allowSignup) return { id: '', isNew: false };
+	if (!signupAllowed) return { id: '', isNew: false };
 	const id = nanoid();
-	const displayName = email.split('@')[0];
-	await db.insert(users).values({
+	const displayName = name ?? email.split('@')[0];
+	const insertValues: typeof users.$inferInsert = {
 		id,
 		email: email.toLowerCase(),
 		displayName,
 		role,
 		status: 'active'
-	});
+	};
+	if (opts?.timezone) insertValues.timezone = opts.timezone;
+	await db.insert(users).values(insertValues);
+
+	// Seed a notification_preferences row for the new user. The migration
+	// backfills existing users; this handles new ones.
+	await db.insert(notificationPreferences).values({ userId: id }).onConflictDoNothing();
 
 	return { id, isNew: true };
 }

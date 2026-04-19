@@ -2,6 +2,7 @@ import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { handleSubjectResolve } from './subject/queue-resolve';
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
+import { runDailyDigest } from './notifications/scheduled-digest';
 
 export interface HandlerContext {
 	env: Env;
@@ -26,11 +27,14 @@ export async function dispatchWorkerMessage(
 	}
 }
 
-export async function dispatchScheduled(cron: string, _context: HandlerContext): Promise<void> {
-	// No scheduled handlers registered yet. Planned jobs:
-	//   - notifications.digest.daily — fan out daily digests
-	//   - maintenance.cleanup.magic-links — prune expired magic links
-	//   - maintenance.cleanup.sessions — prune expired auth sessions
-	//   - maintenance.repair.book-metadata — refresh stale book metadata
+export async function dispatchScheduled(cron: string, context: HandlerContext): Promise<void> {
+	// Hourly cron drives the digest scheduler. The handler itself filters
+	// users down to those whose local digest hour matches the current hour
+	// in their timezone, so other crons can be added later without touching
+	// the digest code.
+	if (cron === '0 * * * *') {
+		await runDailyDigest(context);
+		return;
+	}
 	console.log(`[SCHEDULED] No handler registered for cron: ${cron}`);
 }

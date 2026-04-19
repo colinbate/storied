@@ -1,11 +1,32 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { users } from '$lib/server/db/schema';
+import { notificationPreferences, users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import {
+	DEFAULT_TIMEZONE,
+	getOrCreateNotificationPreferences,
+	isValidTimezone
+} from '$lib/server/notification-preferences';
+
+type NotificationMode = 'off' | 'immediate' | 'daily_digest';
+type DefaultSubMode = 'immediate' | 'daily_digest';
+
+function isDefaultSubMode(value: unknown): value is DefaultSubMode {
+	return value === 'immediate' || value === 'daily_digest';
+}
+
+function isNotificationMode(value: unknown): value is NotificationMode {
+	return value === 'off' || value === 'immediate' || value === 'daily_digest';
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
-	return { user: locals.user };
+	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+	return {
+		user: locals.user,
+		preferences,
+		defaultTimezone: DEFAULT_TIMEZONE
+	};
 };
 
 export const actions: Actions = {
@@ -80,5 +101,78 @@ export const actions: Actions = {
 			.where(eq(users.id, locals.user.id));
 
 		return { avatarSuccess: true };
+	},
+
+	updateTimezone: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
+		const timezone = data.get('timezone')?.toString()?.trim();
+		if (!timezone || !isValidTimezone(timezone)) {
+			return fail(400, { timezoneError: 'Please choose a valid timezone.' });
+		}
+
+		await locals.db
+			.update(users)
+			.set({ timezone, updatedAt: new Date().toISOString() })
+			.where(eq(users.id, locals.user.id));
+
+		return { timezoneSuccess: true };
+	},
+
+	updatePreferences: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
+		const mode = data.get('mode')?.toString();
+		const digestHourRaw = data.get('digestHour')?.toString();
+		const autoSubscribe = data.get('autoSubscribe')?.toString() === 'on';
+
+		if (!isNotificationMode(mode)) {
+			return fail(400, { prefsError: 'Invalid notification mode.' });
+		}
+
+		let emailEnabled = 1;
+		let digestHourLocal: number | null = null;
+		let defaultSubMode: DefaultSubMode = 'immediate';
+
+		if (mode === 'off') {
+			emailEnabled = 0;
+			digestHourLocal = null;
+			// Leave defaultSubMode at 'immediate' — it's only consulted when
+			// email_enabled=1 or the user re-enables later. Value is harmless.
+			defaultSubMode = 'immediate';
+		} else if (mode === 'immediate') {
+			emailEnabled = 1;
+			digestHourLocal = null;
+			defaultSubMode = 'immediate';
+		} else {
+			// daily_digest
+			emailEnabled = 1;
+			const hour = digestHourRaw !== undefined ? Number.parseInt(digestHourRaw, 10) : NaN;
+			if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+				return fail(400, { prefsError: 'Please pick a valid digest hour (0–23).' });
+			}
+			digestHourLocal = hour;
+			defaultSubMode = 'daily_digest';
+		}
+
+		// Ensure a row exists, then update.
+		await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+		await locals.db
+			.update(notificationPreferences)
+			.set({
+				emailEnabled,
+				digestHourLocal,
+				defaultSubMode,
+				autoSubscribeOwn: autoSubscribe ? 1 : 0,
+				updatedAt: new Date().toISOString()
+			})
+			.where(eq(notificationPreferences.userId, locals.user.id));
+
+		// Guard in case TS complains later — keep helper imported.
+		void isDefaultSubMode;
+
+		return { prefsSuccess: true };
 	}
 };
