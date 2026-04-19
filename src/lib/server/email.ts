@@ -77,37 +77,3 @@ export async function sendMagicLinkEmail(
     `.trim()
 	});
 }
-
-/** Send a notification email for a new reply */
-export async function sendReplyNotificationEmail(
-	platform: App.Platform,
-	email: string,
-	threadTitle: string,
-	threadSlug: string,
-	replyAuthor: string,
-	replyPreview: string,
-	baseUrl: string
-): Promise<{ success: boolean; error?: string }> {
-	const threadUrl = `${baseUrl}/thread/${threadSlug}`;
-
-	return sendEmail(platform, {
-		to: email,
-		subject: `New reply in "${threadTitle}" — BTS Discussions`,
-		textBody: `${replyAuthor} replied in "${threadTitle}":\n\n${replyPreview}\n\nView the thread: ${threadUrl}`,
-		htmlBody: `
-      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society Discussions</p>
-        <h3 style="color: #1a1a2e; margin-top: 0;">${replyAuthor} replied in "${threadTitle}"</h3>
-        <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
-          <p style="color: #444; margin: 0; line-height: 1.5;">${replyPreview}</p>
-        </div>
-        <div style="margin: 24px 0;">
-          <a href="${threadUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-            View Thread
-          </a>
-        </div>
-        <p style="color: #aaa; font-size: 12px;">You're receiving this because you're watching this thread.</p>
-      </div>
-    `.trim()
-	});
-}

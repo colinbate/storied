@@ -28,8 +28,8 @@ pattern = "discuss.bermudatrianglesociety.com"
 custom_domain = true
 
 [[queues.producers]]
-binding = "SUBJECT_QUEUE"
-queue = "storied-subject-resolve"
+binding = "WORKER_QUEUE"
+queue = "storied-worker-tasks"
 
 [[send_email]]
 name = "EMAIL"

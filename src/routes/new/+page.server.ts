@@ -13,6 +13,8 @@ import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
+import type { SubjectSourceType } from '$shared/worker-messages';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -133,10 +135,10 @@ export const actions: Actions = {
 				resolvedSubjectId = existingSource.subjectId;
 
 				// Source exists but not yet resolved — re-enqueue
-				if (!resolvedSubjectId && platform?.env.SUBJECT_QUEUE) {
-					await platform.env.SUBJECT_QUEUE.send({
+				if (!resolvedSubjectId) {
+					await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
 						subjectSourceId: existingSource.id,
-						sourceType: link.sourceType,
+						sourceType: link.sourceType as SubjectSourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
 						threadId
@@ -153,15 +155,13 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				if (platform?.env.SUBJECT_QUEUE) {
-					await platform.env.SUBJECT_QUEUE.send({
-						subjectSourceId: sourceId,
-						sourceType: link.sourceType,
-						sourceUrl: link.url,
-						sourceKey: link.sourceKey,
-						threadId
-					});
-				}
+				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+					subjectSourceId: sourceId,
+					sourceType: link.sourceType as SubjectSourceType,
+					sourceUrl: link.url,
+					sourceKey: link.sourceKey,
+					threadId
+				});
 			}
 
 			// Link thread to subject if already resolved

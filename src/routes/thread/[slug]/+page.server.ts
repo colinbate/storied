@@ -5,7 +5,6 @@ import {
 	posts,
 	users,
 	subscriptions,
-	notificationEvents,
 	books,
 	series,
 	subjectSources,
@@ -16,8 +15,9 @@ import {
 import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
-import { sendReplyNotificationEmail } from '$lib/server/email';
 import { detectSubjectLinks } from '$lib/server/book-links';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
+import type { SubjectSourceType } from '$shared/worker-messages';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -124,9 +124,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})
 		.filter((s): s is NonNullable<typeof s> => s !== null);
 
-	const uniqueBooks = linkedSubjects
-		.filter((s) => s.kind === 'book')
-		.map((s) => s.book);
+	const uniqueBooks = linkedSubjects.filter((s) => s.kind === 'book').map((s) => s.book);
 
 	// Load linked session if present
 	let session: { id: string; slug: string; title: string } | null = null;
@@ -257,10 +255,10 @@ export const actions: Actions = {
 				resolvedSubjectId = existingSource.subjectId;
 
 				// Source exists but not yet resolved — re-enqueue
-				if (!resolvedSubjectId && platform?.env.SUBJECT_QUEUE) {
-					await platform.env.SUBJECT_QUEUE.send({
+				if (!resolvedSubjectId) {
+					await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
 						subjectSourceId: existingSource.id,
-						sourceType: link.sourceType,
+						sourceType: link.sourceType as SubjectSourceType,
 						sourceUrl: link.url,
 						sourceKey: link.sourceKey,
 						threadId: thread.id,
@@ -278,16 +276,14 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				if (platform?.env.SUBJECT_QUEUE) {
-					await platform.env.SUBJECT_QUEUE.send({
-						subjectSourceId: sourceId,
-						sourceType: link.sourceType,
-						sourceUrl: link.url,
-						sourceKey: link.sourceKey,
-						threadId: thread.id,
-						postId
-					});
-				}
+				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+					subjectSourceId: sourceId,
+					sourceType: link.sourceType as SubjectSourceType,
+					sourceUrl: link.url,
+					sourceKey: link.sourceKey,
+					threadId: thread.id,
+					postId
+				});
 			}
 
 			if (resolvedSubjectType && resolvedSubjectId) {
@@ -307,47 +303,13 @@ export const actions: Actions = {
 			}
 		}
 
-		// Send notifications to subscribers (excluding the replier)
-		if (platform) {
-			const subs = await locals.db
-				.select({
-					userId: subscriptions.userId,
-					email: users.email
-				})
-				.from(subscriptions)
-				.innerJoin(users, eq(subscriptions.userId, users.id))
-				.where(and(eq(subscriptions.threadId, thread.id), eq(subscriptions.mode, 'immediate')))
-				.all();
-
-			const baseUrl = url.origin;
-			for (const sub of subs) {
-				if (sub.userId === locals.user.id) continue;
-
-				// Create notification event
-				await locals.db.insert(notificationEvents).values({
-					id: newId(),
-					userId: sub.userId,
-					eventType: 'reply',
-					threadId: thread.id,
-					postId,
-					status: 'pending'
-				});
-
-				// Send email (fire and forget in background)
-				const preview = bodySource.substring(0, 200);
-				platform.ctx.waitUntil(
-					sendReplyNotificationEmail(
-						platform,
-						sub.email,
-						thread.title,
-						thread.slug,
-						locals.user.displayName,
-						preview,
-						baseUrl
-					)
-				);
-			}
-		}
+		// Fan out reply notifications in the background worker.
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'notifications.thread-reply', {
+			threadId: thread.id,
+			postId,
+			replyAuthorUserId: locals.user.id,
+			baseUrl: url.origin
+		});
 
 		return { success: true };
 	},

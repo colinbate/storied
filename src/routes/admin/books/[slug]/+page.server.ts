@@ -13,6 +13,8 @@ import {
 import { eq, and, desc, inArray, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
+import type { SubjectSourceType } from '$shared/worker-messages';
 import { newId } from '$lib/server/ids';
 
 const SUBJECT = 'book' as const;
@@ -35,11 +37,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.where(and(eq(genreLinks.subjectType, SUBJECT), eq(genreLinks.subjectId, book.id)))
 		.all();
 
-	const allGenres = await locals.db
-		.select()
-		.from(genres)
-		.orderBy(asc(genres.name))
-		.all();
+	const allGenres = await locals.db.select().from(genres).orderBy(asc(genres.name)).all();
 
 	// Series containing this book
 	const seriesRows = await locals.db
@@ -72,9 +70,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})
 		.from(sessionSubjects)
 		.innerJoin(sessions, eq(sessionSubjects.sessionId, sessions.id))
-		.where(
-			and(eq(sessionSubjects.subjectType, SUBJECT), eq(sessionSubjects.subjectId, book.id))
-		)
+		.where(and(eq(sessionSubjects.subjectType, SUBJECT), eq(sessionSubjects.subjectId, book.id)))
 		.orderBy(desc(sessions.createdAt))
 		.all();
 
@@ -387,14 +383,12 @@ export const actions: Actions = {
 			.set({ fetchStatus: 'pending', updatedAt: new Date().toISOString() })
 			.where(eq(subjectSources.id, sourceId));
 
-		if (platform?.env.SUBJECT_QUEUE) {
-			await platform.env.SUBJECT_QUEUE.send({
-				subjectSourceId: source.id,
-				sourceType: source.sourceType,
-				sourceUrl: source.sourceUrl,
-				sourceKey: source.sourceKey
-			});
-		}
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+			subjectSourceId: source.id,
+			sourceType: source.sourceType as SubjectSourceType,
+			sourceUrl: source.sourceUrl,
+			sourceKey: source.sourceKey
+		});
 
 		return { retried: true };
 	}

@@ -9,7 +9,7 @@ declare namespace Cloudflare {
 		FILES: R2Bucket;
 		DB: D1Database;
 		EMAIL: SendEmail;
-		SUBJECT_QUEUE: Queue;
+		WORKER_QUEUE: Queue;
 		ASSETS: Fetcher;
 		SEND_EMAILS: "";
 		FILE_BASE_URL: "https://assets.bermudatrianglesociety.com";
