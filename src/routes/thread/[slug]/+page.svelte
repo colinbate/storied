@@ -127,7 +127,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-6 lg:flex-row">
-	<div class="min-w-0 flex-1 space-y-6">
+	<div class="@container min-w-0 flex-1 space-y-6">
 		<!-- Back + thread header -->
 		<div>
 			<a
@@ -138,7 +138,7 @@
 				Back to Discussions
 			</a>
 
-			<div class="flex flex-col items-start justify-between gap-4 md:flex-row">
+			<div class="flex flex-col items-start justify-between gap-4 @3xl:flex-row">
 				<div>
 					<div class="flex items-center gap-2">
 						<h1 class="text-2xl font-bold">{data.thread.title}</h1>

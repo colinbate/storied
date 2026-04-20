@@ -27,6 +27,8 @@ export const users = sqliteTable('users', {
 	status: text('status').notNull().default('active'),
 	/** IANA timezone identifier, e.g. 'Atlantic/Bermuda' */
 	timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
+	/** 0 = default fonts, 1 = use OpenDyslexic for all site text */
+	dyslexicFont: integer('dyslexic_font', { mode: 'boolean' }).notNull().default(false),
 	createdAt: text('created_at').notNull().default(timestampDefault),
 	updatedAt: text('updated_at').notNull().default(timestampDefault)
 });
@@ -62,7 +64,7 @@ export const categories = sqliteTable(
 		description: text('description'),
 		sortOrder: integer('sort_order').notNull().default(0),
 		/** 0 = public, 1 = private */
-		isPrivate: integer('is_private').notNull().default(0),
+		isPrivate: integer('is_private', { mode: 'boolean' }).notNull().default(false),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
@@ -90,9 +92,9 @@ export const threads = sqliteTable(
 		/** Allowed values: 'public' | 'members' | 'admins' */
 		visibility: text('visibility').notNull().default('members'),
 		/** 0 = unlocked, 1 = locked */
-		isLocked: integer('is_locked').notNull().default(0),
+		isLocked: integer('is_locked', { mode: 'boolean' }).notNull().default(false),
 		/** 0 = not pinned, 1 = pinned */
-		isPinned: integer('is_pinned').notNull().default(0),
+		isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),
 		replyCount: integer('reply_count').notNull().default(0),
 		lastPostAt: text('last_post_at'),
 		deletedAt: text('deleted_at'),
@@ -166,15 +168,15 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 		.primaryKey()
 		.references(() => users.id, { onDelete: 'cascade' }),
 	/** 0 = disabled, 1 = enabled */
-	emailEnabled: integer('email_enabled').notNull().default(1),
+	emailEnabled: integer('email_enabled', { mode: 'boolean' }).notNull().default(true),
 	/** 0 = disabled, 1 = enabled */
-	marketingEnabled: integer('marketing_enabled').notNull().default(0),
+	marketingEnabled: integer('marketing_enabled', { mode: 'boolean' }).notNull().default(false),
 	/** Hour 0–23 in the user's local timezone for digest delivery. NULL = digest disabled. */
 	digestHourLocal: integer('digest_hour_local'),
 	/** Allowed values: 'immediate' | 'daily_digest'. Applied when auto-subscribing. */
 	defaultSubMode: text('default_sub_mode').notNull().default('immediate'),
 	/** 0 = do not auto-subscribe on create/reply, 1 = auto-subscribe. */
-	autoSubscribeOwn: integer('auto_subscribe_own').notNull().default(1),
+	autoSubscribeOwn: integer('auto_subscribe_own', { mode: 'boolean' }).notNull().default(true),
 	/** ISO-8601 timestamp of the last digest delivery, or NULL if none. */
 	lastDigestAt: text('last_digest_at'),
 	createdAt: text('created_at').notNull().default(timestampDefault),
@@ -337,7 +339,7 @@ export const series = sqliteTable(
 		amazonAsin: text('amazon_asin'),
 		goodreadsUrl: text('goodreads_url'),
 		/** 0 = ongoing, 1 = complete */
-		isComplete: integer('is_complete').notNull().default(0),
+		isComplete: integer('is_complete', { mode: 'boolean' }).notNull().default(false),
 		bookCount: integer('book_count'),
 		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
@@ -421,7 +423,7 @@ export const genres = sqliteTable(
 		parentId: integer('parent_id'),
 		description: text('description'),
 		/** 0 = mainstream, 1 = speculative */
-		isSpeculative: integer('is_speculative').notNull().default(1),
+		isSpeculative: integer('is_speculative', { mode: 'boolean' }).notNull().default(true),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
@@ -488,7 +490,7 @@ export const userSubjects = sqliteTable(
 		/** Allowed values: 'want_to_read' | 'reading' | 'read' | 'did_not_finish' */
 		readingStatus: text('reading_status').notNull().default('want_to_read'),
 		/** 0 = not recommended, 1 = recommended */
-		isRecommended: integer('is_recommended').notNull().default(0),
+		isRecommended: integer('is_recommended', { mode: 'boolean' }).notNull().default(false),
 		note: text('note'),
 		/** 1–5 star rating */
 		rating: integer('rating'),

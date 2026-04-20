@@ -74,7 +74,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			and(
 				eq(userSubjects.subjectType, SUBJECT),
 				eq(userSubjects.subjectId, book.id),
-				eq(userSubjects.isRecommended, 1)
+				eq(userSubjects.isRecommended, true)
 			)
 		);
 
@@ -181,7 +181,7 @@ export const actions: Actions = {
 			await locals.db
 				.update(userSubjects)
 				.set({
-					isRecommended: existing.isRecommended ? 0 : 1,
+					isRecommended: existing.isRecommended,
 					updatedAt: new Date().toISOString()
 				})
 				.where(
@@ -196,7 +196,7 @@ export const actions: Actions = {
 				userId: locals.user.id,
 				subjectType: SUBJECT,
 				subjectId: book.id,
-				isRecommended: 1
+				isRecommended: true
 			});
 		}
 

@@ -20,7 +20,7 @@
 <ModeWatcher />
 <Toaster richColors />
 
-<div class="flex min-h-screen flex-col">
+<div data-dyslexic={data.dyslexicFont} class="flex min-h-screen flex-col">
 	<header class="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-sm">
 		<div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
 			<a

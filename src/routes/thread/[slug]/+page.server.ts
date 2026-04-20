@@ -153,7 +153,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		author: thread.author,
 		posts: threadPosts,
 		isSubscribed: !!subscription,
-		subscriptionMode: (subscription?.mode ?? 'none') as 'immediate' | 'daily_digest' | 'mute' | 'none',
+		subscriptionMode: (subscription?.mode ?? 'none') as
+			| 'immediate'
+			| 'daily_digest'
+			| 'mute'
+			| 'none',
 		books: uniqueBooks,
 		series: linkedSubjects.filter((s) => s.kind === 'series').map((s) => s.series),
 		session,
@@ -380,7 +384,7 @@ export const actions: Actions = {
 		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
 
-		const newPinned = thread.isPinned ? 0 : 1;
+		const newPinned = thread.isPinned;
 		const now = new Date().toISOString();
 		await locals.db
 			.update(threads)
@@ -410,7 +414,7 @@ export const actions: Actions = {
 		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
 
-		const newLocked = thread.isLocked ? 0 : 1;
+		const newLocked = thread.isLocked;
 		const now = new Date().toISOString();
 		await locals.db
 			.update(threads)

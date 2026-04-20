@@ -17,10 +17,13 @@
 
 	let timezoneSaving = $state(false);
 	let prefsSaving = $state(false);
+	let dyslexicSaving = $state(false);
+
+	let dyslexicFont = $derived(!!data.user.dyslexicFont);
 
 	// Derive the initial notification mode from stored prefs.
 	function initialMode(prefs: {
-		emailEnabled: number;
+		emailEnabled: boolean;
 		digestHourLocal: number | null;
 	}): 'off' | 'immediate' | 'daily_digest' {
 		if (!prefs.emailEnabled) return 'off';
@@ -33,25 +36,10 @@
 	// re-syncs whenever `data` changes (e.g. after a successful form action
 	// returns a new server snapshot), so the "captures initial value" warnings
 	// are intentional.
-	// svelte-ignore state_referenced_locally
-	let selectedTimezone = $state<string>(data.user.timezone);
-	// svelte-ignore state_referenced_locally
-	let notificationMode = $state<'off' | 'immediate' | 'daily_digest'>(
-		initialMode(data.preferences)
-	);
-	// svelte-ignore state_referenced_locally
-	let digestHour = $state<number>(data.preferences.digestHourLocal ?? 8);
-	// svelte-ignore state_referenced_locally
-	let autoSubscribe = $state<boolean>(!!data.preferences.autoSubscribeOwn);
 
-	$effect(() => {
-		// Keep local state in sync with freshly-loaded server data after an
-		// action completes.
-		selectedTimezone = data.user.timezone;
-		notificationMode = initialMode(data.preferences);
-		digestHour = data.preferences.digestHourLocal ?? 8;
-		autoSubscribe = !!data.preferences.autoSubscribeOwn;
-	});
+	let selectedTimezone = $derived(data.user.timezone);
+	let notificationMode = $derived(initialMode(data.preferences));
+	let digestHour = $derived(data.preferences.digestHourLocal ?? 8);
 
 	let detectedTimezone = $state<string>('');
 	let allTimezones = $state<string[]>([]);
@@ -361,7 +349,7 @@
 				{/if}
 
 				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" name="autoSubscribe" bind:checked={autoSubscribe} />
+					<input type="checkbox" name="autoSubscribe" checked={data.preferences.autoSubscribeOwn} />
 					Automatically watch threads I create or reply to
 				</label>
 
@@ -371,6 +359,43 @@
 
 				<Button type="submit" disabled={prefsSaving}>
 					{prefsSaving ? 'Saving…' : 'Save Preferences'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Accessibility</Card.Title>
+			<Card.Description>
+				Swap all site text to the <a
+					href="https://opendyslexic.org/"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="underline hover:text-foreground">OpenDyslexic</a
+				> font.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/updateDyslexicFont"
+				use:enhance={() => {
+					dyslexicSaving = true;
+					return async ({ result, update }) => {
+						dyslexicSaving = false;
+						await update();
+						if (result.type === 'success') toast.success('Preference updated.');
+					};
+				}}
+				class="space-y-4"
+			>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="dyslexicFont" checked={dyslexicFont} />
+					Use OpenDyslexic font across the site
+				</label>
+				<Button type="submit" disabled={dyslexicSaving}>
+					{dyslexicSaving ? 'Saving…' : 'Save'}
 				</Button>
 			</form>
 		</Card.Content>

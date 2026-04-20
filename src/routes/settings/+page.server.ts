@@ -103,6 +103,20 @@ export const actions: Actions = {
 		return { avatarSuccess: true };
 	},
 
+	updateDyslexicFont: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
+		const enabled = data.get('dyslexicFont')?.toString() === 'on';
+
+		await locals.db
+			.update(users)
+			.set({ dyslexicFont: enabled, updatedAt: new Date().toISOString() })
+			.where(eq(users.id, locals.user.id));
+
+		return { dyslexicFontSuccess: true };
+	},
+
 	updateTimezone: async ({ request, locals }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
 
@@ -132,23 +146,23 @@ export const actions: Actions = {
 			return fail(400, { prefsError: 'Invalid notification mode.' });
 		}
 
-		let emailEnabled = 1;
+		let emailEnabled = true;
 		let digestHourLocal: number | null = null;
 		let defaultSubMode: DefaultSubMode = 'immediate';
 
 		if (mode === 'off') {
-			emailEnabled = 0;
+			emailEnabled = false;
 			digestHourLocal = null;
 			// Leave defaultSubMode at 'immediate' — it's only consulted when
 			// email_enabled=1 or the user re-enables later. Value is harmless.
 			defaultSubMode = 'immediate';
 		} else if (mode === 'immediate') {
-			emailEnabled = 1;
+			emailEnabled = true;
 			digestHourLocal = null;
 			defaultSubMode = 'immediate';
 		} else {
 			// daily_digest
-			emailEnabled = 1;
+			emailEnabled = true;
 			const hour = digestHourRaw !== undefined ? Number.parseInt(digestHourRaw, 10) : NaN;
 			if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
 				return fail(400, { prefsError: 'Please pick a valid digest hour (0–23).' });
@@ -165,7 +179,7 @@ export const actions: Actions = {
 				emailEnabled,
 				digestHourLocal,
 				defaultSubMode,
-				autoSubscribeOwn: autoSubscribe ? 1 : 0,
+				autoSubscribeOwn: autoSubscribe,
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(notificationPreferences.userId, locals.user.id));

@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 					and(
 						eq(userSubjects.subjectType, SUBJECT),
 						eq(userSubjects.subjectId, book.id),
-						eq(userSubjects.isRecommended, 1)
+						eq(userSubjects.isRecommended, true)
 					)
 				);
 

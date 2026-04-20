@@ -105,7 +105,7 @@ export const actions: Actions = {
 
 		const bookCountStr = data.get('bookCount')?.toString()?.trim() || '';
 		const bookCount = bookCountStr ? Number(bookCountStr) : null;
-		const isComplete = data.get('isComplete')?.toString() === '1' ? 1 : 0;
+		const isComplete = data.get('isComplete')?.toString() === '1';
 
 		await locals.db
 			.update(series)

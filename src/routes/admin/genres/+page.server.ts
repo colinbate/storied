@@ -30,7 +30,7 @@ export const actions: Actions = {
 		const name = data.get('name')?.toString()?.trim();
 		const description = data.get('description')?.toString()?.trim() || null;
 		const parentIdRaw = data.get('parentId')?.toString()?.trim();
-		const isSpeculative = data.get('isSpeculative')?.toString() === '1' ? 1 : 0;
+		const isSpeculative = data.get('isSpeculative')?.toString() === '1';
 
 		if (!name || name.length < 2) {
 			return fail(400, { error: 'Name must be at least 2 characters.' });
@@ -77,12 +77,13 @@ export const actions: Actions = {
 		const name = data.get('name')?.toString()?.trim();
 		const description = data.get('description')?.toString()?.trim() || null;
 		const parentIdRaw = data.get('parentId')?.toString()?.trim();
-		const isSpeculative = data.get('isSpeculative')?.toString() === '1' ? 1 : 0;
+		const isSpeculative = data.get('isSpeculative')?.toString() === '1';
 
 		if (!idRaw) return fail(400, { error: 'Missing genre id.' });
 		const id = Number(idRaw);
 		if (Number.isNaN(id)) return fail(400, { error: 'Invalid genre id.' });
-		if (!name || name.length < 2) return fail(400, { error: 'Name must be at least 2 characters.' });
+		if (!name || name.length < 2)
+			return fail(400, { error: 'Name must be at least 2 characters.' });
 
 		const parentId = parentIdRaw && parentIdRaw.length > 0 ? Number(parentIdRaw) : null;
 		if (parentId !== null && Number.isNaN(parentId)) return fail(400, { error: 'Invalid parent.' });

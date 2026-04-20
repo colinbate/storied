@@ -111,6 +111,35 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 }
 
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Regular.woff2') format('woff2');
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Bold.woff2') format('woff2');
+	font-weight: bold;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Italic.woff2') format('woff2');
+	font-weight: normal;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-BoldItalic.woff2') format('woff2');
+	font-weight: bold;
+	font-style: italic;
+	font-display: swap;
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
@@ -121,5 +150,14 @@
 		font-feature-settings:
 			'rlig' 1,
 			'calt' 1;
+	}
+
+	/* When the user opts in, force every element — including form controls
+	   that don't inherit from body — to use OpenDyslexic. The @font-face
+	   rules above don't trigger a download until something actually uses
+	   the family, so users who haven't enabled this never fetch the woff2. */
+	body:has([data-dyslexic='true']),
+	body:has([data-dyslexic='true']) * {
+		font-family: 'OpenDyslexic', ui-sans-serif, system-ui, sans-serif !important;
 	}
 }
