@@ -347,7 +347,7 @@
 								</div>
 							</form>
 						{:else}
-							<div class="prose prose-sm max-w-none wrap-anywhere dark:prose-invert">
+							<div class="prose max-w-none wrap-anywhere dark:prose-invert">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html data.thread.bodyHtml}
 							</div>
@@ -421,7 +421,7 @@
 											</div>
 										</form>
 									{:else}
-										<div class="prose prose-sm max-w-none wrap-anywhere dark:prose-invert">
+										<div class="prose max-w-none wrap-anywhere dark:prose-invert">
 											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											{@html post.bodyHtml}
 										</div>

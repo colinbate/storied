@@ -68,12 +68,12 @@
 				</Card.Content>
 			</Card.Root>
 		{:else}
-			<div class="space-y-2">
+			<div class="space-y-3">
 				{#each data.recentThreads as { thread, author } (thread.id)}
 					<a href={resolve(`/thread/${thread.slug}`)} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
-							<Card.Content class="flex items-start gap-3 py-3">
-								<Avatar.Root class="mt-0.5 h-8 w-8 shrink-0">
+							<Card.Content class="flex items-center gap-3">
+								<Avatar.Root class="h-8 w-8 shrink-0">
 									{#if author.avatarUrl}
 										<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
 									{/if}
@@ -83,7 +83,7 @@
 								</Avatar.Root>
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
-										<h3 class="truncate font-medium">{thread.title}</h3>
+										<h3 class="truncate text-base font-medium">{thread.title}</h3>
 										{#if thread.isPinned}
 											<PinIcon class="h-3.5 w-3.5 shrink-0 text-primary" />
 										{/if}
@@ -91,7 +91,7 @@
 											<LockIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 										{/if}
 									</div>
-									<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
 										<span>{author.displayName}</span>
 										<span>·</span>
 										<span>{new Date(thread.createdAt).toLocaleDateString()}</span>
