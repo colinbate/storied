@@ -1,35 +1,45 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { books, userSubjects, threadSubjects, threads, users } from '$lib/server/db/schema';
-import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import {
+	series,
+	seriesBooks,
+	books,
+	userSubjects,
+	threadSubjects,
+	threads,
+	users
+} from '$lib/server/db/schema';
+import { eq, and, isNull, desc, asc, sql } from 'drizzle-orm';
 
-const SUBJECT = 'book';
+const SUBJECT = 'series';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
+	const seriesRecord = await locals.db
+		.select()
+		.from(series)
+		.where(eq(series.slug, params.slug))
+		.get();
 
-	if (!book || book.deletedAt) {
-		throw error(404, 'Book not found');
+	if (!seriesRecord || seriesRecord.deletedAt) {
+		throw error(404, 'Series not found');
 	}
 
-	// Load user's personal relationship to this book
-	const myBookRelation = await locals.db
+	const mySeriesRelation = await locals.db
 		.select()
 		.from(userSubjects)
 		.where(
 			and(
 				eq(userSubjects.userId, locals.user.id),
 				eq(userSubjects.subjectType, SUBJECT),
-				eq(userSubjects.subjectId, book.id)
+				eq(userSubjects.subjectId, seriesRecord.id)
 			)
 		)
 		.get();
 
-	// Load threads that reference this book (through thread_subjects)
 	const relatedThreads = await locals.db
 		.select({
 			thread: {
@@ -51,14 +61,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.where(
 			and(
 				eq(threadSubjects.subjectType, SUBJECT),
-				eq(threadSubjects.subjectId, book.id),
+				eq(threadSubjects.subjectId, seriesRecord.id),
 				isNull(threads.deletedAt)
 			)
 		)
 		.orderBy(desc(threads.createdAt))
 		.all();
 
-	// Deduplicate threads (same thread shouldn't appear twice now, but keep for safety)
 	const seenIds = new Set<string>();
 	const uniqueThreads = relatedThreads.filter(({ thread }) => {
 		if (seenIds.has(thread.id)) return false;
@@ -66,12 +75,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		return true;
 	});
 
-	// Aggregate stats: how many members recommend, have read, etc.
 	const recommendCount = await locals.db.$count(
 		userSubjects,
 		and(
 			eq(userSubjects.subjectType, SUBJECT),
-			eq(userSubjects.subjectId, book.id),
+			eq(userSubjects.subjectId, seriesRecord.id),
 			eq(userSubjects.isRecommended, true)
 		)
 	);
@@ -80,15 +88,38 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		userSubjects,
 		and(
 			eq(userSubjects.subjectType, SUBJECT),
-			eq(userSubjects.subjectId, book.id),
+			eq(userSubjects.subjectId, seriesRecord.id),
 			eq(userSubjects.readingStatus, 'read')
 		)
 	);
 
+	const seriesEntries = await locals.db
+		.select({
+			book: {
+				id: books.id,
+				slug: books.slug,
+				title: books.title,
+				subtitle: books.subtitle,
+				authorText: books.authorText,
+				coverUrl: books.coverUrl,
+				firstPublishYear: books.firstPublishYear
+			},
+			entry: {
+				position: seriesBooks.position,
+				positionSort: seriesBooks.positionSort
+			}
+		})
+		.from(seriesBooks)
+		.innerJoin(books, eq(seriesBooks.bookId, books.id))
+		.where(and(eq(seriesBooks.seriesId, seriesRecord.id), isNull(books.deletedAt)))
+		.orderBy(asc(seriesBooks.positionSort), asc(books.title))
+		.all();
+
 	return {
-		book,
-		myBookRelation: myBookRelation ?? null,
+		series: seriesRecord,
+		mySeriesRelation: mySeriesRelation ?? null,
 		relatedThreads: uniqueThreads,
+		seriesEntries,
 		stats: {
 			recommendations: recommendCount,
 			readers: readCount
@@ -114,7 +145,7 @@ export const actions: Actions = {
 			.values({
 				userId: locals.user.id,
 				subjectType: SUBJECT,
-				subjectId: sql`(SELECT ${books.id} FROM ${books} WHERE ${books.slug} = ${params.slug})`,
+				subjectId: sql`(SELECT ${series.id} FROM ${series} WHERE ${series.slug} = ${params.slug})`,
 				readingStatus
 			})
 			.onConflictDoUpdate({
@@ -133,10 +164,14 @@ export const actions: Actions = {
 			throw redirect(302, '/auth/login');
 		}
 
-		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
+		const seriesRecord = await locals.db
+			.select()
+			.from(series)
+			.where(eq(series.slug, params.slug))
+			.get();
 
-		if (!book) {
-			throw error(404, 'Book not found');
+		if (!seriesRecord || seriesRecord.deletedAt) {
+			throw error(404, 'Series not found');
 		}
 
 		await locals.db
@@ -144,7 +179,7 @@ export const actions: Actions = {
 			.values({
 				userId: locals.user.id,
 				subjectType: SUBJECT,
-				subjectId: book.id,
+				subjectId: seriesRecord.id,
 				isRecommended: true
 			})
 			.onConflictDoUpdate({

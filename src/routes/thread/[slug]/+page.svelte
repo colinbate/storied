@@ -27,6 +27,7 @@
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import type { SubmitFunction } from '@sveltejs/kit';
+	import SeriesCard from '$lib/components/series-card.svelte';
 
 	let { data, form } = $props();
 	let replyBody = $state('');
@@ -257,7 +258,7 @@
 										</ConfirmButton>
 									</div>
 								</div>
-								{#if data.permissions.has('sessions:editx')}
+								{#if data.permissions.has('sessions:edit')}
 									<form
 										method="POST"
 										action="?/linkSession"
@@ -552,14 +553,7 @@
 						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>
 						<div class="space-y-2">
 							{#each data.series as s (s.id)}
-								<div class="rounded-lg border p-2 text-sm">
-									<a class="leading-tight font-medium" rel="external" href={s.goodreadsUrl}
-										>{s.title}</a
-									>
-									{#if s.authorText}
-										<p class="mt-0.5 text-xs text-muted-foreground">{s.authorText}</p>
-									{/if}
-								</div>
+								<SeriesCard series={s} compact />
 							{/each}
 						</div>
 					</div>
