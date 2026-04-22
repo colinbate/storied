@@ -4,19 +4,10 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
-
-	function formatDate(value: string | null) {
-		if (!value) return 'Date to be announced';
-		return new Date(value).toLocaleString([], {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit'
-		});
-	}
+	const timeZone = $derived(data.user?.timezone);
 
 	const groups = $derived([
 		{ title: 'Current', sessions: data.currentSessions },
@@ -58,7 +49,7 @@
 								<Card.Content class="space-y-2 text-sm text-muted-foreground">
 									<div class="flex items-center gap-2">
 										<CalendarIcon class="h-4 w-4" />
-										<span>{formatDate(session.startsAt)}</span>
+										<span>{formatDate(session.startsAt, { time: 'always', timeZone })}</span>
 									</div>
 									{#if session.locationName}
 										<div class="flex items-center gap-2">

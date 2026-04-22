@@ -14,8 +14,10 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import { toast } from 'svelte-sonner';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 	let loading = $state(false);
 	let showCreateForm = $state(false);
 	let editingId = $state<string | null>(null);
@@ -320,7 +322,7 @@
 									class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground"
 								>
 									{#if session.startsAt}
-										<span>Starts {new Date(session.startsAt).toLocaleDateString()}</span>
+										<span>Starts {formatDate(session.startsAt, { time: 'never', timeZone })}</span>
 									{/if}
 									{#if session.astroPath}
 										<span class="font-mono text-xs">{session.astroPath}</span>

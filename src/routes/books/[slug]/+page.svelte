@@ -13,8 +13,10 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 
 	const statusLabels: Record<string, string> = {
 		want_to_read: 'Want to Read',
@@ -186,7 +188,7 @@
 									<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 										<span>{author.displayName}</span>
 										<span>·</span>
-										<span>{new Date(thread.createdAt).toLocaleDateString()}</span>
+										<span>{formatDate(thread.createdAt, { time: 'never', timeZone })}</span>
 										{#if thread.replyCount > 0}
 											<span>·</span>
 											<Badge variant="secondary" class="px-1.5 py-0 text-xs">

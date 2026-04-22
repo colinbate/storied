@@ -9,8 +9,10 @@
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 </script>
 
 <svelte:head>
@@ -74,7 +76,7 @@
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									<span>{author.displayName}</span>
 									<span>·</span>
-									<span>{new Date(thread.createdAt).toLocaleDateString()}</span>
+									<span>{formatDate(thread.createdAt, { time: 'never', timeZone })}</span>
 									{#if thread.replyCount > 0}
 										<span>·</span>
 										<Badge variant="secondary" class="px-1.5 py-0 text-xs"

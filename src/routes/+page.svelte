@@ -11,8 +11,10 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import { resolve } from '$app/paths';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 </script>
 
 <svelte:head>
@@ -56,11 +58,10 @@
 								{#if data.currentSession.startsAt}
 									<span class="inline-flex items-center gap-1">
 										<CalendarIcon class="h-4 w-4" />
-										{new Date(data.currentSession.startsAt).toLocaleString([], {
-											month: 'short',
-											day: 'numeric',
-											hour: 'numeric',
-											minute: '2-digit'
+										{formatDate(data.currentSession.startsAt, {
+											time: 'always',
+											timeZone,
+											dateStyle: 'medium'
 										})}
 									</span>
 								{/if}
@@ -161,7 +162,7 @@
 									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
 										<span>{author.displayName}</span>
 										<span>·</span>
-										<span>{new Date(thread.createdAt).toLocaleDateString()}</span>
+										<span>{formatDate(thread.createdAt, { time: 'never', timeZone })}</span>
 										{#if thread.replyCount > 0}
 											<span>·</span>
 											<Badge variant="secondary" class="px-1.5 py-0 text-xs"

@@ -9,6 +9,7 @@
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import { formatDate } from '$lib/date-format';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -407,7 +408,10 @@
 		</Card.Header>
 		<Card.Content>
 			<p class="mb-3 text-sm text-muted-foreground">
-				Member since {new Date(data.user.createdAt).toLocaleDateString()}
+				Member since {formatDate(data.user.createdAt, {
+					time: 'never',
+					timeZone: data.user.timezone
+				})}
 			</p>
 			<Separator class="my-4" />
 			<form method="POST" action="/auth/logout">

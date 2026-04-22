@@ -8,8 +8,10 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
+	import { formatDate } from '$lib/date-format';
 
 	let { data, form } = $props();
+	const timeZone = $derived(data.user?.timezone);
 	let loading = $state(false);
 	let showAddForm = $state(false);
 	let updatingUserId = $state<string | null>(null);
@@ -151,7 +153,7 @@
 								</NativeSelect>
 							</form>
 							<span class="text-xs whitespace-nowrap text-muted-foreground">
-								Joined {new Date(member.createdAt).toLocaleDateString()}
+								Joined {formatDate(member.createdAt, { time: 'never', timeZone })}
 							</span>
 						</div>
 					</div>

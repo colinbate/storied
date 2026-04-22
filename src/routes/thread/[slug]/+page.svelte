@@ -31,6 +31,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import SeriesCard from '$lib/components/series-card.svelte';
+	import { formatDate } from '$lib/date-format';
 
 	let { data, form } = $props();
 	let replyBody = $state('');
@@ -43,6 +44,7 @@
 	let editSaving = $state(false);
 
 	const currentUserId = $derived(data.user?.id ?? null);
+	const timeZone = $derived(data.user?.timezone);
 	const editWindowMs = $derived(data.postEditWindowMs ?? 24 * 60 * 60 * 1000);
 
 	function canEdit(authorId: string, createdAt: string): boolean {
@@ -167,7 +169,7 @@
 					<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<span>{data.author.displayName}</span>
 						<span>·</span>
-						<span>{new Date(data.thread.createdAt).toLocaleDateString()}</span>
+						<span>{formatDate(data.thread.createdAt, { time: 'never', timeZone })}</span>
 						{#if data.thread.replyCount > 0}
 							<span>·</span>
 							<span
@@ -369,7 +371,7 @@
 							{#if data.session.startsAt}
 								<span class="inline-flex items-center gap-1">
 									<CalendarIcon class="h-3.5 w-3.5" />
-									{new Date(data.session.startsAt).toLocaleDateString()}
+									{formatDate(data.session.startsAt, { time: 'never', timeZone })}
 								</span>
 							{/if}
 							{#if data.session.locationName}
@@ -404,7 +406,7 @@
 						<div class="mb-2 flex items-center gap-2">
 							<span class="font-medium">{data.author.displayName}</span>
 							<span class="text-xs text-muted-foreground"
-								>{new Date(data.thread.createdAt).toLocaleString()}</span
+								>{formatDate(data.thread.createdAt, { time: 'always', timeZone })}</span
 							>
 							{#if editingId !== '' && canEdit(data.author.id, data.thread.createdAt)}
 								<button
@@ -471,7 +473,7 @@
 									<div class="mb-2 flex items-center gap-2">
 										<span class="text-sm font-medium">{author.displayName}</span>
 										<span class="text-xs text-muted-foreground"
-											>{new Date(post.createdAt).toLocaleString()}</span
+											>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
 										>
 										{#if post.editCount > 0}
 											<span class="text-xs text-muted-foreground italic">(edited)</span>

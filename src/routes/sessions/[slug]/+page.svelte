@@ -10,20 +10,10 @@
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
-
-	function formatDate(value: string | null) {
-		if (!value) return 'Date to be announced';
-		return new Date(value).toLocaleString([], {
-			weekday: 'short',
-			month: 'long',
-			day: 'numeric',
-			year: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit'
-		});
-	}
+	const timeZone = $derived(data.user?.timezone);
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 title' : `${items.length} titles`;
@@ -70,7 +60,11 @@
 		<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
 			<span class="inline-flex items-center gap-2">
 				<CalendarIcon class="h-4 w-4" />
-				{formatDate(data.session.startsAt)}
+				{formatDate(data.session.startsAt, {
+					time: 'always',
+					timeZone,
+					dateStyle: 'full'
+				})}
 			</span>
 			{#if data.session.durationMinutes}
 				<span class="inline-flex items-center gap-2">

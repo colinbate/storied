@@ -6,8 +6,10 @@
 	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
 	import type { SubmitFunction } from '@sveltejs/kit';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 
 	const restoreEnhance: SubmitFunction = () => {
 		return async ({ result, update }) => {
@@ -51,7 +53,7 @@
 								</div>
 								<div class="mt-0.5 text-sm text-muted-foreground">
 									by {author.displayName} · deleted {thread.deletedAt
-										? new Date(thread.deletedAt).toLocaleString()
+										? formatDate(thread.deletedAt, { time: 'always', timeZone })
 										: ''}
 								</div>
 							</div>
@@ -99,7 +101,7 @@
 								</div>
 								<div class="mt-0.5 text-sm text-muted-foreground">
 									by {author.displayName} · deleted {post.deletedAt
-										? new Date(post.deletedAt).toLocaleString()
+										? formatDate(post.deletedAt, { time: 'always', timeZone })
 										: ''}
 								</div>
 								<div class="prose prose-sm mt-2 max-w-none text-muted-foreground dark:prose-invert">
