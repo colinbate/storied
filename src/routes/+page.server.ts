@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { categories, threads, users } from '$lib/server/db/schema';
+import { categories, sessions, threads, users } from '$lib/server/db/schema';
 import { eq, isNull, desc, asc, and, count } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -35,8 +35,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(20)
 		.all();
 
+	const currentSessions = await locals.db
+		.select()
+		.from(sessions)
+		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
+		.all();
+
 	return {
 		categories: allCategories,
-		recentThreads
+		recentThreads,
+		currentSession:
+			currentSessions.find((session) => session.status === 'current') ??
+			currentSessions.find((session) => session.status === 'draft') ??
+			null,
+		pastSessions: currentSessions.filter((session) => session.status === 'past').reverse().slice(0, 2)
 	};
 };

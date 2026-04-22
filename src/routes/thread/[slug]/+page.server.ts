@@ -10,9 +10,10 @@ import {
 	subjectSources,
 	threadSubjects,
 	sessions,
-	moderationEvents
+	moderationEvents,
+	type SubjectType
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
+import { eq, and, isNull, asc, inArray, ne } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
@@ -128,10 +129,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const uniqueBooks = linkedSubjects.filter((s) => s.kind === 'book').map((s) => s.book);
 
 	// Load linked session if present
-	let session: { id: string; slug: string; title: string } | null = null;
+	let session: {
+		id: string;
+		slug: string;
+		title: string;
+		startsAt: string | null;
+		themeTitle: string | null;
+		theme: string | null;
+		locationName: string | null;
+	} | null = null;
 	if (thread.thread.sessionId) {
 		const row = await locals.db
-			.select({ id: sessions.id, slug: sessions.slug, title: sessions.title })
+			.select({
+				id: sessions.id,
+				slug: sessions.slug,
+				title: sessions.title,
+				startsAt: sessions.startsAt,
+				themeTitle: sessions.themeTitle,
+				theme: sessions.theme,
+				locationName: sessions.locationName
+			})
 			.from(sessions)
 			.where(eq(sessions.id, thread.thread.sessionId))
 			.get();
@@ -303,7 +320,7 @@ export const actions: Actions = {
 						id: newId(),
 						threadId: thread.id,
 						postId,
-						subjectType: resolvedSubjectType,
+						subjectType: resolvedSubjectType as SubjectType,
 						subjectId: resolvedSubjectId,
 						displayOrder: i,
 						context: 'linked',
@@ -441,15 +458,34 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		const rawSessionId = data.get('sessionId')?.toString();
 		const sessionId = rawSessionId && rawSessionId.length > 0 ? rawSessionId : null;
+		const rawSessionThreadRole = data.get('sessionThreadRole')?.toString();
+		const sessionThreadRole =
+			sessionId && (rawSessionThreadRole === 'primary' || rawSessionThreadRole === 'related')
+				? rawSessionThreadRole
+				: sessionId
+					? 'related'
+					: null;
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
 
 		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
 
 		const now = new Date().toISOString();
+		if (sessionId && sessionThreadRole === 'primary') {
+			await locals.db
+				.update(threads)
+				.set({ sessionThreadRole: 'related', updatedAt: now })
+				.where(
+					and(
+						eq(threads.sessionId, sessionId),
+						eq(threads.sessionThreadRole, 'primary'),
+						ne(threads.id, threadId)
+					)
+				);
+		}
 		await locals.db
 			.update(threads)
-			.set({ sessionId, updatedAt: now })
+			.set({ sessionId, sessionThreadRole, updatedAt: now })
 			.where(eq(threads.id, threadId));
 
 		await locals.db.insert(moderationEvents).values({

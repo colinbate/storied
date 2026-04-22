@@ -32,7 +32,9 @@
 	let addBookMode = $state<'existing' | 'url'>('existing');
 
 	let addSessionId = $state<string | undefined>(undefined);
-	let addSessionStatus = $state<'mentioned' | 'featured' | 'selected'>('mentioned');
+	let addSessionStatus = $state<'starter' | 'featured' | 'discussed' | 'mentioned_off_theme'>(
+		'starter'
+	);
 
 	function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (status === 'resolved') return 'default';
@@ -421,9 +423,12 @@
 							<div class="flex items-center gap-2">
 								<Label for="status-{link.session.id}" class="text-xs">Status</Label>
 								<NativeSelect id="status-{link.session.id}" name="status" value={link.link.status}>
-									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+									<NativeSelectOption value="starter">starter</NativeSelectOption>
 									<NativeSelectOption value="featured">featured</NativeSelectOption>
-									<NativeSelectOption value="selected">selected</NativeSelectOption>
+									<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+									<NativeSelectOption value="mentioned_off_theme"
+										>mentioned off theme</NativeSelectOption
+									>
 								</NativeSelect>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
@@ -474,9 +479,10 @@
 				<div class="space-y-1">
 					<Label for="add-status">Status</Label>
 					<NativeSelect id="add-status" name="status" bind:value={addSessionStatus}>
-						<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<NativeSelectOption value="starter">starter</NativeSelectOption>
 						<NativeSelectOption value="featured">featured</NativeSelectOption>
-						<NativeSelectOption value="selected">selected</NativeSelectOption>
+						<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+						<NativeSelectOption value="mentioned_off_theme">mentioned off theme</NativeSelectOption>
 					</NativeSelect>
 				</div>
 				<div class="flex-1 space-y-1">

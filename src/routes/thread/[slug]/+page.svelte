@@ -17,8 +17,8 @@
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import UnlockIcon from '@lucide/svelte/icons/lock-open';
 	import ReplyIcon from '@lucide/svelte/icons/reply';
-	import GlobeIcon from '@lucide/svelte/icons/globe';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
@@ -163,14 +163,15 @@
 						{/if}
 						{#if data.session}
 							<span>·</span>
-							<Badge variant="secondary" class="gap-1 px-2 py-0 text-xs">
-								<CalendarIcon class="h-3 w-3" />
-								{data.session.title}
-							</Badge>
-							<Badge variant="outline" class="gap-1 px-2 py-0 text-xs">
-								<GlobeIcon class="h-3 w-3" />
-								Public
-							</Badge>
+							<a href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
+								<Badge variant="secondary" class="gap-1 px-2 py-0 text-xs hover:bg-secondary/80">
+									<CalendarIcon class="h-3 w-3" />
+									{data.session.title}
+								</Badge>
+							</a>
+							{#if data.thread.sessionThreadRole === 'primary'}
+								<Badge variant="outline" class="px-2 py-0 text-xs">main discussion</Badge>
+							{/if}
 						{/if}
 					</div>
 				</div>
@@ -217,6 +218,11 @@
 										use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
 									>
 										<input type="hidden" name="threadId" value={data.thread.id} />
+										<input
+											type="hidden"
+											name="sessionThreadRole"
+											value={data.thread.sessionThreadRole ?? 'related'}
+										/>
 										<Button variant="outline" size="sm" type="submit">
 											{#if data.thread.isPinned}
 												<PinOffIcon class="h-4 w-4" />
@@ -293,6 +299,38 @@
 											{/each}
 										</NativeSelect.Root>
 									</form>
+									{#if data.thread.sessionId}
+										<form
+											method="POST"
+											action="?/linkSession"
+											use:enhance={modEnhance('Session thread role updated.')}
+											class="inline-flex items-center gap-2"
+										>
+											<input type="hidden" name="threadId" value={data.thread.id} />
+											<input type="hidden" name="sessionId" value={data.thread.sessionId} />
+											<label for="session-role-select" class="text-muted-foreground">Role</label>
+											<NativeSelect.Root
+												id="session-role-select"
+												name="sessionThreadRole"
+												onchange={(e) => {
+													(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+												}}
+											>
+												<NativeSelect.Option
+													value="primary"
+													selected={data.thread.sessionThreadRole === 'primary'}
+												>
+													Primary
+												</NativeSelect.Option>
+												<NativeSelect.Option
+													value="related"
+													selected={data.thread.sessionThreadRole !== 'primary'}
+												>
+													Related
+												</NativeSelect.Option>
+											</NativeSelect.Root>
+										</form>
+									{/if}
 								{/if}
 							</Popover.Content>
 						</Popover.Root>
@@ -300,6 +338,43 @@
 				</div>
 			</div>
 		</div>
+
+		{#if data.session}
+			<Card.Root class="border-primary/30 bg-primary/20">
+				<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div class="min-w-0">
+						<div class="flex flex-wrap items-center gap-2">
+							<span class="font-medium">Part of {data.session.title}</span>
+							{#if data.thread.sessionThreadRole === 'primary'}
+								<Badge variant="secondary">Main discussion thread</Badge>
+							{:else}
+								<Badge variant="outline">Related thread</Badge>
+							{/if}
+						</div>
+						<div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+							{#if data.session.startsAt}
+								<span class="inline-flex items-center gap-1">
+									<CalendarIcon class="h-3.5 w-3.5" />
+									{new Date(data.session.startsAt).toLocaleDateString()}
+								</span>
+							{/if}
+							{#if data.session.locationName}
+								<span class="inline-flex items-center gap-1">
+									<MapPinIcon class="h-3.5 w-3.5" />
+									{data.session.locationName}
+								</span>
+							{/if}
+							{#if data.session.themeTitle ?? data.session.theme}
+								<span>{data.session.themeTitle ?? data.session.theme}</span>
+							{/if}
+						</div>
+					</div>
+					<Button variant="outline" href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
+						View Session
+					</Button>
+				</Card.Content>
+			</Card.Root>
+		{/if}
 
 		<!-- Thread body (the opening post) -->
 		<Card.Root>
@@ -528,8 +603,8 @@
 						{/if}
 						<div class="flex justify-end">
 							<Button type="submit" disabled={loading || !replyBody.trim()}>
-								{#if loading}Posting…{:else if data.session}<GlobeIcon class="size-4" /> Post Public Reply{:else}Post
-									Reply{/if}
+								{#if loading}Posting…{:else if data.session}<CalendarIcon class="size-4" /> Post Session
+									Reply{:else}Post Reply{/if}
 							</Button>
 						</div>
 					</form>

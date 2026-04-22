@@ -8,7 +8,8 @@ import {
 	genreLinks,
 	sessions,
 	sessionSubjects,
-	subjectSources
+	subjectSources,
+	type SessionSubjectStatus
 } from '$lib/server/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
@@ -17,6 +18,12 @@ import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
 
 const SUBJECT = 'series' as const;
+const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
+
+function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
+	const status = data.get('status')?.toString();
+	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	requirePermission(locals, 'series:edit');
@@ -249,7 +256,7 @@ export const actions: Actions = {
 		const sessionId = data.get('sessionId')?.toString();
 		if (!sessionId) return fail(400, { error: 'Select a session.' });
 
-		const status = data.get('status')?.toString() || 'mentioned';
+		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		await locals.db
@@ -276,7 +283,7 @@ export const actions: Actions = {
 		const sessionId = data.get('sessionId')?.toString();
 		if (!sessionId) return fail(400, { error: 'Missing session ID' });
 
-		const status = data.get('status')?.toString() || 'mentioned';
+		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		await locals.db

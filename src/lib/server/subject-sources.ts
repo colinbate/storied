@@ -1,6 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import type { ORM } from './db';
-import { subjectSources, threadSubjects, sessionSubjects, seriesBooks } from './db/schema';
+import {
+	subjectSources,
+	threadSubjects,
+	sessionSubjects,
+	seriesBooks,
+	type SessionSubjectStatus
+} from './db/schema';
 import { newId } from './ids';
 import { detectSubjectLinks, type DetectedSubjectLink } from './book-links';
 import { publishWorkerMessage, type WorkerQueueBinding } from './worker-queue';
@@ -112,7 +118,7 @@ export async function ensureSubjectSource(
 					sessionId: sideEffects.sessionLink.sessionId,
 					subjectType: resolvedSubjectType,
 					subjectId: resolvedSubjectId,
-					status: sideEffects.sessionLink.status,
+					status: sideEffects.sessionLink.status as SessionSubjectStatus,
 					note: sideEffects.sessionLink.note ?? null,
 					addedByUserId: sideEffects.sessionLink.addedByUserId ?? null
 				})

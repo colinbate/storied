@@ -33,7 +33,9 @@
 
 	// Session add state
 	let addSessionId = $state<string | undefined>(undefined);
-	let addSessionStatus = $state<'mentioned' | 'featured' | 'selected'>('mentioned');
+	let addSessionStatus = $state<'starter' | 'featured' | 'discussed' | 'mentioned_off_theme'>(
+		'starter'
+	);
 
 	function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (status === 'resolved') return 'default';
@@ -428,9 +430,12 @@
 									name="status"
 									value={link.link.status}
 								>
-									<NativeSelect.Option value="mentioned">mentioned</NativeSelect.Option>
+									<NativeSelect.Option value="starter">starter</NativeSelect.Option>
 									<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-									<NativeSelect.Option value="selected">selected</NativeSelect.Option>
+									<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+									<NativeSelect.Option value="mentioned_off_theme"
+										>mentioned off theme</NativeSelect.Option
+									>
 								</NativeSelect.Root>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
@@ -481,9 +486,10 @@
 				<div class="space-y-1">
 					<Label for="add-status">Status</Label>
 					<NativeSelect.Root id="add-status" name="status" bind:value={addSessionStatus}>
-						<NativeSelect.Option value="mentioned">mentioned</NativeSelect.Option>
+						<NativeSelect.Option value="starter">starter</NativeSelect.Option>
 						<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-						<NativeSelect.Option value="selected">selected</NativeSelect.Option>
+						<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+						<NativeSelect.Option value="mentioned_off_theme">mentioned off theme</NativeSelect.Option>
 					</NativeSelect.Root>
 				</div>
 				<div class="flex-1 space-y-1">

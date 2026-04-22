@@ -5,7 +5,9 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import XIcon from '@lucide/svelte/icons/x';
@@ -73,18 +75,50 @@
 							<Input id="create-title" name="title" placeholder="e.g. January 2025" required />
 						</div>
 						<div class="space-y-2">
-							<Label for="create-theme">Theme</Label>
-							<Input id="create-theme" name="theme" placeholder="e.g. Science Fiction" />
+							<Label for="create-slug">Slug</Label>
+							<Input id="create-slug" name="slug" placeholder="auto-generated if blank" />
+						</div>
+						<div class="space-y-2">
+							<Label for="create-status">Status</Label>
+							<NativeSelect id="create-status" name="status" value="draft">
+								<NativeSelectOption value="draft">draft</NativeSelectOption>
+								<NativeSelectOption value="current">current</NativeSelectOption>
+								<NativeSelectOption value="past">past</NativeSelectOption>
+							</NativeSelect>
 						</div>
 						<div class="space-y-2">
 							<Label for="create-startsAt">Starts At</Label>
-							<Input id="create-startsAt" name="startsAt" type="date" />
+							<Input id="create-startsAt" name="startsAt" type="datetime-local" />
+						</div>
+						<div class="space-y-2">
+							<Label for="create-durationMinutes">Duration Minutes</Label>
+							<Input id="create-durationMinutes" name="durationMinutes" type="number" min="0" />
+						</div>
+						<div class="space-y-2">
+							<Label for="create-locationName">Location</Label>
+							<Input id="create-locationName" name="locationName" />
+						</div>
+						<div class="space-y-2">
+							<Label for="create-themeTitle">Theme Title</Label>
+							<Input id="create-themeTitle" name="themeTitle" placeholder="e.g. Haunted Futures" />
+						</div>
+						<div class="space-y-2 sm:col-span-2">
+							<Label for="create-themeSummary">Theme Summary</Label>
+							<Textarea id="create-themeSummary" name="themeSummary" rows={2} />
+						</div>
+						<div class="space-y-2 sm:col-span-2">
+							<Label for="create-bodySource">Body</Label>
+							<Textarea id="create-bodySource" name="bodySource" rows={6} />
+						</div>
+						<div class="space-y-2">
+							<Label for="create-rsvpSlug">RSVP Slug</Label>
+							<Input id="create-rsvpSlug" name="rsvpSlug" />
 						</div>
 						<div class="space-y-2">
 							<Label for="create-astroPath">Astro Path</Label>
 							<Input id="create-astroPath" name="astroPath" placeholder="/sessions/jan-2025" />
 						</div>
-						<div class="space-y-2 sm:col-span-2">
+						<div class="space-y-2">
 							<Label for="create-externalUrl">External URL</Label>
 							<Input
 								id="create-externalUrl"
@@ -93,6 +127,10 @@
 								placeholder="https://..."
 							/>
 						</div>
+						<label class="flex items-center gap-2 pt-8 text-sm">
+							<input name="isPublic" type="checkbox" class="rounded border-input" />
+							Public
+						</label>
 					</div>
 					<div class="flex items-center gap-2">
 						<Button type="submit" disabled={loading}>
@@ -146,16 +184,76 @@
 									<Input id="edit-title-{session.id}" name="title" value={session.title} required />
 								</div>
 								<div class="space-y-1">
-									<Label for="edit-theme-{session.id}">Theme</Label>
-									<Input id="edit-theme-{session.id}" name="theme" value={session.theme ?? ''} />
+									<Label for="edit-slug-{session.id}">Slug</Label>
+									<Input id="edit-slug-{session.id}" name="slug" value={session.slug} required />
+								</div>
+								<div class="space-y-1">
+									<Label for="edit-status-{session.id}">Status</Label>
+									<NativeSelect id="edit-status-{session.id}" name="status" value={session.status}>
+										<NativeSelectOption value="draft">draft</NativeSelectOption>
+										<NativeSelectOption value="current">current</NativeSelectOption>
+										<NativeSelectOption value="past">past</NativeSelectOption>
+									</NativeSelect>
 								</div>
 								<div class="space-y-1">
 									<Label for="edit-startsAt-{session.id}">Starts At</Label>
 									<Input
 										id="edit-startsAt-{session.id}"
 										name="startsAt"
-										type="date"
+										type="datetime-local"
 										value={session.startsAt ?? ''}
+									/>
+								</div>
+								<div class="space-y-1">
+									<Label for="edit-durationMinutes-{session.id}">Duration Minutes</Label>
+									<Input
+										id="edit-durationMinutes-{session.id}"
+										name="durationMinutes"
+										type="number"
+										min="0"
+										value={session.durationMinutes ?? ''}
+									/>
+								</div>
+								<div class="space-y-1">
+									<Label for="edit-locationName-{session.id}">Location</Label>
+									<Input
+										id="edit-locationName-{session.id}"
+										name="locationName"
+										value={session.locationName ?? ''}
+									/>
+								</div>
+								<div class="space-y-1">
+									<Label for="edit-themeTitle-{session.id}">Theme Title</Label>
+									<Input
+										id="edit-themeTitle-{session.id}"
+										name="themeTitle"
+										value={session.themeTitle ?? session.theme ?? ''}
+									/>
+								</div>
+								<div class="space-y-1 sm:col-span-2">
+									<Label for="edit-themeSummary-{session.id}">Theme Summary</Label>
+									<Textarea
+										id="edit-themeSummary-{session.id}"
+										name="themeSummary"
+										rows={2}
+										value={session.themeSummary ?? ''}
+									/>
+								</div>
+								<div class="space-y-1 sm:col-span-2">
+									<Label for="edit-bodySource-{session.id}">Body</Label>
+									<Textarea
+										id="edit-bodySource-{session.id}"
+										name="bodySource"
+										rows={6}
+										value={session.bodySource ?? ''}
+									/>
+								</div>
+								<div class="space-y-1">
+									<Label for="edit-rsvpSlug-{session.id}">RSVP Slug</Label>
+									<Input
+										id="edit-rsvpSlug-{session.id}"
+										name="rsvpSlug"
+										value={session.rsvpSlug ?? ''}
 									/>
 								</div>
 								<div class="space-y-1">
@@ -166,7 +264,7 @@
 										value={session.astroPath ?? ''}
 									/>
 								</div>
-								<div class="space-y-1 sm:col-span-2">
+								<div class="space-y-1">
 									<Label for="edit-externalUrl-{session.id}">External URL</Label>
 									<Input
 										id="edit-externalUrl-{session.id}"
@@ -175,6 +273,15 @@
 										value={session.externalUrl ?? ''}
 									/>
 								</div>
+								<label class="flex items-center gap-2 pt-7 text-sm">
+									<input
+										name="isPublic"
+										type="checkbox"
+										checked={session.isPublic}
+										class="rounded border-input"
+									/>
+									Public
+								</label>
 							</div>
 							<div class="flex items-center gap-2">
 								<Button type="submit" size="sm" disabled={loading}>
@@ -199,8 +306,14 @@
 							<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2">
 									<span class="font-medium">{session.title}</span>
-									{#if session.theme}
-										<Badge variant="secondary">{session.theme}</Badge>
+									<Badge variant={session.status === 'current' ? 'default' : 'secondary'}
+										>{session.status}</Badge
+									>
+									{#if session.isPublic}
+										<Badge variant="outline">public</Badge>
+									{/if}
+									{#if session.themeTitle ?? session.theme}
+										<Badge variant="secondary">{session.themeTitle ?? session.theme}</Badge>
 									{/if}
 								</div>
 								<div

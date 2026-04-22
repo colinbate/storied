@@ -11,6 +11,7 @@
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
@@ -32,6 +33,13 @@
 			</a>
 
 			<div class="flex items-center gap-2">
+				{#if user}
+					<Button href={resolve('/sessions')} variant="ghost" size="sm" class="hidden sm:inline-flex">
+						<CalendarIcon class="h-4 w-4" />
+						Sessions
+					</Button>
+				{/if}
+
 				<Button onclick={toggleMode} variant="ghost" size="icon" class="h-9 w-9">
 					<SunIcon class="h-4 w-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
 					<MoonIcon

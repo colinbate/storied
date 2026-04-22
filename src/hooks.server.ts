@@ -18,8 +18,26 @@ const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?:
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
 	member: ['access:general'],
-	moderator: ['access:general', 'admin:view', 'moderate', 'book:edit', 'genre:edit', 'series:edit'],
-	admin: ['access:general', 'admin:view', 'moderate', 'book:edit', 'genre:edit', 'series:edit', 'members:edit', 'sessions:edit']
+	moderator: [
+		'access:general',
+		'admin:view',
+		'moderate',
+		'book:edit',
+		'book:promote',
+		'genre:edit',
+		'series:edit'
+	],
+	admin: [
+		'access:general',
+		'admin:view',
+		'moderate',
+		'book:edit',
+		'book:promote',
+		'genre:edit',
+		'series:edit',
+		'members:edit',
+		'sessions:edit'
+	]
 };
 
 function canAccess(path: string, permissions: Set<string>) {

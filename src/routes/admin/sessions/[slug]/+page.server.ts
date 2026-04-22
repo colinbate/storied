@@ -1,11 +1,31 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { books, series, sessions, sessionSubjects } from '$lib/server/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
+import { renderMarkdown } from '$lib/server/markdown';
+import { slugify } from '$lib/server/slugify';
 
 type SubjectKind = 'book' | 'series';
+type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
+
+const sessionStatuses = new Set(['draft', 'current', 'past']);
+const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
+
+function getOptionalString(data: FormData, key: string) {
+	return data.get(key)?.toString()?.trim() || null;
+}
+
+function getSessionStatus(data: FormData) {
+	const status = data.get('status')?.toString();
+	return sessionStatuses.has(status ?? '') ? (status as 'draft' | 'current' | 'past') : 'draft';
+}
+
+function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
+	const status = data.get('status')?.toString();
+	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	requirePermission(locals, 'sessions:edit');
@@ -100,19 +120,39 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
+		const slug = slugify(getOptionalString(data, 'slug') ?? '');
 		if (!title || title.length < 2) return fail(400, { error: 'Title must be at least 2 characters.' });
+		if (!slug) return fail(400, { error: 'Slug is required.' });
+
+		const bodySource = getOptionalString(data, 'bodySource');
+		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
+		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
 
 		await locals.db
 			.update(sessions)
 			.set({
 				title,
-				theme: data.get('theme')?.toString()?.trim() || null,
-				startsAt: data.get('startsAt')?.toString()?.trim() || null,
-				astroPath: data.get('astroPath')?.toString()?.trim() || null,
-				externalUrl: data.get('externalUrl')?.toString()?.trim() || null,
+				slug,
+				status: getSessionStatus(data),
+				theme: themeTitle,
+				themeTitle,
+				themeSummary: getOptionalString(data, 'themeSummary'),
+				bodySource,
+				bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
+				startsAt: getOptionalString(data, 'startsAt'),
+				durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
+				locationName: getOptionalString(data, 'locationName'),
+				rsvpSlug: getOptionalString(data, 'rsvpSlug'),
+				isPublic: data.get('isPublic') === 'on',
+				astroPath: getOptionalString(data, 'astroPath'),
+				externalUrl: getOptionalString(data, 'externalUrl'),
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(sessions.id, row.id));
+
+		if (slug !== row.slug) {
+			throw redirect(303, `/admin/sessions/${slug}`);
+		}
 
 		return { updated: true };
 	},
@@ -133,7 +173,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid subject kind.' });
 		if (!subjectId) return fail(400, { error: 'Select a subject to link.' });
 
-		const status = data.get('status')?.toString() || 'mentioned';
+		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		await locals.db
@@ -162,7 +202,7 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const url = data.get('url')?.toString()?.trim() || '';
-		const status = data.get('status')?.toString() || 'mentioned';
+		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		const link = detectFirstSubjectLink(url);
@@ -197,7 +237,7 @@ export const actions: Actions = {
 		const subjectId = data.get('subjectId')?.toString();
 		if (!kind || !subjectId) return fail(400, { error: 'Missing subject reference.' });
 
-		const status = data.get('status')?.toString() || 'mentioned';
+		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		await locals.db

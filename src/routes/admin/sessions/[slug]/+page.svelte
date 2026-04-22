@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
@@ -22,12 +23,13 @@
 	let saving = $state(false);
 
 	type LinkKind = 'book' | 'series';
+	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 	let addKind = $state<LinkKind>('book');
 	let addBookId = $state<string | undefined>(undefined);
 	let addSeriesId = $state<string | undefined>(undefined);
-	let addStatus = $state<'mentioned' | 'featured' | 'selected'>('mentioned');
+	let addStatus = $state<SubjectStatus>('starter');
 
-	let urlStatus = $state<'mentioned' | 'featured' | 'selected'>('mentioned');
+	let urlStatus = $state<SubjectStatus>('starter');
 
 	const bookPickerItems = $derived(
 		data.allBooks
@@ -58,8 +60,11 @@
 			<ArrowLeftIcon class="h-4 w-4" />
 		</Button>
 		<h1 class="text-2xl font-bold">{data.session.title}</h1>
-		{#if data.session.theme}
-			<Badge variant="secondary">{data.session.theme}</Badge>
+		<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
+			{data.session.status}
+		</Badge>
+		{#if data.session.themeTitle ?? data.session.theme}
+			<Badge variant="secondary">{data.session.themeTitle ?? data.session.theme}</Badge>
 		{/if}
 	</div>
 
@@ -92,18 +97,75 @@
 						<Input id="title" name="title" value={data.session.title} required />
 					</div>
 					<div class="space-y-2">
-						<Label for="theme">Theme</Label>
-						<Input id="theme" name="theme" value={data.session.theme ?? ''} />
+						<Label for="slug">Slug</Label>
+						<Input id="slug" name="slug" value={data.session.slug} required />
+					</div>
+					<div class="space-y-2">
+						<Label for="status">Status</Label>
+						<NativeSelect id="status" name="status" value={data.session.status}>
+							<NativeSelectOption value="draft">draft</NativeSelectOption>
+							<NativeSelectOption value="current">current</NativeSelectOption>
+							<NativeSelectOption value="past">past</NativeSelectOption>
+						</NativeSelect>
 					</div>
 					<div class="space-y-2">
 						<Label for="startsAt">Starts At</Label>
-						<Input id="startsAt" name="startsAt" type="date" value={data.session.startsAt ?? ''} />
+						<Input
+							id="startsAt"
+							name="startsAt"
+							type="datetime-local"
+							value={data.session.startsAt ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="durationMinutes">Duration Minutes</Label>
+						<Input
+							id="durationMinutes"
+							name="durationMinutes"
+							type="number"
+							min="0"
+							value={data.session.durationMinutes ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="locationName">Location</Label>
+						<Input id="locationName" name="locationName" value={data.session.locationName ?? ''} />
+					</div>
+					<div class="space-y-2">
+						<Label for="themeTitle">Theme Title</Label>
+						<Input
+							id="themeTitle"
+							name="themeTitle"
+							value={data.session.themeTitle ?? data.session.theme ?? ''}
+						/>
+					</div>
+					<div class="space-y-2 sm:col-span-2">
+						<Label for="themeSummary">Theme Summary</Label>
+						<Textarea
+							id="themeSummary"
+							name="themeSummary"
+							rows={2}
+							value={data.session.themeSummary ?? ''}
+						/>
+					</div>
+					<div class="space-y-2 sm:col-span-2">
+						<Label for="bodySource">Body</Label>
+						<Textarea
+							id="bodySource"
+							name="bodySource"
+							rows={8}
+							value={data.session.bodySource ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="rsvpSlug">RSVP Slug</Label>
+						<Input id="rsvpSlug" name="rsvpSlug" value={data.session.rsvpSlug ?? ''} />
 					</div>
 					<div class="space-y-2">
 						<Label for="astroPath">Astro Path</Label>
 						<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
 					</div>
-					<div class="space-y-2 sm:col-span-2">
+					<div class="space-y-2">
 						<Label for="externalUrl">External URL</Label>
 						<Input
 							id="externalUrl"
@@ -112,6 +174,15 @@
 							value={data.session.externalUrl ?? ''}
 						/>
 					</div>
+					<label class="flex items-center gap-2 pt-8 text-sm">
+						<input
+							name="isPublic"
+							type="checkbox"
+							checked={data.session.isPublic}
+							class="rounded border-input"
+						/>
+						Public
+					</label>
 				</div>
 				<Button type="submit" disabled={saving}>
 					{saving ? 'Saving…' : 'Save Session'}
@@ -177,9 +248,12 @@
 							<div class="flex items-center gap-2">
 								<Label for="status-b-{entry.book.id}" class="text-xs">Status</Label>
 								<NativeSelect id="status-b-{entry.book.id}" name="status" value={entry.link.status}>
-									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+									<NativeSelectOption value="starter">starter</NativeSelectOption>
 									<NativeSelectOption value="featured">featured</NativeSelectOption>
-									<NativeSelectOption value="selected">selected</NativeSelectOption>
+									<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+									<NativeSelectOption value="mentioned_off_theme"
+										>mentioned off theme</NativeSelectOption
+									>
 								</NativeSelect>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
@@ -265,9 +339,12 @@
 									name="status"
 									value={entry.link.status}
 								>
-									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+									<NativeSelectOption value="starter">starter</NativeSelectOption>
 									<NativeSelectOption value="featured">featured</NativeSelectOption>
-									<NativeSelectOption value="selected">selected</NativeSelectOption>
+									<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+									<NativeSelectOption value="mentioned_off_theme"
+										>mentioned off theme</NativeSelectOption
+									>
 								</NativeSelect>
 							</div>
 							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
@@ -353,9 +430,10 @@
 				<div class="space-y-1">
 					<Label for="add-status">Status</Label>
 					<NativeSelect id="add-status" name="status" bind:value={addStatus}>
-						<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<NativeSelectOption value="starter">starter</NativeSelectOption>
 						<NativeSelectOption value="featured">featured</NativeSelectOption>
-						<NativeSelectOption value="selected">selected</NativeSelectOption>
+						<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+						<NativeSelectOption value="mentioned_off_theme">mentioned off theme</NativeSelectOption>
 					</NativeSelect>
 				</div>
 				<div class="flex-1 space-y-1">
@@ -411,9 +489,10 @@
 				<div class="space-y-1">
 					<Label for="url-status">Status</Label>
 					<NativeSelect id="url-status" name="status" bind:value={urlStatus}>
-						<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<NativeSelectOption value="starter">starter</NativeSelectOption>
 						<NativeSelectOption value="featured">featured</NativeSelectOption>
-						<NativeSelectOption value="selected">selected</NativeSelectOption>
+						<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+						<NativeSelectOption value="mentioned_off_theme">mentioned off theme</NativeSelectOption>
 					</NativeSelect>
 				</div>
 				<div class="flex-1 space-y-1">

@@ -12,6 +12,10 @@ import { sql } from 'drizzle-orm';
 
 // Helper for ISO-8601 timestamp default.
 const timestampDefault = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
+export type SubjectType = 'book' | 'series';
+export type SessionStatus = 'draft' | 'current' | 'past';
+export type SessionThreadRole = 'primary' | 'related';
+export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 
 // ──────────────────────────────────────────────
 // users
@@ -43,13 +47,26 @@ export const sessions = sqliteTable(
 		slug: text('slug').notNull().unique(),
 		title: text('title').notNull(),
 		startsAt: text('starts_at'),
+		status: text('status').notNull().default('draft').$type<SessionStatus>(),
 		theme: text('theme'),
+		themeTitle: text('theme_title'),
+		themeSummary: text('theme_summary'),
+		bodySource: text('body_source'),
+		bodyHtml: text('body_html'),
+		durationMinutes: integer('duration_minutes'),
+		locationName: text('location_name'),
+		rsvpSlug: text('rsvp_slug'),
+		isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
 		astroPath: text('astro_path'),
 		externalUrl: text('external_url'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
-	(table) => [index('idx_sessions_slug').on(table.slug)]
+	(table) => [
+		index('idx_sessions_slug').on(table.slug),
+		index('idx_sessions_status_starts_at').on(table.status, table.startsAt),
+		index('idx_sessions_is_public_starts_at').on(table.isPublic, table.startsAt)
+	]
 );
 
 // ──────────────────────────────────────────────
@@ -85,6 +102,7 @@ export const threads = sqliteTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'restrict' }),
 		sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+		sessionThreadRole: text('session_thread_role').$type<SessionThreadRole>(),
 		title: text('title').notNull(),
 		slug: text('slug').notNull().unique(),
 		bodySource: text('body_source').notNull(),
@@ -105,6 +123,7 @@ export const threads = sqliteTable(
 		index('idx_threads_category_last_post').on(table.categoryId, table.isPinned, table.lastPostAt),
 		index('idx_threads_author').on(table.authorUserId, table.createdAt),
 		index('idx_threads_session').on(table.sessionId, table.createdAt),
+		index('idx_threads_session_role').on(table.sessionId, table.sessionThreadRole, table.createdAt),
 		index('idx_threads_visibility').on(table.visibility, table.deletedAt, table.lastPostAt)
 	]
 );
@@ -364,7 +383,7 @@ export const subjectSources = sqliteTable(
 		sourceUrl: text('source_url').notNull(),
 		sourceKey: text('source_key').notNull(),
 		/** Allowed values: 'book' | 'series' */
-		subjectType: text('subject_type'),
+		subjectType: text('subject_type').$type<SubjectType>(),
 		subjectId: text('subject_id'),
 		rawMetadata: text('raw_metadata'),
 		/** Allowed values: 'pending' | 'resolved' | 'failed' | 'ignored' */
@@ -392,11 +411,10 @@ export const threadSubjects = sqliteTable(
 			.references(() => threads.id, { onDelete: 'cascade' }),
 		postId: text('post_id').references(() => posts.id, { onDelete: 'set null' }),
 		/** Allowed values: 'book' | 'series' */
-		subjectType: text('subject_type').notNull(),
+		subjectType: text('subject_type').notNull().$type<SubjectType>(),
 		subjectId: text('subject_id').notNull(),
 		displayOrder: integer('display_order').notNull().default(0),
-		/** Allowed values: 'linked' | 'mentioned' | 'recommended' */
-		context: text('context').notNull().default('linked'),
+		context: text('context').notNull().default('linked').$type<'linked' | 'mentioned' | 'manual'>(),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		addedBy: text('added_by').references(() => users.id, { onDelete: 'set null' })
 	},
@@ -440,7 +458,7 @@ export const genreLinks = sqliteTable(
 			.notNull()
 			.references(() => genres.id, { onDelete: 'cascade' }),
 		/** Allowed values: 'book' | 'series' */
-		subjectType: text('subject_type').notNull(),
+		subjectType: text('subject_type').notNull().$type<SubjectType>(),
 		subjectId: text('subject_id').notNull(),
 		/** Allowed values: 'manual' | 'inferred' | 'imported' */
 		confidence: text('confidence').notNull(),
@@ -485,7 +503,7 @@ export const userSubjects = sqliteTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		/** Allowed values: 'book' | 'series' */
-		subjectType: text('subject_type').notNull(),
+		subjectType: text('subject_type').notNull().$type<SubjectType>(),
 		subjectId: text('subject_id').notNull(),
 		/** Allowed values: 'want_to_read' | 'reading' | 'read' | 'did_not_finish' */
 		readingStatus: text('reading_status').notNull().default('want_to_read'),
@@ -514,10 +532,10 @@ export const sessionSubjects = sqliteTable(
 			.notNull()
 			.references(() => sessions.id, { onDelete: 'cascade' }),
 		/** Allowed values: 'book' | 'series' */
-		subjectType: text('subject_type').notNull(),
+		subjectType: text('subject_type').notNull().$type<SubjectType>(),
 		subjectId: text('subject_id').notNull(),
-		/** Allowed values: 'mentioned' | 'featured' | 'selected' */
-		status: text('status').notNull().default('mentioned'),
+		/** Allowed values: 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme' */
+		status: text('status').notNull().default('starter').$type<SessionSubjectStatus>(),
 		note: text('note'),
 		addedByUserId: text('added_by_user_id').references(() => users.id, {
 			onDelete: 'set null'

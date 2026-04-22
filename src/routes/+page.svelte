@@ -8,6 +8,8 @@
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import PinIcon from '@lucide/svelte/icons/pin';
 	import LockIcon from '@lucide/svelte/icons/lock';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import { resolve } from '$app/paths';
 
 	let { data } = $props();
@@ -29,6 +31,71 @@
 			New Thread
 		</Button>
 	</div>
+
+	{#if data.currentSession}
+		<section>
+			<a href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })} class="block">
+				<Card.Root class="border-primary/40 bg-primary/5 transition-colors hover:border-primary">
+					<Card.Content class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div class="min-w-0">
+							<div class="mb-2 flex flex-wrap items-center gap-2">
+								<Badge variant={data.currentSession.status === 'current' ? 'default' : 'secondary'}>
+									{data.currentSession.status === 'current' ? 'Current session' : 'Next session'}
+								</Badge>
+								{#if data.currentSession.isPublic}
+									<Badge variant="outline">public</Badge>
+								{/if}
+							</div>
+							<h2 class="text-xl font-semibold">{data.currentSession.title}</h2>
+							{#if data.currentSession.themeTitle ?? data.currentSession.theme}
+								<p class="mt-1 text-muted-foreground">
+									{data.currentSession.themeTitle ?? data.currentSession.theme}
+								</p>
+							{/if}
+							<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+								{#if data.currentSession.startsAt}
+									<span class="inline-flex items-center gap-1">
+										<CalendarIcon class="h-4 w-4" />
+										{new Date(data.currentSession.startsAt).toLocaleString([], {
+											month: 'short',
+											day: 'numeric',
+											hour: 'numeric',
+											minute: '2-digit'
+										})}
+									</span>
+								{/if}
+								{#if data.currentSession.locationName}
+									<span class="inline-flex items-center gap-1">
+										<MapPinIcon class="h-4 w-4" />
+										{data.currentSession.locationName}
+									</span>
+								{/if}
+							</div>
+						</div>
+						<span
+							class="inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium"
+						>
+							View Session
+						</span>
+					</Card.Content>
+				</Card.Root>
+			</a>
+		</section>
+	{/if}
+
+	{#if data.pastSessions.length > 0}
+		<section class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+			<span>Recent sessions:</span>
+			{#each data.pastSessions as session (session.id)}
+				<a href={resolve('/sessions/[slug]', { slug: session.slug })} class="hover:text-foreground">
+					{session.title}
+				</a>
+			{/each}
+			<a href={resolve('/sessions')} class="font-medium text-foreground hover:underline"
+				>All sessions</a
+			>
+		</section>
+	{/if}
 
 	<!-- Categories -->
 	<section>

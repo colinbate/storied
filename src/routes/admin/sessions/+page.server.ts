@@ -5,6 +5,18 @@ import { desc, eq } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
+import { renderMarkdown } from '$lib/server/markdown';
+
+const sessionStatuses = new Set(['draft', 'current', 'past']);
+
+function getOptionalString(data: FormData, key: string) {
+	return data.get(key)?.toString()?.trim() || null;
+}
+
+function getSessionStatus(data: FormData) {
+	const status = data.get('status')?.toString();
+	return sessionStatuses.has(status ?? '') ? (status as 'draft' | 'current' | 'past') : 'draft';
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'sessions:edit');
@@ -23,24 +35,32 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
-		const theme = data.get('theme')?.toString()?.trim() || null;
-		const startsAt = data.get('startsAt')?.toString()?.trim() || null;
-		const astroPath = data.get('astroPath')?.toString()?.trim() || null;
-		const externalUrl = data.get('externalUrl')?.toString()?.trim() || null;
+		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
+		const bodySource = getOptionalString(data, 'bodySource');
+		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 
 		if (!title || title.length < 2) {
 			return fail(400, { error: 'Title must be at least 2 characters.' });
 		}
 
-		const slug = slugify(title);
+		const slug = slugify(getOptionalString(data, 'slug') ?? title);
 		await locals.db.insert(sessions).values({
 			id: newId(),
 			slug,
 			title,
-			theme,
-			startsAt,
-			astroPath,
-			externalUrl
+			status: getSessionStatus(data),
+			theme: themeTitle,
+			themeTitle,
+			themeSummary: getOptionalString(data, 'themeSummary'),
+			bodySource,
+			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
+			startsAt: getOptionalString(data, 'startsAt'),
+			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
+			locationName: getOptionalString(data, 'locationName'),
+			rsvpSlug: getOptionalString(data, 'rsvpSlug'),
+			isPublic: data.get('isPublic') === 'on',
+			astroPath: getOptionalString(data, 'astroPath'),
+			externalUrl: getOptionalString(data, 'externalUrl')
 		});
 
 		return { created: true };
@@ -52,16 +72,34 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id')?.toString();
 		const title = data.get('title')?.toString()?.trim();
-		const theme = data.get('theme')?.toString()?.trim() || null;
-		const startsAt = data.get('startsAt')?.toString()?.trim() || null;
-		const astroPath = data.get('astroPath')?.toString()?.trim() || null;
-		const externalUrl = data.get('externalUrl')?.toString()?.trim() || null;
+		const slug = slugify(getOptionalString(data, 'slug') ?? title ?? '');
+		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
+		const bodySource = getOptionalString(data, 'bodySource');
+		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 
 		if (!id || !title) return fail(400, { error: 'Missing required fields.' });
+		if (!slug) return fail(400, { error: 'Slug is required.' });
 
 		await locals.db
 			.update(sessions)
-			.set({ title, theme, startsAt, astroPath, externalUrl, updatedAt: new Date().toISOString() })
+			.set({
+				title,
+				slug,
+				status: getSessionStatus(data),
+				theme: themeTitle,
+				themeTitle,
+				themeSummary: getOptionalString(data, 'themeSummary'),
+				bodySource,
+				bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
+				startsAt: getOptionalString(data, 'startsAt'),
+				durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
+				locationName: getOptionalString(data, 'locationName'),
+				rsvpSlug: getOptionalString(data, 'rsvpSlug'),
+				isPublic: data.get('isPublic') === 'on',
+				astroPath: getOptionalString(data, 'astroPath'),
+				externalUrl: getOptionalString(data, 'externalUrl'),
+				updatedAt: new Date().toISOString()
+			})
 			.where(eq(sessions.id, id));
 
 		return { updated: true };

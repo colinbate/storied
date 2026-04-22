@@ -6,7 +6,8 @@ import {
 	threads,
 	subscriptions,
 	subjectSources,
-	threadSubjects
+	threadSubjects,
+	type SubjectType
 } from '$lib/server/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
@@ -175,7 +176,7 @@ export const actions: Actions = {
 					.values({
 						id: newId(),
 						threadId,
-						subjectType: resolvedSubjectType,
+						subjectType: resolvedSubjectType as SubjectType,
 						subjectId: resolvedSubjectId,
 						displayOrder: i,
 						context: 'linked',
