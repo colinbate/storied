@@ -85,3 +85,32 @@ export async function sendMagicLinkEmail(
     `.trim()
 	});
 }
+
+/** Send an invitation email */
+export async function sendInviteEmail(
+	platform: App.Platform,
+	email: string,
+	inviteUrl: string
+): Promise<{ success: boolean; error?: string }> {
+	return sendEmail(platform, {
+		to: email,
+		subject: 'Invitation to Bermuda Triangle Society Discussions',
+		textBody: `You've been invited to join Bermuda Triangle Society Discussions.\n\nUse this invitation link to sign in:\n\n${inviteUrl}\n\nIf you weren't expecting this, you can safely ignore this email.`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <h2 style="color: #1a1a2e; margin-bottom: 24px;">You're invited</h2>
+        <p style="color: #444; line-height: 1.6;">Use the button below to join Bermuda Triangle Society Discussions:</p>
+        <div style="margin: 32px 0; text-align: center;">
+          <a href="${inviteUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Accept Invitation
+          </a>
+        </div>
+        <p style="color: #888; font-size: 14px; line-height: 1.5;">
+          Or copy and paste this URL into your browser:<br>
+          <a href="${inviteUrl}" style="color: #6d28d9; word-break: break-all;">${inviteUrl}</a>
+        </p>
+        <p style="color: #888; font-size: 13px; margin-top: 32px;">If you weren't expecting this, you can safely ignore this email.</p>
+      </div>
+    `.trim()
+	});
+}

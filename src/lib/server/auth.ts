@@ -1,22 +1,29 @@
 import { nanoid } from 'nanoid';
-import { eq, and, gt, gte, isNull, sql } from 'drizzle-orm';
+import { eq, and, gt, gte, isNull, sql, or } from 'drizzle-orm';
 import type { ORM } from './db';
-import { users, authMagicLinks, userSessions, notificationPreferences } from './db/schema';
+import { users, authMagicLinks, userSessions, notificationPreferences, invites } from './db/schema';
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
 const TIMEZONE_COOKIE_NAME = 'storied-signup-tz';
+const INVITE_COOKIE_NAME = 'storied-invite';
 const TIMEZONE_COOKIE_MAX_AGE_S = 60 * 60; // 1 hour — only needs to outlive the magic-link round-trip
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_CODE_ATTEMPTS = 5;
 
-export { SESSION_COOKIE_NAME, REDIR_COOKIE_NAME, TIMEZONE_COOKIE_NAME, TIMEZONE_COOKIE_MAX_AGE_S };
+export {
+	SESSION_COOKIE_NAME,
+	REDIR_COOKIE_NAME,
+	TIMEZONE_COOKIE_NAME,
+	TIMEZONE_COOKIE_MAX_AGE_S,
+	INVITE_COOKIE_NAME
+};
 
 /** Hash a token using Web Crypto (available in CF Workers) */
-async function hashToken(token: string): Promise<string> {
+export async function hashToken(token: string): Promise<string> {
 	const encoded = new TextEncoder().encode(token);
 	const digest = await crypto.subtle.digest('SHA-256', encoded);
 	return Array.from(new Uint8Array(digest))
@@ -162,16 +169,30 @@ export async function verifyMagicLinkCode(
 
 /** Create or find a user by email. If new, creates with 'active' status and the email as display name. */
 export type UserRole = 'member' | 'moderator' | 'admin';
+export type UserStatus = 'active' | 'pending' | 'suspended';
+export type SignupMode = 'closed' | 'moderated' | 'open';
 
 export const USER_ROLES: UserRole[] = ['member', 'moderator', 'admin'];
+export const USER_STATUSES: UserStatus[] = ['active', 'pending', 'suspended'];
 
 export function isUserRole(value: unknown): value is UserRole {
 	return typeof value === 'string' && (USER_ROLES as string[]).includes(value);
 }
 
+export function isUserStatus(value: unknown): value is UserStatus {
+	return typeof value === 'string' && (USER_STATUSES as string[]).includes(value);
+}
+
+export function getSignupMode(value: string | undefined): SignupMode {
+	if (value === 'yes' || value === 'open') return 'open';
+	if (value === 'moderated') return 'moderated';
+	return 'closed';
+}
+
 export interface FindOrCreateUserOptions {
 	role?: UserRole;
 	allowSignup?: boolean;
+	status?: UserStatus;
 	/** IANA timezone identifier used when creating a brand-new user. */
 	timezone?: string;
 	name?: string;
@@ -184,6 +205,7 @@ export async function findOrCreateUser(
 ): Promise<{ id: string; isNew: boolean }> {
 	const role: UserRole = opts?.role ?? 'member';
 	const signupAllowed = opts?.allowSignup ?? true;
+	const status: UserStatus = opts?.status ?? 'active';
 	const name = opts?.name;
 
 	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
@@ -196,7 +218,7 @@ export async function findOrCreateUser(
 		email: email.toLowerCase(),
 		displayName,
 		role,
-		status: 'active'
+		status
 	};
 	if (opts?.timezone) insertValues.timezone = opts.timezone;
 	await db.insert(users).values(insertValues);
@@ -206,6 +228,33 @@ export async function findOrCreateUser(
 	await db.insert(notificationPreferences).values({ userId: id }).onConflictDoNothing();
 
 	return { id, isNew: true };
+}
+
+export async function getValidInviteForEmail(db: ORM, code: string, email: string) {
+	const codeHash = await hashToken(code);
+	const normalizedEmail = email.toLowerCase();
+	const now = new Date().toISOString();
+
+	return await db
+		.select()
+		.from(invites)
+		.where(
+			and(
+				eq(invites.codeHash, codeHash),
+				isNull(invites.claimedAt),
+				or(isNull(invites.expiresAt), gt(invites.expiresAt, now)),
+				or(isNull(invites.email), eq(invites.email, normalizedEmail))
+			)
+		)
+		.get();
+}
+
+export async function claimInvite(db: ORM, inviteId: string, userId: string): Promise<void> {
+	const now = new Date().toISOString();
+	await db
+		.update(invites)
+		.set({ claimedByUserId: userId, claimedAt: now })
+		.where(eq(invites.id, inviteId));
 }
 
 /** Create an auth session and return the raw token (for the cookie). */
@@ -287,15 +336,40 @@ export async function completeMagicLinkLogin(
 		cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
 	}
 	const timezone = isValidTimezone(cookieTimezone) ? cookieTimezone : undefined;
+	const inviteCode = cookies.get(INVITE_COOKIE_NAME);
+	if (inviteCode) {
+		cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
+	}
+	const invite = inviteCode ? await getValidInviteForEmail(db, inviteCode, result.email) : null;
+	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
 
 	const { id: userId } = await findOrCreateUser(db, result.email, {
 		role: 'member',
-		allowSignup: platform?.env.ALLOW_SIGNUP === 'yes',
+		allowSignup: !!invite || signupMode !== 'closed',
+		status: invite || signupMode === 'open' ? 'active' : 'pending',
 		timezone
 	});
 
 	if (!userId) {
 		redirect(302, '/auth/login?error=no_signup');
+	}
+
+	if (invite) {
+		await claimInvite(db, invite.id, userId);
+		await db.update(users).set({ status: 'active' }).where(eq(users.id, userId));
+	}
+
+	const user = await db
+		.select({ status: users.status })
+		.from(users)
+		.where(eq(users.id, userId))
+		.get();
+
+	if (user?.status === 'pending') {
+		redirect(302, '/auth/login?error=pending_approval');
+	}
+	if (user?.status === 'suspended') {
+		redirect(302, '/auth/login?error=suspended');
 	}
 
 	const session = await createSession(db, userId);

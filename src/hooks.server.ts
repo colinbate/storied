@@ -70,7 +70,9 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 		if (result) {
 			event.locals.user = result.user;
 			event.locals.sessionId = result.sessionId;
-			event.locals.permissions = new Set(ROLE_PERMISSIONS[result.user.role] ?? []);
+			if (result.user.status === 'active') {
+				event.locals.permissions = new Set(ROLE_PERMISSIONS[result.user.role] ?? []);
+			}
 		} else {
 			event.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
 		}

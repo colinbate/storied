@@ -33,6 +33,10 @@
 			{:else if data.error === 'no_signup'}
 				Sign up is currently disabled. If you have an account, please make sure you entered the
 				email address you are registered with.
+			{:else if data.error === 'pending_approval'}
+				Your sign up is waiting for an administrator to approve it.
+			{:else if data.error === 'suspended'}
+				This account is not currently allowed to sign in.
 			{:else}
 				Unknown error.
 			{/if}
@@ -43,9 +47,17 @@
 			<Card.Title class="text-2xl">Welcome</Card.Title>
 			<Card.Description>
 				Sign in to Bermuda Triangle Society Discussions.
-				{#if !data.canSignup}
+				{#if data.signupMode === 'moderated'}
+					<span class="block text-muted-foreground">
+						New member sign ups are reviewed before access is granted.
+					</span>
+				{:else if !data.canSignup && !data.invite}
 					<span class="block text-destructive">
 						At the moment, we are not accepting new member sign ups.
+					</span>
+				{:else if data.invite}
+					<span class="block text-muted-foreground">
+						Use the email address your invitation was sent to.
 					</span>
 				{/if}
 			</Card.Description>
@@ -123,6 +135,7 @@
 					class="space-y-4"
 				>
 					<input type="hidden" name="browserTimezone" bind:value={browserTimezone} />
+					<input type="hidden" name="invite" value={data.invite} />
 					<div class="space-y-2">
 						<Label for="email">Email address</Label>
 						<Input

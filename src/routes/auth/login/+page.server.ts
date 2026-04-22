@@ -6,7 +6,10 @@ import {
 	completeMagicLinkLogin,
 	REDIR_COOKIE_NAME,
 	TIMEZONE_COOKIE_NAME,
-	TIMEZONE_COOKIE_MAX_AGE_S
+	TIMEZONE_COOKIE_MAX_AGE_S,
+	INVITE_COOKIE_NAME,
+	getSignupMode,
+	getValidInviteForEmail
 } from '$lib/server/auth';
 import { isValidTimezone } from '$lib/server/notification-preferences';
 import { sendMagicLinkEmail } from '$lib/server/email';
@@ -16,10 +19,13 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 		throw redirect(302, '/');
 	}
 	const error = url.searchParams.get('error');
-	const canSignup = platform?.env.ALLOW_SIGNUP === 'yes';
+	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
+	const invite = url.searchParams.get('invite')?.trim() ?? '';
 	return {
 		error,
-		canSignup
+		signupMode,
+		canSignup: signupMode !== 'closed',
+		invite
 	};
 };
 
@@ -34,6 +40,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const rawEmail = data.get('email');
 		const email = normalizeEmail(rawEmail);
+		const inviteCode = data.get('invite')?.toString()?.trim() ?? '';
 
 		if (!email) {
 			return fail(400, {
@@ -47,6 +54,25 @@ export const actions: Actions = {
 			cookies.set(REDIR_COOKIE_NAME, redir, { path: '/' });
 		} else {
 			cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
+		}
+
+		if (inviteCode) {
+			const invite = await getValidInviteForEmail(locals.db, inviteCode, email);
+			if (!invite) {
+				return fail(400, {
+					error: 'That invitation is invalid, expired, or for a different email address.',
+					email
+				});
+			}
+			cookies.set(INVITE_COOKIE_NAME, inviteCode, {
+				path: '/',
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+			});
+		} else {
+			cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
 		}
 
 		// Stash the browser-detected timezone in a short-lived cookie so the
