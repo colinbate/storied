@@ -16,7 +16,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		currentSessions: rows.filter((session) => session.status === 'current'),
-		upcomingSessions: rows.filter((session) => session.status === 'draft'),
 		pastSessions: rows.filter((session) => session.status === 'past').reverse()
 	};
 };

@@ -20,7 +20,6 @@
 
 	const groups = $derived([
 		{ title: 'Current', sessions: data.currentSessions },
-		{ title: 'Upcoming', sessions: data.upcomingSessions },
 		{ title: 'Past', sessions: data.pastSessions }
 	]);
 </script>

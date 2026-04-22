@@ -23,6 +23,9 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import XIcon from '@lucide/svelte/icons/x';
+	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import LibraryIcon from '@lucide/svelte/icons/library';
 	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -116,6 +119,17 @@
 				const mode = result.data?.subscriptionMode;
 				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
 				toast.success(label ? `Thread ${label}.` : 'Notification preference updated.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
+
+	const promoteEnhance: (message: string) => SubmitFunction = (message) => () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				toast.success(message);
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
@@ -627,8 +641,103 @@
 					<div>
 						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>
 						<div class="space-y-2">
-							{#each data.series as s (s.id)}
-								<SeriesCard series={s} compact />
+							{#each data.seriesWithSessionLinks as entry (entry.series.id)}
+								{#if data.session && data.canPromoteBooks}
+									<Popover.Root>
+										<Popover.Trigger class="w-full rounded-lg text-left transition-colors hover:bg-muted">
+											<span class="flex items-start gap-3 p-2">
+												{#if entry.series.coverUrl}
+													<img
+														src={entry.series.coverUrl}
+														alt={entry.series.title}
+														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
+													/>
+												{:else}
+													<span class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted">
+														<LibraryIcon class="h-5 w-5 text-muted-foreground" />
+													</span>
+												{/if}
+												<span class="min-w-0 flex-1">
+													<span class="block text-sm leading-tight font-medium">{entry.series.title}</span>
+													{#if entry.series.authorText}
+														<span class="mt-0.5 block text-xs text-muted-foreground">
+															{entry.series.authorText}
+														</span>
+													{/if}
+													{#if entry.sessionSubject}
+														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+															{entry.sessionSubject.status.replaceAll('_', ' ')}
+														</Badge>
+													{/if}
+												</span>
+											</span>
+										</Popover.Trigger>
+										<Popover.Content align="start" class="w-72 space-y-3">
+											<div>
+												<p class="font-medium">{entry.series.title}</p>
+												<p class="text-sm text-muted-foreground">
+													{entry.sessionSubject
+														? 'Linked to this session.'
+														: 'Promote this mention to the session.'}
+												</p>
+											</div>
+											<form
+												method="POST"
+												action="?/promoteSessionSubject"
+												use:enhance={promoteEnhance('Session link updated.')}
+												class="space-y-2"
+											>
+												<input type="hidden" name="subjectType" value="series" />
+												<input type="hidden" name="subjectId" value={entry.series.id} />
+												<label for="series-status-{entry.series.id}" class="text-xs font-medium"
+													>Session status</label
+												>
+												<NativeSelect.Root
+													id="series-status-{entry.series.id}"
+													name="status"
+													value={entry.sessionSubject?.status ?? 'starter'}
+												>
+													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+													<NativeSelect.Option value="mentioned_off_theme"
+														>mentioned off theme</NativeSelect.Option
+													>
+												</NativeSelect.Root>
+												<Button type="submit" size="sm" class="w-full">
+													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+												</Button>
+											</form>
+											<div class="flex gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													href={resolve('/series/[slug]', { slug: entry.series.slug })}
+													class="flex-1"
+												>
+													<ExternalLinkIcon class="h-4 w-4" />
+													Open
+												</Button>
+												{#if entry.sessionSubject}
+													<form
+														method="POST"
+														action="?/unlinkSessionSubject"
+														use:enhance={promoteEnhance('Removed from session.')}
+														class="flex-1"
+													>
+														<input type="hidden" name="subjectType" value="series" />
+														<input type="hidden" name="subjectId" value={entry.series.id} />
+														<Button type="submit" variant="outline" size="sm" class="w-full">
+															Unlink
+														</Button>
+													</form>
+												{/if}
+											</div>
+										</Popover.Content>
+									</Popover.Root>
+								{:else}
+									<SeriesCard series={entry.series} compact />
+								{/if}
 							{/each}
 						</div>
 					</div>
@@ -637,8 +746,103 @@
 					<div>
 						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Books Mentioned</h3>
 						<div class="space-y-2">
-							{#each data.books as book (book.id)}
-								<BookCard {book} compact />
+							{#each data.booksWithSessionLinks as entry (entry.book.id)}
+								{#if data.session && data.canPromoteBooks}
+									<Popover.Root>
+										<Popover.Trigger class="w-full rounded-lg text-left transition-colors hover:bg-muted">
+											<span class="flex items-start gap-3 p-2">
+												{#if entry.book.coverUrl}
+													<img
+														src={entry.book.coverUrl}
+														alt={entry.book.title}
+														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
+													/>
+												{:else}
+													<span class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted">
+														<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
+													</span>
+												{/if}
+												<span class="min-w-0 flex-1">
+													<span class="block text-sm leading-tight font-medium">{entry.book.title}</span>
+													{#if entry.book.authorText}
+														<span class="mt-0.5 block text-xs text-muted-foreground">
+															{entry.book.authorText}
+														</span>
+													{/if}
+													{#if entry.sessionSubject}
+														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+															{entry.sessionSubject.status.replaceAll('_', ' ')}
+														</Badge>
+													{/if}
+												</span>
+											</span>
+										</Popover.Trigger>
+										<Popover.Content align="start" class="w-72 space-y-3">
+											<div>
+												<p class="font-medium">{entry.book.title}</p>
+												<p class="text-sm text-muted-foreground">
+													{entry.sessionSubject
+														? 'Linked to this session.'
+														: 'Promote this mention to the session.'}
+												</p>
+											</div>
+											<form
+												method="POST"
+												action="?/promoteSessionSubject"
+												use:enhance={promoteEnhance('Session link updated.')}
+												class="space-y-2"
+											>
+												<input type="hidden" name="subjectType" value="book" />
+												<input type="hidden" name="subjectId" value={entry.book.id} />
+												<label for="book-status-{entry.book.id}" class="text-xs font-medium"
+													>Session status</label
+												>
+												<NativeSelect.Root
+													id="book-status-{entry.book.id}"
+													name="status"
+													value={entry.sessionSubject?.status ?? 'starter'}
+												>
+													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+													<NativeSelect.Option value="mentioned_off_theme"
+														>mentioned off theme</NativeSelect.Option
+													>
+												</NativeSelect.Root>
+												<Button type="submit" size="sm" class="w-full">
+													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+												</Button>
+											</form>
+											<div class="flex gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													href={resolve('/books/[slug]', { slug: entry.book.slug })}
+													class="flex-1"
+												>
+													<ExternalLinkIcon class="h-4 w-4" />
+													Open
+												</Button>
+												{#if entry.sessionSubject}
+													<form
+														method="POST"
+														action="?/unlinkSessionSubject"
+														use:enhance={promoteEnhance('Removed from session.')}
+														class="flex-1"
+													>
+														<input type="hidden" name="subjectType" value="book" />
+														<input type="hidden" name="subjectId" value={entry.book.id} />
+														<Button type="submit" variant="outline" size="sm" class="w-full">
+															Unlink
+														</Button>
+													</form>
+												{/if}
+											</div>
+										</Popover.Content>
+									</Popover.Root>
+								{:else}
+									<BookCard book={entry.book} compact />
+								{/if}
 							{/each}
 						</div>
 					</div>

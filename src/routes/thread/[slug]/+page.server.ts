@@ -9,9 +9,11 @@ import {
 	series,
 	subjectSources,
 	threadSubjects,
+	sessionSubjects,
 	sessions,
 	moderationEvents,
-	type SubjectType
+	type SubjectType,
+	type SessionSubjectStatus
 } from '$lib/server/db/schema';
 import { eq, and, isNull, asc, inArray, ne } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
@@ -23,12 +25,18 @@ import type { SubjectSourceType } from '$shared/worker-messages';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
 
 function canEditContent(authorId: string, createdAt: string, userId: string | undefined) {
 	if (!userId || authorId !== userId) return false;
 	const created = Date.parse(createdAt);
 	if (Number.isNaN(created)) return false;
 	return Date.now() - created < POST_EDIT_WINDOW_MS;
+}
+
+function getSessionSubjectStatus(value: FormDataEntryValue | null): SessionSubjectStatus {
+	const status = value?.toString();
+	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -155,7 +163,31 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		session = row ?? null;
 	}
 
+	const sessionSubjectRows =
+		thread.thread.sessionId && subjectLinks.length
+			? await locals.db
+					.select()
+					.from(sessionSubjects)
+					.where(eq(sessionSubjects.sessionId, thread.thread.sessionId))
+					.all()
+			: [];
+	const sessionSubjectMap = new Map(
+		sessionSubjectRows.map((link) => [`${link.subjectType}:${link.subjectId}`, link])
+	);
+
+	const booksWithSessionLinks = uniqueBooks.map((book) => ({
+		book,
+		sessionSubject: sessionSubjectMap.get(`book:${book.id}`) ?? null
+	}));
+	const seriesWithSessionLinks = linkedSubjects
+		.filter((s) => s.kind === 'series')
+		.map((s) => ({
+			series: s.series,
+			sessionSubject: sessionSubjectMap.get(`series:${s.series.id}`) ?? null
+		}));
+
 	const canModerate = locals.permissions.has('moderate');
+	const canPromoteBooks = locals.permissions.has('book:promote');
 	let allSessions: { id: string; title: string }[] = [];
 	if (canModerate) {
 		allSessions = await locals.db
@@ -177,8 +209,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			| 'none',
 		books: uniqueBooks,
 		series: linkedSubjects.filter((s) => s.kind === 'series').map((s) => s.series),
+		booksWithSessionLinks,
+		seriesWithSessionLinks,
 		session,
 		canModerate,
+		canPromoteBooks,
 		allSessions,
 		postEditWindowMs: POST_EDIT_WINDOW_MS
 	};
@@ -498,6 +533,110 @@ export const actions: Actions = {
 		});
 
 		return { success: true };
+	},
+
+	promoteSessionSubject: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('book:promote')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const subjectType = data.get('subjectType')?.toString() as SubjectType | undefined;
+		const subjectId = data.get('subjectId')?.toString();
+		const status = getSessionSubjectStatus(data.get('status'));
+		if (!subjectId || (subjectType !== 'book' && subjectType !== 'series')) {
+			return fail(400, { error: 'Missing subject reference.' });
+		}
+
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.get();
+		if (!thread) throw error(404, 'Thread not found');
+		if (!thread.sessionId) return fail(400, { error: 'This thread is not linked to a session.' });
+
+		const threadSubject = await locals.db
+			.select()
+			.from(threadSubjects)
+			.where(
+				and(
+					eq(threadSubjects.threadId, thread.id),
+					eq(threadSubjects.subjectType, subjectType),
+					eq(threadSubjects.subjectId, subjectId)
+				)
+			)
+			.get();
+		if (!threadSubject) return fail(404, { error: 'Subject is not linked to this thread.' });
+
+		const existing = await locals.db
+			.select()
+			.from(sessionSubjects)
+			.where(
+				and(
+					eq(sessionSubjects.sessionId, thread.sessionId),
+					eq(sessionSubjects.subjectType, subjectType),
+					eq(sessionSubjects.subjectId, subjectId)
+				)
+			)
+			.get();
+
+		const now = new Date().toISOString();
+		if (existing) {
+			await locals.db
+				.update(sessionSubjects)
+				.set({ status, updatedAt: now })
+				.where(
+					and(
+						eq(sessionSubjects.sessionId, thread.sessionId),
+						eq(sessionSubjects.subjectType, subjectType),
+						eq(sessionSubjects.subjectId, subjectId)
+					)
+				);
+		} else {
+			await locals.db.insert(sessionSubjects).values({
+				sessionId: thread.sessionId,
+				subjectType,
+				subjectId,
+				status,
+				addedByUserId: locals.user?.id ?? null
+			});
+		}
+
+		return { sessionSubjectPromoted: true };
+	},
+
+	unlinkSessionSubject: async ({ request, locals, params }) => {
+		if (!locals.permissions.has('book:promote')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+
+		const data = await request.formData();
+		const subjectType = data.get('subjectType')?.toString() as SubjectType | undefined;
+		const subjectId = data.get('subjectId')?.toString();
+		if (!subjectId || (subjectType !== 'book' && subjectType !== 'series')) {
+			return fail(400, { error: 'Missing subject reference.' });
+		}
+
+		const thread = await locals.db
+			.select()
+			.from(threads)
+			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.get();
+		if (!thread) throw error(404, 'Thread not found');
+		if (!thread.sessionId) return fail(400, { error: 'This thread is not linked to a session.' });
+
+		await locals.db
+			.delete(sessionSubjects)
+			.where(
+				and(
+					eq(sessionSubjects.sessionId, thread.sessionId),
+					eq(sessionSubjects.subjectType, subjectType),
+					eq(sessionSubjects.subjectId, subjectId)
+				)
+			);
+
+		return { sessionSubjectUnlinked: true };
 	},
 
 	deleteThread: async ({ request, locals, params }) => {
