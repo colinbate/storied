@@ -32,11 +32,14 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import { formatDate } from '$lib/date-format';
+	import { cn } from '$lib/utils.js';
+	import { tick } from 'svelte';
 
 	let { data, form } = $props();
 	let replyBody = $state('');
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
+	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
 
 	/** Post id currently being edited (empty string = editing the thread opener) */
 	let editingId = $state<string | null>(null);
@@ -46,6 +49,8 @@
 	const currentUserId = $derived(data.user?.id ?? null);
 	const timeZone = $derived(data.user?.timezone);
 	const editWindowMs = $derived(data.postEditWindowMs ?? 24 * 60 * 60 * 1000);
+	const postsById = $derived(new Map(data.posts.map((entry) => [entry.post.id, entry])));
+	const replyingToPost = $derived(replyingTo ? postsById.get(replyingTo) : null);
 
 	function canEdit(authorId: string, createdAt: string): boolean {
 		if (!currentUserId || currentUserId !== authorId) return false;
@@ -67,6 +72,19 @@
 	function cancelEdit() {
 		editingId = null;
 		editBody = '';
+	}
+
+	function getPostPreview(body: string) {
+		return body.replace(/\s+/g, ' ').trim();
+	}
+
+	async function selectReplyTarget(postId: string) {
+		replyingTo = replyingTo === postId ? null : postId;
+		if (!replyingTo) return;
+
+		await tick();
+		document.getElementById('reply-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		replyTextarea?.focus({ preventScroll: true });
 	}
 
 	function getInitial(name: string) {
@@ -459,7 +477,13 @@
 
 			<div class="space-y-3">
 				{#each data.posts as { post, author } (post.id)}
-					<Card.Root id="post-{post.id}" class="target:border-2 target:border-primary">
+					<Card.Root
+						id="post-{post.id}"
+						class={cn(
+							'target:border-2 target:border-primary',
+							replyingTo === post.id && 'border-2 border-primary bg-primary/5'
+						)}
+					>
 						<Card.Content class="pt-1">
 							<div class="flex items-start gap-3">
 								<Avatar.Root class="h-8 w-8 shrink-0">
@@ -470,7 +494,7 @@
 									>
 								</Avatar.Root>
 								<div class="min-w-0 flex-1">
-									<div class="mb-2 flex items-center gap-2">
+									<div class="mb-2 flex flex-wrap items-center gap-2">
 										<span class="text-sm font-medium">{author.displayName}</span>
 										<span class="text-xs text-muted-foreground"
 											>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
@@ -479,11 +503,21 @@
 											<span class="text-xs text-muted-foreground italic">(edited)</span>
 										{/if}
 										{#if post.parentPostId}
+											{@const parentPost = postsById.get(post.parentPostId)}
 											<a
 												href="#post-{post.parentPostId}"
-												class="text-xs text-primary hover:underline"
+												class="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-primary hover:underline"
 											>
-												<ReplyIcon class="inline h-3 w-3" /> in reply
+												<ReplyIcon class="h-3 w-3 shrink-0" />
+												{#if parentPost}
+													<span class="shrink-0">in reply to {parentPost.author.displayName}</span>
+													<span class="shrink-0 text-muted-foreground">-</span>
+													<span class="line-clamp-1 min-w-0 text-muted-foreground">
+														{getPostPreview(parentPost.post.bodySource)}
+													</span>
+												{:else}
+													<span>in reply</span>
+												{/if}
 											</a>
 										{/if}
 									</div>
@@ -522,9 +556,7 @@
 												<button
 													type="button"
 													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
-													onclick={() => {
-														replyingTo = replyingTo === post.id ? null : post.id;
-													}}
+													onclick={() => selectReplyTarget(post.id)}
 												>
 													<ReplyIcon class="mr-1 inline h-3 w-3" />
 													Reply
@@ -567,20 +599,20 @@
 		<!-- Reply form -->
 		{#if !data.thread.isLocked}
 			<Separator />
-			<Card.Root>
+			<Card.Root id="reply-form">
 				<Card.Header>
-					<Card.Title class="text-base">
+					<Card.Title class="flex flex-wrap items-center gap-3 text-base">
 						{#if replyingTo}
-							Replying to a post
-							<button
-								type="button"
-								class="ml-2 text-sm text-muted-foreground hover:text-foreground"
+							Reply to {replyingToPost?.author.displayName ?? 'post'}
+							<Button
+								size="sm"
+								variant="outline"
 								onclick={() => {
 									replyingTo = null;
 								}}
 							>
-								(cancel)
-							</button>
+								Cancel
+							</Button>
 						{:else}
 							Post a Reply
 						{/if}
@@ -608,6 +640,7 @@
 							<input type="hidden" name="parentPostId" value={replyingTo} />
 						{/if}
 						<Textarea
+							bind:ref={replyTextarea}
 							name="body"
 							placeholder="Write your reply… (Markdown supported)"
 							rows={4}
