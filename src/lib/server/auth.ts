@@ -9,6 +9,7 @@ const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
 const TIMEZONE_COOKIE_NAME = 'storied-signup-tz';
 const INVITE_COOKIE_NAME = 'storied-invite';
+const SIGNUP_NAME_COOKIE_NAME = 'storied-signup-name';
 const TIMEZONE_COOKIE_MAX_AGE_S = 60 * 60; // 1 hour — only needs to outlive the magic-link round-trip
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
@@ -19,7 +20,8 @@ export {
 	REDIR_COOKIE_NAME,
 	TIMEZONE_COOKIE_NAME,
 	TIMEZONE_COOKIE_MAX_AGE_S,
-	INVITE_COOKIE_NAME
+	INVITE_COOKIE_NAME,
+	SIGNUP_NAME_COOKIE_NAME
 };
 
 /** Hash a token using Web Crypto (available in CF Workers) */
@@ -336,6 +338,10 @@ export async function completeMagicLinkLogin(
 		cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
 	}
 	const timezone = isValidTimezone(cookieTimezone) ? cookieTimezone : undefined;
+	const signupName = cookies.get(SIGNUP_NAME_COOKIE_NAME);
+	if (signupName) {
+		cookies.delete(SIGNUP_NAME_COOKIE_NAME, { path: '/' });
+	}
 	const inviteCode = cookies.get(INVITE_COOKIE_NAME);
 	if (inviteCode) {
 		cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
@@ -347,7 +353,8 @@ export async function completeMagicLinkLogin(
 		role: 'member',
 		allowSignup: !!invite || signupMode !== 'closed',
 		status: invite || signupMode === 'open' ? 'active' : 'pending',
-		timezone
+		timezone,
+		name: signupName
 	});
 
 	if (!userId) {

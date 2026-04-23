@@ -8,11 +8,13 @@ import {
 	TIMEZONE_COOKIE_NAME,
 	TIMEZONE_COOKIE_MAX_AGE_S,
 	INVITE_COOKIE_NAME,
+	SIGNUP_NAME_COOKIE_NAME,
 	getSignupMode,
 	getValidInviteForEmail
 } from '$lib/server/auth';
 import { isValidTimezone } from '$lib/server/notification-preferences';
 import { sendMagicLinkEmail } from '$lib/server/email';
+import { getDisplayNameFromForm, normalizeEmail } from '$lib/server/form-values';
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	if (locals.user) {
@@ -29,18 +31,13 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	};
 };
 
-function normalizeEmail(raw: FormDataEntryValue | null): string | null {
-	const email = raw?.toString()?.trim()?.toLowerCase();
-	if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
-	return email;
-}
-
 export const actions: Actions = {
 	login: async ({ request, locals, platform, url, cookies }) => {
 		const data = await request.formData();
 		const rawEmail = data.get('email');
 		const email = normalizeEmail(rawEmail);
 		const inviteCode = data.get('invite')?.toString()?.trim() ?? '';
+		const displayName = getDisplayNameFromForm(data);
 
 		if (!email) {
 			return fail(400, {
@@ -89,6 +86,18 @@ export const actions: Actions = {
 			});
 		} else {
 			cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
+		}
+
+		if (displayName) {
+			cookies.set(SIGNUP_NAME_COOKIE_NAME, displayName, {
+				path: '/',
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+			});
+		} else {
+			cookies.delete(SIGNUP_NAME_COOKIE_NAME, { path: '/' });
 		}
 
 		try {

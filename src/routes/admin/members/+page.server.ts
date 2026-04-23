@@ -11,13 +11,7 @@ import {
 	requirePermission
 } from '$lib/server/auth';
 import { sendInviteEmail } from '$lib/server/email';
-
-function normalizeEmail(value: FormDataEntryValue | null): string | null {
-	const email = value?.toString()?.trim()?.toLowerCase();
-	if (!email) return null;
-	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
-	return email;
-}
+import { normalizeEmail } from '$lib/server/form-values';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'members:edit');
