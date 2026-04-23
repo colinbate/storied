@@ -1,15 +1,26 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import BookPicker from '$lib/components/admin/book-picker.svelte';
+	import ProfileGenrePicker from '$lib/components/profile-genre-picker.svelte';
+	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
+	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import UploadIcon from '@lucide/svelte/icons/upload';
+	import EyeIcon from '@lucide/svelte/icons/eye';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import StarIcon from '@lucide/svelte/icons/star';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
+	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -19,6 +30,11 @@
 	let timezoneSaving = $state(false);
 	let prefsSaving = $state(false);
 	let dyslexicSaving = $state(false);
+	let featureSaving = $state(false);
+	let featureKind = $state<'book' | 'series'>('book');
+	let featureBookId = $state<string | undefined>(undefined);
+	let featureSeriesId = $state<string | undefined>(undefined);
+	let profileGenres = $derived([...(data.profileGenres ?? [])]);
 
 	let dyslexicFont = $derived(!!data.user.dyslexicFont);
 
@@ -44,8 +60,29 @@
 
 	let detectedTimezone = $state<string>('');
 	let allTimezones = $state<string[]>([]);
+	const featuredCount = $derived(data.featuredSubjects.length);
+	const availableBooks = $derived(
+		data.allBooks
+			.filter((book) => !book.deletedAt)
+			.filter(
+				(book) =>
+					!data.featuredSubjects.some((item) => item.kind === 'book' && item.book.id === book.id)
+			)
+			.map((book) => ({ id: book.id, title: book.title, authorText: book.authorText }))
+	);
+	const availableSeries = $derived(
+		data.allSeries
+			.filter((entry) => !entry.deletedAt)
+			.filter(
+				(entry) =>
+					!data.featuredSubjects.some(
+						(item) => item.kind === 'series' && item.series.id === entry.id
+					)
+			)
+			.map((entry) => ({ id: entry.id, title: entry.title, authorText: entry.authorText }))
+	);
 
-	$effect(() => {
+	onMount(() => {
 		try {
 			detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
 		} catch {
@@ -53,10 +90,8 @@
 		}
 		let zones: string[] = [];
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const anyIntl = Intl as any;
-			if (typeof anyIntl.supportedValuesOf === 'function') {
-				zones = anyIntl.supportedValuesOf('timeZone') as string[];
+			if (typeof Intl.supportedValuesOf === 'function') {
+				zones = Intl.supportedValuesOf('timeZone') as string[];
 			}
 		} catch {
 			zones = [];
@@ -64,15 +99,20 @@
 		if (zones.length === 0) {
 			// Fallback minimal list if the runtime lacks supportedValuesOf.
 			zones = [
-				data.user.timezone,
-				'UTC',
-				'Atlantic/Bermuda',
-				'America/New_York',
-				'America/Halifax',
-				'America/Los_Angeles',
-				'Europe/London',
-				'Europe/Berlin'
-			].filter((v, i, a) => v && a.indexOf(v) === i);
+				...new Set([
+					data.user.timezone || 'UTC',
+					detectedTimezone || 'UTC',
+					'UTC',
+					'Atlantic/Bermuda',
+					'America/Chicago',
+					'America/Denver',
+					'America/Halifax',
+					'America/Los_Angeles',
+					'America/New_York',
+					'Europe/London',
+					'Europe/Berlin'
+				])
+			];
 		}
 		allTimezones = zones;
 	});
@@ -108,9 +148,15 @@
 </svelte:head>
 
 <div class="max-w-2xl space-y-6">
-	<div>
-		<h1 class="text-2xl font-bold">Settings</h1>
-		<p class="text-muted-foreground">Manage your account and preferences</p>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-bold">Settings</h1>
+			<p class="text-muted-foreground">Manage your account and preferences</p>
+		</div>
+		<Button href={resolve('/members/[id]', { id: data.user.id })} variant="outline">
+			<EyeIcon class="h-4 w-4" />
+			View Profile
+		</Button>
 	</div>
 
 	<Card.Root>
@@ -126,7 +172,7 @@
 					loading = true;
 					return async ({ result, update }) => {
 						loading = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
 							toast.success('Profile updated!');
 						}
@@ -150,6 +196,67 @@
 						maxlength={50}
 					/>
 				</div>
+				<div class="space-y-2">
+					<Label for="headline">Headline</Label>
+					<Input
+						id="headline"
+						name="headline"
+						value={data.profile?.headline ?? ''}
+						maxlength={120}
+					/>
+				</div>
+				<div class="space-y-2">
+					<Label for="bio">Bio</Label>
+					<Textarea id="bio" name="bio" rows={4} value={data.profile?.bio ?? ''} />
+				</div>
+
+				<div class="space-y-2">
+					<Label for="favoriteGenresText">Favorite Genres ({profileGenres.length}/5)</Label>
+					<ProfileGenrePicker
+						genres={data.allGenres}
+						bind:selectedGenres={profileGenres}
+						name="favoriteGenresText"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label for="websiteUrl">Website</Label>
+					<Input
+						id="websiteUrl"
+						name="websiteUrl"
+						type="url"
+						value={data.profile?.websiteUrl ?? ''}
+					/>
+				</div>
+				<div class="grid gap-3 sm:grid-cols-3">
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							name="showProfile"
+							type="checkbox"
+							checked={data.profile?.showProfile ?? true}
+							class="rounded border-input"
+						/>
+						Show profile
+					</label>
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							name="showRecommendations"
+							type="checkbox"
+							checked={data.profile?.showRecommendations ?? true}
+							class="rounded border-input"
+						/>
+						Show recommendations
+					</label>
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							name="showReadBooks"
+							type="checkbox"
+							checked={data.profile?.showReadBooks ?? true}
+							class="rounded border-input"
+						/>
+						Show read books
+					</label>
+				</div>
 				{#if form?.error}
 					<p class="text-sm text-destructive">{form.error}</p>
 				{/if}
@@ -157,6 +264,178 @@
 					{loading ? 'Saving…' : 'Save Changes'}
 				</Button>
 			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Featured On Profile</Card.Title>
+			<Card.Description>
+				Pick up to 5 books or series to lead your profile. These show in the larger featured
+				section.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<form
+				method="POST"
+				action="?/addFeaturedSubject"
+				use:enhance={() => {
+					featureSaving = true;
+					return async ({ result, update }) => {
+						featureSaving = false;
+						await update();
+						if (result.type === 'success') {
+							if (result.data?.featureAdded) {
+								toast.success('Featured subject updated.');
+								featureBookId = undefined;
+								featureSeriesId = undefined;
+							}
+						} else if (result.type === 'failure' && result.data?.featureError) {
+							toast.error(String(result.data.featureError));
+						}
+					};
+				}}
+				class="space-y-3"
+			>
+				<div class="flex flex-col gap-2">
+					<div class="space-y-1">
+						<div class="flex gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant={featureKind === 'book' ? 'default' : 'outline'}
+								onclick={() => (featureKind = 'book')}
+							>
+								Book
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant={featureKind === 'series' ? 'default' : 'outline'}
+								onclick={() => (featureKind = 'series')}
+							>
+								Series
+							</Button>
+						</div>
+					</div>
+					<input type="hidden" name="kind" value={featureKind} />
+					<div class="flex gap-2">
+						<div class="flex-1">
+							{#if featureKind === 'book'}
+								<BookPicker
+									books={availableBooks}
+									bind:selectedId={featureBookId}
+									name="subjectId"
+									placeholder="Search books to feature..."
+								/>
+							{:else}
+								<SeriesPicker
+									series={availableSeries}
+									bind:selectedId={featureSeriesId}
+									name="subjectId"
+									placeholder="Search series to feature..."
+								/>
+							{/if}
+						</div>
+						<Button
+							class="h-10"
+							type="submit"
+							disabled={featureSaving ||
+								featuredCount >= 5 ||
+								(featureKind === 'book' ? !featureBookId : !featureSeriesId)}
+						>
+							<PlusIcon class="h-4 w-4" />
+							Add
+						</Button>
+					</div>
+				</div>
+				<div class="flex items-center justify-between text-xs text-muted-foreground">
+					<span>{featuredCount}/5 featured</span>
+					{#if featuredCount >= 5}
+						<span>Remove one to add another.</span>
+					{/if}
+				</div>
+				{#if form?.featureError}
+					<p class="text-sm text-destructive">{form.featureError}</p>
+				{/if}
+			</form>
+
+			{#if data.featuredSubjects.length > 0}
+				<div class="space-y-3">
+					{#each data.featuredSubjects as item (item.relation.subjectType + item.relation.subjectId)}
+						<div class="rounded-lg border p-3">
+							<div class="mb-3 flex items-center justify-between gap-3">
+								<div class="flex items-center gap-2 text-sm">
+									<StarIcon class="h-4 w-4 text-primary" />
+									<span class="font-medium">Featured</span>
+								</div>
+								<ConfirmButton
+									confirmText="Remove this featured subject?"
+									formAction="?/removeFeaturedSubject"
+									formData={{ kind: item.relation.subjectType, subjectId: item.relation.subjectId }}
+									variant="ghost"
+									size="icon-sm"
+								>
+									<XIcon class="h-4 w-4" />
+								</ConfirmButton>
+							</div>
+							{#if item.kind === 'book'}
+								<a
+									href={resolve('/books/[slug]', { slug: item.book.slug })}
+									class="flex items-start gap-4 rounded-md p-2 transition-colors hover:bg-muted"
+								>
+									{#if item.book.coverUrl}
+										<img
+											src={item.book.coverUrl}
+											alt={item.book.title}
+											class="h-20 w-14 shrink-0 rounded object-cover shadow-sm"
+										/>
+									{:else}
+										<div
+											class="flex h-20 w-14 shrink-0 items-center justify-center rounded bg-muted"
+										>
+											<StarIcon class="h-5 w-5 text-muted-foreground" />
+										</div>
+									{/if}
+									<div class="min-w-0 flex-1">
+										<h3 class="font-medium">{item.book.title}</h3>
+										{#if item.book.authorText}
+											<p class="mt-1 text-sm text-muted-foreground">{item.book.authorText}</p>
+										{/if}
+									</div>
+								</a>
+							{:else}
+								<a
+									href={resolve('/series/[slug]', { slug: item.series.slug })}
+									class="flex items-start gap-4 rounded-md p-2 transition-colors hover:bg-muted"
+								>
+									{#if item.series.coverUrl}
+										<img
+											src={item.series.coverUrl}
+											alt={item.series.title}
+											class="h-20 w-14 shrink-0 rounded object-cover shadow-sm"
+										/>
+									{:else}
+										<div
+											class="flex h-20 w-14 shrink-0 items-center justify-center rounded bg-muted"
+										>
+											<StarIcon class="h-5 w-5 text-muted-foreground" />
+										</div>
+									{/if}
+									<div class="min-w-0 flex-1">
+										<h3 class="font-medium">{item.series.title}</h3>
+										{#if item.series.authorText}
+											<p class="mt-1 text-sm text-muted-foreground">{item.series.authorText}</p>
+										{/if}
+									</div>
+								</a>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No featured subjects yet.</p>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

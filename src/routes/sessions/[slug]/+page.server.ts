@@ -1,6 +1,15 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { books, series, sessionSubjects, sessions, threads, users } from '$lib/server/db/schema';
+import {
+	books,
+	series,
+	sessionParticipantSubjects,
+	sessionParticipants,
+	sessionSubjects,
+	sessions,
+	threads,
+	users
+} from '$lib/server/db/schema';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -23,7 +32,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
 		.all();
 
-	const bookIds = subjectLinks.filter((link) => link.subjectType === 'book').map((link) => link.subjectId);
+	const bookIds = subjectLinks
+		.filter((link) => link.subjectType === 'book')
+		.map((link) => link.subjectId);
 	const seriesIds = subjectLinks
 		.filter((link) => link.subjectType === 'series')
 		.map((link) => link.subjectId);
@@ -72,12 +83,54 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.all();
 
 	const primaryThread =
-		sessionThreads.find(({ thread }) => thread.sessionThreadRole === 'primary') ?? sessionThreads[0] ?? null;
+		sessionThreads.find(({ thread }) => thread.sessionThreadRole === 'primary') ??
+		sessionThreads[0] ??
+		null;
+
+	const participants = await locals.db
+		.select({
+			participant: sessionParticipants,
+			user: {
+				id: users.id,
+				displayName: users.displayName,
+				avatarUrl: users.avatarUrl
+			}
+		})
+		.from(sessionParticipants)
+		.innerJoin(users, eq(sessionParticipants.userId, users.id))
+		.where(eq(sessionParticipants.sessionId, session.id))
+		.orderBy(asc(users.displayName))
+		.all();
+
+	const participantSubjectRows = await locals.db
+		.select({
+			read: sessionParticipantSubjects,
+			user: {
+				id: users.id,
+				displayName: users.displayName,
+				avatarUrl: users.avatarUrl
+			}
+		})
+		.from(sessionParticipantSubjects)
+		.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
+		.where(eq(sessionParticipantSubjects.sessionId, session.id))
+		.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
+		.all();
+
+	const subjectReaders = participantSubjectRows.reduce((map, row) => {
+		const key = `${row.read.subjectType}:${row.read.subjectId}`;
+		const existing = map.get(key) ?? [];
+		existing.push(row);
+		map.set(key, existing);
+		return map;
+	}, new Map<string, typeof participantSubjectRows>());
 
 	return {
 		session,
 		primaryThread,
 		relatedThreads: sessionThreads.filter(({ thread }) => thread.id !== primaryThread?.thread.id),
+		participants,
+		subjectReaders: Object.fromEntries(subjectReaders),
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
 		featuredSubjects: subjects.filter(({ link }) => link.status === 'featured'),
 		discussedSubjects: subjects.filter(({ link }) => link.status === 'discussed'),

@@ -8,6 +8,7 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
+	import MemberPicker from '$lib/components/admin/member-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -16,6 +17,7 @@
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
@@ -28,6 +30,12 @@
 	let addBookId = $state<string | undefined>(undefined);
 	let addSeriesId = $state<string | undefined>(undefined);
 	let addStatus = $state<SubjectStatus>('starter');
+	let participantUserId = $state<string | undefined>(undefined);
+	let participantStatus = $state<'attending' | 'not_attending' | 'maybe' | 'attended'>('attended');
+	let readUserId = $state<string | undefined>(undefined);
+	let readKind = $state<LinkKind>('book');
+	let readBookId = $state<string | undefined>(undefined);
+	let readSeriesId = $state<string | undefined>(undefined);
 
 	let urlStatus = $state<SubjectStatus>('starter');
 
@@ -48,6 +56,33 @@
 
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
+	const activeUsers = $derived(data.allUsers.filter((user) => user.status === 'active'));
+	const participantUserIds = $derived(new Set(data.participants.map((p) => p.user.id)));
+	const addableUsers = $derived(activeUsers.filter((u) => !participantUserIds.has(u.id)));
+	const linkedBookPickerItems = $derived(
+		books.map((entry) => ({
+			id: entry.book.id,
+			title: entry.book.title,
+			authorText: entry.book.authorText
+		}))
+	);
+	const linkedSeriesPickerItems = $derived(
+		seriesLinks.map((entry) => ({
+			id: entry.series.id,
+			title: entry.series.title,
+			authorText: entry.series.authorText
+		}))
+	);
+
+	function readSubjectTitle(read: { subjectType: string; subjectId: string }) {
+		if (read.subjectType === 'book') {
+			return books.find((entry) => entry.book.id === read.subjectId)?.book.title ?? 'Unknown book';
+		}
+		return (
+			seriesLinks.find((entry) => entry.series.id === read.subjectId)?.series.title ??
+			'Unknown series'
+		);
+	}
 </script>
 
 <svelte:head>
@@ -187,6 +222,315 @@
 				<Button type="submit" disabled={saving}>
 					{saving ? 'Saving…' : 'Save Session'}
 				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Participants -->
+	<Card.Root>
+		<Card.Header>
+			<div class="flex items-center gap-2">
+				<UsersIcon class="h-5 w-5 text-primary" />
+				<Card.Title class="text-base">Participants ({data.participants.length})</Card.Title>
+			</div>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if data.participants.length > 0}
+				<div class="divide-y rounded-md border">
+					{#each data.participants as { participant, user } (user.id)}
+						<form
+							method="POST"
+							action="?/upsertParticipant"
+							use:enhance={() => {
+								saving = true;
+								return async ({ result, update }) => {
+									saving = false;
+									await update();
+									if (result.type === 'success') {
+										if (result.data?.participantSaved) toast.success('Participant saved.');
+										if (result.data?.error) toast.error(String(result.data.error));
+									}
+								};
+							}}
+							class="flex flex-wrap items-center gap-3 px-4 py-3"
+						>
+							<input type="hidden" name="userId" value={user.id} />
+							<div class="min-w-40 flex-1">
+								<p class="font-medium">{user.displayName}</p>
+								<p class="text-xs text-muted-foreground">{user.email}</p>
+							</div>
+							<div class="flex items-center gap-2">
+								<Label for="attendance-{user.id}" class="text-xs">Attendance</Label>
+								<NativeSelect
+									id="attendance-{user.id}"
+									name="attendanceStatus"
+									value={participant.attendanceStatus}
+								>
+									<NativeSelectOption value="attending">attending</NativeSelectOption>
+									<NativeSelectOption value="not_attending">not attending</NativeSelectOption>
+									<NativeSelectOption value="maybe">maybe</NativeSelectOption>
+									<NativeSelectOption value="attended">attended</NativeSelectOption>
+								</NativeSelect>
+							</div>
+							<Input name="note" class="w-48" placeholder="note" value={participant.note ?? ''} />
+							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							<ConfirmButton
+								confirmText="Remove this participant?"
+								formAction="?/removeParticipant"
+								formData={{ userId: user.id }}
+								variant="ghost"
+								size="icon-sm"
+							>
+								<XIcon class="h-4 w-4" />
+							</ConfirmButton>
+						</form>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No participants recorded yet.</p>
+			{/if}
+
+			<form
+				method="POST"
+				action="?/upsertParticipant"
+				use:enhance={() => {
+					saving = true;
+					return async ({ result, update }) => {
+						saving = false;
+						await update();
+						if (result.type === 'success') {
+							if (result.data?.participantSaved) {
+								toast.success('Participant added.');
+								participantUserId = undefined;
+							}
+							if (result.data?.error) toast.error(String(result.data.error));
+						}
+					};
+				}}
+				class="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_12rem_minmax(0,1fr)_auto]"
+			>
+				<div class="space-y-1">
+					<Label for="participant-user">Member</Label>
+					<MemberPicker
+						members={addableUsers}
+						bind:selectedId={participantUserId}
+						name="userId"
+						placeholder="Search members..."
+					/>
+				</div>
+				<div class="space-y-1">
+					<Label for="participant-status">Attendance</Label>
+					<NativeSelect
+						id="participant-status"
+						name="attendanceStatus"
+						bind:value={participantStatus}
+					>
+						<NativeSelectOption value="attended">attended</NativeSelectOption>
+						<NativeSelectOption value="attending">attending</NativeSelectOption>
+						<NativeSelectOption value="maybe">maybe</NativeSelectOption>
+						<NativeSelectOption value="not_attending">not attending</NativeSelectOption>
+					</NativeSelect>
+				</div>
+				<div class="flex-1 space-y-1">
+					<Label for="participant-note">Note</Label>
+					<Input id="participant-note" name="note" placeholder="optional" />
+				</div>
+				<Button type="submit" class="self-end" disabled={saving || !participantUserId}>
+					<PlusIcon class="h-4 w-4" />
+					Add
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Participant reads -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base"
+				>Member Session Reads ({data.participantReads.length})</Card.Title
+			>
+			<Card.Description
+				>Record what each member read, considered, or mentioned for this session.</Card.Description
+			>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if data.participantReads.length > 0}
+				<div class="divide-y rounded-md border">
+					{#each data.participantReads as { read, user } (user.id + read.subjectType + read.subjectId)}
+						<form
+							method="POST"
+							action="?/upsertParticipantSubject"
+							use:enhance={() => {
+								saving = true;
+								return async ({ result, update }) => {
+									saving = false;
+									await update();
+									if (result.type === 'success') {
+										if (result.data?.participantSubjectSaved) toast.success('Session read saved.');
+										if (result.data?.error) toast.error(String(result.data.error));
+									}
+								};
+							}}
+							class="flex flex-wrap items-center gap-3 px-4 py-3"
+						>
+							<input type="hidden" name="userId" value={user.id} />
+							<input type="hidden" name="kind" value={read.subjectType} />
+							<input type="hidden" name="subjectId" value={read.subjectId} />
+							<div class="min-w-52 flex-1">
+								<p class="font-medium">{user.displayName}</p>
+								<p class="text-sm text-muted-foreground">{readSubjectTitle(read)}</p>
+							</div>
+							<NativeSelect name="relationType" value={read.relationType}>
+								<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
+								<NativeSelectOption value="considered">considered</NativeSelectOption>
+								<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+							</NativeSelect>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									name="isPrimaryPick"
+									type="checkbox"
+									checked={read.isPrimaryPick}
+									class="rounded border-input"
+								/>
+								Primary
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									name="isThemeRelated"
+									type="checkbox"
+									checked={read.isThemeRelated}
+									class="rounded border-input"
+								/>
+								Theme
+							</label>
+							<Input name="note" class="w-44" placeholder="note" value={read.note ?? ''} />
+							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							<ConfirmButton
+								confirmText="Remove this session read?"
+								formAction="?/removeParticipantSubject"
+								formData={{ userId: user.id, kind: read.subjectType, subjectId: read.subjectId }}
+								variant="ghost"
+								size="icon-sm"
+							>
+								<XIcon class="h-4 w-4" />
+							</ConfirmButton>
+						</form>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No member reads recorded yet.</p>
+			{/if}
+
+			<form
+				method="POST"
+				action="?/upsertParticipantSubject"
+				use:enhance={() => {
+					saving = true;
+					return async ({ result, update }) => {
+						saving = false;
+						await update();
+						if (result.type === 'success') {
+							if (result.data?.participantSubjectSaved) {
+								toast.success('Session read saved.');
+								readBookId = undefined;
+								readSeriesId = undefined;
+							}
+							if (result.data?.error) toast.error(String(result.data.error));
+						}
+					};
+				}}
+				class="space-y-4"
+			>
+				<div class="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_10rem]">
+					<div class="space-y-1">
+						<Label for="read-user">Member</Label>
+						<MemberPicker
+							members={activeUsers}
+							bind:selectedId={readUserId}
+							name="userId"
+							placeholder="Search members..."
+						/>
+					</div>
+					<div class="space-y-1">
+						<Label>Kind</Label>
+						<div class="flex gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant={readKind === 'book' ? 'default' : 'outline'}
+								onclick={() => (readKind = 'book')}
+							>
+								Book
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant={readKind === 'series' ? 'default' : 'outline'}
+								onclick={() => (readKind = 'series')}
+							>
+								Series
+							</Button>
+						</div>
+					</div>
+				</div>
+				<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+					<input type="hidden" name="kind" value={readKind} />
+					<div class="space-y-1">
+						<Label>{readKind === 'book' ? 'Book' : 'Series'}</Label>
+						{#if readKind === 'book'}
+							<BookPicker
+								books={linkedBookPickerItems}
+								bind:selectedId={readBookId}
+								name="subjectId"
+								placeholder="Search session books..."
+							/>
+						{:else}
+							<SeriesPicker
+								series={linkedSeriesPickerItems}
+								bind:selectedId={readSeriesId}
+								name="subjectId"
+								placeholder="Search session series..."
+							/>
+						{/if}
+					</div>
+					<div class="space-y-1">
+						<Label for="read-relation">Relation</Label>
+						<NativeSelect id="read-relation" name="relationType" value="read_for_session">
+							<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
+							<NativeSelectOption value="considered">considered</NativeSelectOption>
+							<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						</NativeSelect>
+					</div>
+					<div class="space-y-1">
+						<Label>Flags</Label>
+						<div
+							class="flex min-h-11 flex-wrap items-center gap-4 rounded-md border px-3 py-2 text-sm"
+						>
+							<label class="flex items-center gap-2">
+								<input name="isPrimaryPick" type="checkbox" class="rounded border-input" />
+								Primary
+							</label>
+							<label class="flex items-center gap-2">
+								<input name="isThemeRelated" type="checkbox" checked class="rounded border-input" />
+								Theme
+							</label>
+						</div>
+					</div>
+				</div>
+				<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+					<div class="space-y-1">
+						<Label for="read-note">Note</Label>
+						<Input id="read-note" name="note" placeholder="optional" />
+					</div>
+					<Button
+						type="submit"
+						class="self-end"
+						disabled={saving || !readUserId || (readKind === 'book' ? !readBookId : !readSeriesId)}
+					>
+						<PlusIcon class="h-4 w-4" />
+						Record
+					</Button>
+				</div>
 			</form>
 		</Card.Content>
 	</Card.Root>

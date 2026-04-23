@@ -12,6 +12,8 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import UsersIcon from '@lucide/svelte/icons/users';
+	import UserIcon from '@lucide/svelte/icons/user';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
@@ -34,9 +36,23 @@
 
 			<div class="flex items-center gap-2">
 				{#if user}
-					<Button href={resolve('/sessions')} variant="ghost" size="sm" class="hidden sm:inline-flex">
+					<Button
+						href={resolve('/sessions')}
+						variant="ghost"
+						size="sm"
+						class="hidden sm:inline-flex"
+					>
 						<CalendarIcon class="h-4 w-4" />
 						Sessions
+					</Button>
+					<Button
+						href={resolve('/members')}
+						variant="ghost"
+						size="sm"
+						class="hidden sm:inline-flex"
+					>
+						<UsersIcon class="h-4 w-4" />
+						Members
 					</Button>
 				{/if}
 
@@ -73,6 +89,10 @@
 								</div>
 							</DropdownMenu.Label>
 							<DropdownMenu.Separator />
+							<DropdownMenu.Item onSelect={() => goto(resolve('/members/[id]', { id: user.id }))}>
+								<UserIcon class="h-4 w-4" />
+								Profile
+							</DropdownMenu.Item>
 							<DropdownMenu.Item onSelect={() => goto(resolve('/settings'))}>
 								<SettingsIcon class="h-4 w-4" />
 								Settings

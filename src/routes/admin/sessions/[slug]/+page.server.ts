@@ -1,6 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { books, series, sessions, sessionSubjects } from '$lib/server/db/schema';
+import {
+	books,
+	series,
+	sessionParticipantSubjects,
+	sessionParticipants,
+	sessions,
+	sessionSubjects,
+	users
+} from '$lib/server/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
@@ -12,6 +20,8 @@ type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_of
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
+const attendanceStatuses = new Set(['attending', 'not_attending', 'maybe', 'attended']);
+const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
 
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
@@ -25,6 +35,20 @@ function getSessionStatus(data: FormData) {
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	const status = data.get('status')?.toString();
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
+}
+
+function getAttendanceStatus(data: FormData) {
+	const status = data.get('attendanceStatus')?.toString();
+	return attendanceStatuses.has(status ?? '')
+		? (status as 'attending' | 'not_attending' | 'maybe' | 'attended')
+		: 'attending';
+}
+
+function getParticipantSubjectRelation(data: FormData) {
+	const relation = data.get('relationType')?.toString();
+	return participantSubjectRelations.has(relation ?? '')
+		? (relation as 'read_for_session' | 'considered' | 'mentioned')
+		: 'read_for_session';
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -49,12 +73,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const bookIds = rawLinks.filter((l) => l.subjectType === 'book').map((l) => l.subjectId);
 	const seriesIds = rawLinks.filter((l) => l.subjectType === 'series').map((l) => l.subjectId);
 
-	const bookRows = bookIds.length
-		? await locals.db.select().from(books).all()
-		: [];
-	const seriesRows = seriesIds.length
-		? await locals.db.select().from(series).all()
-		: [];
+	const bookRows = bookIds.length ? await locals.db.select().from(books).all() : [];
+	const seriesRows = seriesIds.length ? await locals.db.select().from(series).all() : [];
 
 	const bookMap = new Map(bookRows.filter((b) => bookIds.includes(b.id)).map((b) => [b.id, b]));
 	const seriesMap = new Map(
@@ -74,6 +94,36 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			return null;
 		})
 		.filter((x): x is NonNullable<typeof x> => x !== null);
+
+	const participants = await locals.db
+		.select({
+			participant: sessionParticipants,
+			user: {
+				id: users.id,
+				displayName: users.displayName,
+				email: users.email,
+				avatarUrl: users.avatarUrl
+			}
+		})
+		.from(sessionParticipants)
+		.innerJoin(users, eq(sessionParticipants.userId, users.id))
+		.where(eq(sessionParticipants.sessionId, session.id))
+		.orderBy(asc(users.displayName))
+		.all();
+
+	const participantReads = await locals.db
+		.select({
+			read: sessionParticipantSubjects,
+			user: {
+				id: users.id,
+				displayName: users.displayName
+			}
+		})
+		.from(sessionParticipantSubjects)
+		.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
+		.where(eq(sessionParticipantSubjects.sessionId, session.id))
+		.orderBy(asc(users.displayName), desc(sessionParticipantSubjects.isPrimaryPick))
+		.all();
 
 	// For adding new links — all books/series not yet linked, excluding deleted.
 	const allBooks = await locals.db
@@ -98,12 +148,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.from(series)
 		.orderBy(asc(series.title))
 		.all();
+	const allUsers = await locals.db
+		.select({
+			id: users.id,
+			displayName: users.displayName,
+			email: users.email,
+			status: users.status,
+			avatarUrl: users.avatarUrl
+		})
+		.from(users)
+		.orderBy(asc(users.displayName))
+		.all();
 
 	return {
 		session,
 		linkedSubjects,
+		participants,
+		participantReads,
 		allBooks,
-		allSeries
+		allSeries,
+		allUsers
 	};
 };
 
@@ -111,17 +175,14 @@ export const actions: Actions = {
 	updateSession: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 
-		const row = await locals.db
-			.select()
-			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
-			.get();
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
 		const slug = slugify(getOptionalString(data, 'slug') ?? '');
-		if (!title || title.length < 2) return fail(400, { error: 'Title must be at least 2 characters.' });
+		if (!title || title.length < 2)
+			return fail(400, { error: 'Title must be at least 2 characters.' });
 		if (!slug) return fail(400, { error: 'Slug is required.' });
 
 		const bodySource = getOptionalString(data, 'bodySource');
@@ -159,11 +220,7 @@ export const actions: Actions = {
 
 	addLink: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db
-			.select()
-			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
-			.get();
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
@@ -193,11 +250,7 @@ export const actions: Actions = {
 
 	addLinkFromUrl: async ({ request, params, locals, platform }) => {
 		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db
-			.select()
-			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
-			.get();
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
@@ -225,11 +278,7 @@ export const actions: Actions = {
 
 	updateLink: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db
-			.select()
-			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
-			.get();
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
@@ -256,11 +305,7 @@ export const actions: Actions = {
 
 	removeLink: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db
-			.select()
-			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
-			.get();
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
@@ -279,5 +324,134 @@ export const actions: Actions = {
 			);
 
 		return { linkRemoved: true };
+	},
+
+	upsertParticipant: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		if (!userId) return fail(400, { error: 'Select a member.' });
+
+		await locals.db
+			.insert(sessionParticipants)
+			.values({
+				sessionId: row.id,
+				userId,
+				attendanceStatus: getAttendanceStatus(data),
+				rsvpSource: 'admin',
+				note: getOptionalString(data, 'note')
+			})
+			.onConflictDoUpdate({
+				target: [sessionParticipants.sessionId, sessionParticipants.userId],
+				set: {
+					attendanceStatus: getAttendanceStatus(data),
+					rsvpSource: 'admin',
+					note: getOptionalString(data, 'note'),
+					updatedAt: new Date().toISOString()
+				}
+			});
+
+		return { participantSaved: true };
+	},
+
+	removeParticipant: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		if (!userId) return fail(400, { error: 'Missing member reference.' });
+
+		await locals.db
+			.delete(sessionParticipants)
+			.where(
+				and(eq(sessionParticipants.sessionId, row.id), eq(sessionParticipants.userId, userId))
+			);
+
+		return { participantRemoved: true };
+	},
+
+	upsertParticipantSubject: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
+		const subjectId = data.get('subjectId')?.toString();
+		if (!userId) return fail(400, { error: 'Select a member.' });
+		if (!kind || (kind !== 'book' && kind !== 'series'))
+			return fail(400, { error: 'Invalid subject kind.' });
+		if (!subjectId) return fail(400, { error: 'Select a subject.' });
+
+		await locals.db
+			.insert(sessionParticipants)
+			.values({
+				sessionId: row.id,
+				userId,
+				attendanceStatus: 'attended',
+				rsvpSource: 'admin'
+			})
+			.onConflictDoNothing();
+
+		await locals.db
+			.insert(sessionParticipantSubjects)
+			.values({
+				sessionId: row.id,
+				userId,
+				subjectType: kind,
+				subjectId,
+				relationType: getParticipantSubjectRelation(data),
+				isPrimaryPick: data.get('isPrimaryPick') === 'on',
+				isThemeRelated: data.get('isThemeRelated') === 'on',
+				note: getOptionalString(data, 'note')
+			})
+			.onConflictDoUpdate({
+				target: [
+					sessionParticipantSubjects.sessionId,
+					sessionParticipantSubjects.userId,
+					sessionParticipantSubjects.subjectType,
+					sessionParticipantSubjects.subjectId
+				],
+				set: {
+					relationType: getParticipantSubjectRelation(data),
+					isPrimaryPick: data.get('isPrimaryPick') === 'on',
+					isThemeRelated: data.get('isThemeRelated') === 'on',
+					note: getOptionalString(data, 'note'),
+					updatedAt: new Date().toISOString()
+				}
+			});
+
+		return { participantSubjectSaved: true };
+	},
+
+	removeParticipantSubject: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
+		const subjectId = data.get('subjectId')?.toString();
+		if (!userId || !kind || !subjectId) return fail(400, { error: 'Missing read reference.' });
+
+		await locals.db
+			.delete(sessionParticipantSubjects)
+			.where(
+				and(
+					eq(sessionParticipantSubjects.sessionId, row.id),
+					eq(sessionParticipantSubjects.userId, userId),
+					eq(sessionParticipantSubjects.subjectType, kind),
+					eq(sessionParticipantSubjects.subjectId, subjectId)
+				)
+			);
+
+		return { participantSubjectRemoved: true };
 	}
 };

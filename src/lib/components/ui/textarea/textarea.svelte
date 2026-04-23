@@ -80,7 +80,7 @@
 	<div
 		aria-hidden="true"
 		class={cn(
-			'pointer-events-none invisible col-start-1 row-start-1 min-h-16 w-full rounded-lg border px-2.5 py-2 text-base break-words whitespace-pre-wrap',
+			'wrap-break-words pointer-events-none invisible col-start-1 row-start-1 min-h-16 w-full rounded-lg border px-2.5 py-2 text-base whitespace-pre-wrap',
 			className
 		)}
 	>

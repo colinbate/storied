@@ -3,6 +3,7 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -17,6 +18,10 @@
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 title' : `${items.length} titles`;
+	}
+
+	function readersFor(subjectType: string, subjectId: string) {
+		return data.subjectReaders[`${subjectType}:${subjectId}`] ?? [];
 	}
 
 	const subjectGroups = $derived([
@@ -110,6 +115,30 @@
 		</Card.Root>
 	{/if}
 
+	{#if data.participants.length > 0}
+		<section class="space-y-3">
+			<h2 class="text-lg font-semibold">Participants</h2>
+			<div class="flex flex-wrap gap-2">
+				{#each data.participants as { participant, user } (user.id)}
+					<div class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+						<Avatar.Root class="h-7 w-7">
+							{#if user.avatarUrl}
+								<Avatar.Image src={user.avatarUrl} alt={user.displayName} />
+							{/if}
+							<Avatar.Fallback class="text-xs"
+								>{user.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
+							>
+						</Avatar.Root>
+						<a href={resolve('/members/[id]', { id: user.id })} class="font-medium hover:underline">
+							{user.displayName}
+						</a>
+						<Badge variant="secondary" class="text-xs">{participant.attendanceStatus}</Badge>
+					</div>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	<section class="grid gap-4 lg:grid-cols-2">
 		{#each subjectGroups as group (group.title)}
 			<Card.Root>
@@ -128,6 +157,16 @@
 								{/if}
 								{#if item.link.note}
 									<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">{item.link.note}</p>
+								{/if}
+								{@const readers = readersFor(item.link.subjectType, item.link.subjectId)}
+								{#if readers.length > 0}
+									<div class="flex flex-wrap gap-1 px-2 pb-2">
+										{#each readers as { read, user } (user.id + read.subjectType + read.subjectId)}
+											<Badge variant={read.isPrimaryPick ? 'default' : 'secondary'} class="text-xs">
+												{user.displayName}{read.isPrimaryPick ? ' primary' : ''}
+											</Badge>
+										{/each}
+									</div>
 								{/if}
 							{/each}
 						</div>

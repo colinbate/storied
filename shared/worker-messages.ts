@@ -20,7 +20,7 @@ export type SubjectSourceType =
 	| 'googlebooks'
 	| 'manual';
 
-export type SubjectType = 'book' | 'series';
+export type SubjectType = 'book' | 'series' | 'author';
 
 // ────────────────────────────────────────────────
 // subject.resolve — turn an external URL into a book or series row

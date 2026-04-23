@@ -422,7 +422,12 @@
 					</Avatar.Root>
 					<div class="min-w-0 flex-1">
 						<div class="mb-2 flex items-center gap-2">
-							<span class="font-medium">{data.author.displayName}</span>
+							<a
+								href={resolve('/members/[id]', { id: data.author.id })}
+								class="font-medium hover:underline"
+							>
+								{data.author.displayName}
+							</a>
 							<span class="text-xs text-muted-foreground"
 								>{formatDate(data.thread.createdAt, { time: 'always', timeZone })}</span
 							>
@@ -495,7 +500,12 @@
 								</Avatar.Root>
 								<div class="min-w-0 flex-1">
 									<div class="mb-2 flex flex-wrap items-center gap-2">
-										<span class="text-sm font-medium">{author.displayName}</span>
+										<a
+											href={resolve('/members/[id]', { id: author.id })}
+											class="text-sm font-medium hover:underline"
+										>
+											{author.displayName}
+										</a>
 										<span class="text-xs text-muted-foreground"
 											>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
 										>

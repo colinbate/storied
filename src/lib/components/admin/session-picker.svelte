@@ -3,7 +3,7 @@
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-	import Check from '@lucide/svelte/icons/check';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import type { ClassValue } from 'svelte/elements';
 
 	type SessionItem = {
@@ -35,23 +35,33 @@
 <Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props })}
-			<Button {...props} variant="outline" class={['justify-between', className]}>
-				<span class={!selectedId ? 'text-muted-foreground' : ''}>
-					{#if selected}
-						{selected.title}{#if selected.theme}
-							<span class="text-muted-foreground"> — {selected.theme}</span>
+			<Button
+				{...props}
+				variant="outline"
+				class={['h-auto min-h-11 w-full justify-between px-3 py-2 text-left', className]}
+			>
+				<span class="flex min-w-0 items-start gap-3 text-left">
+					<span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted">
+						<CalendarIcon class="h-4 w-4 text-muted-foreground" />
+					</span>
+					<span class={['min-w-0 flex-1', !selectedId && 'text-muted-foreground']}>
+						{#if selected}
+							<span class="block truncate font-medium">{selected.title}</span>
+							{#if selected.theme}
+								<span class="block truncate text-xs text-muted-foreground">{selected.theme}</span>
+							{/if}
+						{:else}
+							<span class="block">{placeholder}</span>
 						{/if}
-					{:else}
-						{placeholder}
-					{/if}
+					</span>
 				</span>
 				<ChevronsUpDown class="ml-2 shrink-0 opacity-50" />
 			</Button>
 		{/snippet}
 	</Popover.Trigger>
-	<Popover.Content class="w-100 p-0">
+	<Popover.Content class="w-[min(36rem,calc(100vw-2rem))] p-0">
 		<Command.Root>
-			<Command.Input autofocus placeholder="Search sessions..." class="h-9" />
+			<Command.Input autofocus placeholder="Search sessions or themes..." class="h-10" />
 			<Command.Empty>No sessions found.</Command.Empty>
 			<Command.Group>
 				<div style="max-height: 320px; overflow-y: auto;">
@@ -62,14 +72,19 @@
 								selectedId = s.id;
 								open = false;
 							}}
+							class="items-start px-3 py-2"
 						>
-							<div class="min-w-0 flex-1 truncate">
-								<span class="font-medium">{s.title}</span>
+							<span
+								class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted"
+							>
+								<CalendarIcon class="h-4 w-4 text-muted-foreground" />
+							</span>
+							<div class="min-w-0 flex-1">
+								<span class="block truncate font-medium">{s.title}</span>
 								{#if s.theme}
-									<span class="text-muted-foreground"> — {s.theme}</span>
+									<span class="block truncate text-xs text-muted-foreground">{s.theme}</span>
 								{/if}
 							</div>
-							<Check class={['ml-auto', selectedId !== s.id && 'text-transparent']} />
 						</Command.Item>
 					{/each}
 				</div>

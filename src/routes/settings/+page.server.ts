@@ -1,7 +1,16 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { notificationPreferences, users } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+	books,
+	genres,
+	notificationPreferences,
+	series,
+	userProfiles,
+	userSubjects,
+	users
+} from '$lib/server/db/schema';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { parseProfileGenres, serializeProfileGenres } from '$lib/profile-genres';
 import {
 	DEFAULT_TIMEZONE,
 	getOrCreateNotificationPreferences,
@@ -22,8 +31,88 @@ function isNotificationMode(value: unknown): value is NotificationMode {
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+	const profile =
+		(await locals.db
+			.select()
+			.from(userProfiles)
+			.where(eq(userProfiles.userId, locals.user.id))
+			.get()) ?? null;
+	const featuredRelations = await locals.db
+		.select()
+		.from(userSubjects)
+		.where(and(eq(userSubjects.userId, locals.user.id), eq(userSubjects.featuredOnProfile, true)))
+		.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+		.all();
+
+	const featuredBookIds = featuredRelations
+		.filter((relation) => relation.subjectType === 'book')
+		.map((relation) => relation.subjectId);
+	const featuredSeriesIds = featuredRelations
+		.filter((relation) => relation.subjectType === 'series')
+		.map((relation) => relation.subjectId);
+
+	const featuredBookRows = featuredBookIds.length
+		? await locals.db
+				.select()
+				.from(books)
+				.where(and(inArray(books.id, featuredBookIds), isNull(books.deletedAt)))
+				.all()
+		: [];
+	const featuredSeriesRows = featuredSeriesIds.length
+		? await locals.db
+				.select()
+				.from(series)
+				.where(and(inArray(series.id, featuredSeriesIds), isNull(series.deletedAt)))
+				.all()
+		: [];
+
+	const featuredBookMap = new Map(featuredBookRows.map((book) => [book.id, book]));
+	const featuredSeriesMap = new Map(featuredSeriesRows.map((entry) => [entry.id, entry]));
+	const featuredSubjects = featuredRelations
+		.map((relation) => {
+			if (relation.subjectType === 'book') {
+				const book = featuredBookMap.get(relation.subjectId);
+				return book ? { kind: 'book' as const, relation, book } : null;
+			}
+			if (relation.subjectType === 'series') {
+				const seriesEntry = featuredSeriesMap.get(relation.subjectId);
+				return seriesEntry ? { kind: 'series' as const, relation, series: seriesEntry } : null;
+			}
+			return null;
+		})
+		.filter((item): item is NonNullable<typeof item> => item !== null);
+
+	const allBooks = await locals.db
+		.select({
+			id: books.id,
+			title: books.title,
+			authorText: books.authorText,
+			slug: books.slug,
+			deletedAt: books.deletedAt
+		})
+		.from(books)
+		.orderBy(asc(books.title))
+		.all();
+	const allSeries = await locals.db
+		.select({
+			id: series.id,
+			title: series.title,
+			authorText: series.authorText,
+			slug: series.slug,
+			deletedAt: series.deletedAt
+		})
+		.from(series)
+		.orderBy(asc(series.title))
+		.all();
+	const allGenres = await locals.db.select().from(genres).orderBy(asc(genres.name)).all();
 	return {
 		user: locals.user,
+		profile,
+		profileGenres: parseProfileGenres(profile?.favoriteGenresText),
+		featuredSubjects,
+		allBooks,
+		allSeries,
+		allGenres,
 		preferences,
 		defaultTimezone: DEFAULT_TIMEZONE
 	};
@@ -45,7 +134,117 @@ export const actions: Actions = {
 			.set({ displayName, updatedAt: new Date().toISOString() })
 			.where(eq(users.id, locals.user.id));
 
+		await locals.db
+			.insert(userProfiles)
+			.values({
+				userId: locals.user.id,
+				headline: data.get('headline')?.toString()?.trim() || null,
+				bio: data.get('bio')?.toString()?.trim() || null,
+				favoriteGenresText: serializeProfileGenres(
+					parseProfileGenres(data.get('favoriteGenresText')?.toString())
+				),
+				locationText: null,
+				websiteUrl: data.get('websiteUrl')?.toString()?.trim() || null,
+				showReadBooks: data.get('showReadBooks') === 'on',
+				showRecommendations: data.get('showRecommendations') === 'on',
+				showProfile: data.get('showProfile') === 'on'
+			})
+			.onConflictDoUpdate({
+				target: userProfiles.userId,
+				set: {
+					headline: data.get('headline')?.toString()?.trim() || null,
+					bio: data.get('bio')?.toString()?.trim() || null,
+					favoriteGenresText: serializeProfileGenres(
+						parseProfileGenres(data.get('favoriteGenresText')?.toString())
+					),
+					locationText: null,
+					websiteUrl: data.get('websiteUrl')?.toString()?.trim() || null,
+					showReadBooks: data.get('showReadBooks') === 'on',
+					showRecommendations: data.get('showRecommendations') === 'on',
+					showProfile: data.get('showProfile') === 'on',
+					updatedAt: new Date().toISOString()
+				}
+			});
+
 		return { success: true };
+	},
+
+	addFeaturedSubject: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
+		const subjectType = data.get('kind')?.toString();
+		const subjectId = data.get('subjectId')?.toString();
+		if (subjectType !== 'book' && subjectType !== 'series') {
+			return fail(400, { featureError: 'Choose a book or series.' });
+		}
+		if (!subjectId) {
+			return fail(400, { featureError: 'Choose something to feature.' });
+		}
+
+		const existingFeatured = await locals.db
+			.select()
+			.from(userSubjects)
+			.where(and(eq(userSubjects.userId, locals.user.id), eq(userSubjects.featuredOnProfile, true)))
+			.all();
+		const alreadyFeatured = existingFeatured.some(
+			(relation) => relation.subjectType === subjectType && relation.subjectId === subjectId
+		);
+		if (!alreadyFeatured && existingFeatured.length >= 5) {
+			return fail(400, { featureError: 'You can feature up to 5 subjects.' });
+		}
+
+		const nextOrder =
+			existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) + 1;
+
+		await locals.db
+			.insert(userSubjects)
+			.values({
+				userId: locals.user.id,
+				subjectType,
+				subjectId,
+				readingStatus: 'want_to_read',
+				featuredOnProfile: true,
+				featuredOrder: nextOrder
+			})
+			.onConflictDoUpdate({
+				target: [userSubjects.userId, userSubjects.subjectType, userSubjects.subjectId],
+				set: {
+					featuredOnProfile: true,
+					featuredOrder: nextOrder,
+					updatedAt: new Date().toISOString()
+				}
+			});
+
+		return { featureAdded: true };
+	},
+
+	removeFeaturedSubject: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
+		const subjectType = data.get('kind')?.toString();
+		const subjectId = data.get('subjectId')?.toString();
+		if ((subjectType !== 'book' && subjectType !== 'series') || !subjectId) {
+			return fail(400, { featureError: 'Missing featured subject.' });
+		}
+
+		await locals.db
+			.update(userSubjects)
+			.set({
+				featuredOnProfile: false,
+				featuredOrder: null,
+				updatedAt: new Date().toISOString()
+			})
+			.where(
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.subjectType, subjectType),
+					eq(userSubjects.subjectId, subjectId)
+				)
+			);
+
+		return { featureRemoved: true };
 	},
 
 	uploadAvatar: async ({ request, locals, platform }) => {
