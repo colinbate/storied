@@ -394,7 +394,7 @@
 
 		<!-- Thread body (the opening post) -->
 		<Card.Root>
-			<Card.Content class="pt-4">
+			<Card.Content class="pt-1">
 				<div class="flex items-start gap-3">
 					<Avatar.Root class="h-10 w-10 shrink-0">
 						{#if data.author.avatarUrl}
@@ -459,8 +459,8 @@
 
 			<div class="space-y-3">
 				{#each data.posts as { post, author } (post.id)}
-					<Card.Root id="post-{post.id}">
-						<Card.Content class="pt-4">
+					<Card.Root id="post-{post.id}" class="target:border-2 target:border-primary">
+						<Card.Content class="pt-1">
 							<div class="flex items-start gap-3">
 								<Avatar.Root class="h-8 w-8 shrink-0">
 									{#if author.avatarUrl}
@@ -646,7 +646,9 @@
 							{#each data.seriesWithSessionLinks as entry (entry.series.id)}
 								{#if data.session && data.canPromoteBooks}
 									<Popover.Root>
-										<Popover.Trigger class="w-full rounded-lg text-left transition-colors hover:bg-muted">
+										<Popover.Trigger
+											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+										>
 											<span class="flex items-start gap-3 p-2">
 												{#if entry.series.coverUrl}
 													<img
@@ -655,12 +657,16 @@
 														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
 													/>
 												{:else}
-													<span class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted">
+													<span
+														class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
+													>
 														<LibraryIcon class="h-5 w-5 text-muted-foreground" />
 													</span>
 												{/if}
 												<span class="min-w-0 flex-1">
-													<span class="block text-sm leading-tight font-medium">{entry.series.title}</span>
+													<span class="block text-sm leading-tight font-medium"
+														>{entry.series.title}</span
+													>
 													{#if entry.series.authorText}
 														<span class="mt-0.5 block text-xs text-muted-foreground">
 															{entry.series.authorText}
@@ -751,7 +757,9 @@
 							{#each data.booksWithSessionLinks as entry (entry.book.id)}
 								{#if data.session && data.canPromoteBooks}
 									<Popover.Root>
-										<Popover.Trigger class="w-full rounded-lg text-left transition-colors hover:bg-muted">
+										<Popover.Trigger
+											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+										>
 											<span class="flex items-start gap-3 p-2">
 												{#if entry.book.coverUrl}
 													<img
@@ -760,12 +768,16 @@
 														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
 													/>
 												{:else}
-													<span class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted">
+													<span
+														class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
+													>
 														<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
 													</span>
 												{/if}
 												<span class="min-w-0 flex-1">
-													<span class="block text-sm leading-tight font-medium">{entry.book.title}</span>
+													<span class="block text-sm leading-tight font-medium"
+														>{entry.book.title}</span
+													>
 													{#if entry.book.authorText}
 														<span class="mt-0.5 block text-xs text-muted-foreground">
 															{entry.book.authorText}

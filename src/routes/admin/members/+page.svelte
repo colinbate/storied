@@ -12,6 +12,7 @@
 	import { toast } from 'svelte-sonner';
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
+	import * as Avatar from '$lib/components/ui/avatar/index.js';
 
 	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -35,6 +36,10 @@
 		{ value: 'pending', label: 'Pending' },
 		{ value: 'suspended', label: 'Suspended' }
 	];
+
+	function getInitial(name: string) {
+		return name.charAt(0).toUpperCase();
+	}
 
 	function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
 		if (role === 'admin') return 'default';
@@ -191,7 +196,7 @@
 	{/if}
 
 	{#if pendingMembers.length > 0}
-		<Card.Root>
+		<Card.Root class="pb-1">
 			<Card.Header>
 				<Card.Title class="text-base">Pending Sign Ups</Card.Title>
 				<Card.Description>Review new members before they can access the forum.</Card.Description>
@@ -199,7 +204,7 @@
 			<Card.Content class="p-0">
 				<div class="divide-y">
 					{#each pendingMembers as member (member.id)}
-						<div class="flex items-center justify-between gap-4 px-4">
+						<div class="flex items-center justify-between gap-4 px-4 py-3">
 							<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2">
 									<span class="truncate font-medium">{member.displayName}</span>
@@ -269,14 +274,14 @@
 	{/if}
 
 	{#if openInvites.length > 0}
-		<Card.Root>
+		<Card.Root class="pb-1">
 			<Card.Header>
 				<Card.Title class="text-base">Open Invitations</Card.Title>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="divide-y">
 					{#each openInvites as invite (invite.id)}
-						<div class="flex items-center justify-between gap-4 px-4">
+						<div class="flex items-center justify-between gap-4 px-4 py-3">
 							<div class="min-w-0 flex-1">
 								<p class="truncate font-medium">{invite.email ?? 'Reusable invitation'}</p>
 								<p class="text-sm text-muted-foreground">
@@ -297,11 +302,17 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root>
+	<Card.Root class="py-1">
 		<Card.Content class="p-0">
 			<div class="divide-y">
 				{#each data.members as member (member.id)}
-					<div class="flex items-center justify-between gap-4 px-4">
+					<div class="flex items-center justify-between gap-4 px-4 py-3">
+						<Avatar.Root class="h-8 w-8 shrink-0">
+							{#if member.avatarUrl}
+								<Avatar.Image src={member.avatarUrl} alt={member.displayName} />
+							{/if}
+							<Avatar.Fallback class="text-xs">{getInitial(member.displayName)}</Avatar.Fallback>
+						</Avatar.Root>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2">
 								<span class="truncate font-medium">{member.displayName}</span>
