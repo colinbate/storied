@@ -24,7 +24,7 @@
 			{#each data.members as member (member.id)}
 				<a href={resolve('/members/[id]', { id: member.id })} class="block">
 					<Card.Root class="h-full transition-colors hover:border-primary/40">
-						<Card.Content class="flex items-start gap-4 py-5">
+						<Card.Content class="flex items-start gap-4">
 							<Avatar.Root class="h-14 w-14 shrink-0">
 								{#if member.avatarUrl}
 									<Avatar.Image src={member.avatarUrl} alt={member.displayName} />

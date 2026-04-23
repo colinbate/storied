@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
@@ -27,6 +28,10 @@
 	};
 
 	const statusOptions = Object.entries(statusLabels);
+
+	function statusLabel(status: string) {
+		return statusLabels[status] ?? status;
+	}
 </script>
 
 <svelte:head>
@@ -104,52 +109,95 @@
 			</div>
 
 			<!-- User actions -->
-			<div class="flex flex-wrap items-center gap-3">
-				<form
-					method="POST"
-					action="?/updateStatus"
-					use:enhance={() => {
-						return async ({ result, update }) => {
-							await update();
-							if (result.type === 'success') toast.success('Reading status updated!');
-						};
-					}}
-					class="flex items-center gap-2"
-				>
-					<NativeSelect
-						name="readingStatus"
-						onchange={(e) => e.currentTarget.form?.requestSubmit()}
+			<div class="space-y-3">
+				<div class="flex flex-wrap items-center gap-3">
+					<form
+						method="POST"
+						action="?/updateStatus"
+						use:enhance={() => {
+							return async ({ result, update }) => {
+								await update({ reset: false });
+								if (result.type === 'success') toast.success('Reading status updated!');
+							};
+						}}
 					>
-						<NativeSelectOption value="" disabled selected={!data.myBookRelation}
-							>Track this book…</NativeSelectOption
+						<NativeSelect
+							name="readingStatus"
+							onchange={(e) => e.currentTarget.form?.requestSubmit()}
 						>
-						{#each statusOptions as [value, label] (value)}
-							<NativeSelectOption {value} selected={data.myBookRelation?.readingStatus === value}
-								>{label}</NativeSelectOption
+							<NativeSelectOption
+								value=""
+								disabled
+								selected={!data.myBookRelation ||
+									data.myBookRelation.readingStatus === 'want_to_read'}
 							>
-						{/each}
-					</NativeSelect>
-				</form>
+								Track this book...
+							</NativeSelectOption>
+							{#each statusOptions as [value, label] (value)}
+								<NativeSelectOption {value} selected={data.myBookRelation?.readingStatus === value}
+									>{label}</NativeSelectOption
+								>
+							{/each}
+							<NativeSelectOption value="__clear__">Clear status</NativeSelectOption>
+						</NativeSelect>
+					</form>
 
-				<form
-					method="POST"
-					action="?/toggleRecommend"
-					use:enhance={() => {
-						return async ({ result, update }) => {
-							await update();
-							if (result.type === 'success') toast.success('Recommendation updated!');
-						};
-					}}
-				>
-					<Button
-						variant={data.myBookRelation?.isRecommended ? 'default' : 'outline'}
-						size="sm"
-						type="submit"
+					<form
+						method="POST"
+						action="?/toggleRecommend"
+						use:enhance={() => {
+							return async ({ result, update }) => {
+								await update();
+								if (result.type === 'success') toast.success('Recommendation updated!');
+							};
+						}}
 					>
-						<HeartIcon class="h-4 w-4" />
-						{data.myBookRelation?.isRecommended ? 'Recommended' : 'Recommend'}
-					</Button>
-				</form>
+						<Button
+							variant={data.myBookRelation?.isRecommended ? 'default' : 'outline'}
+							size="sm"
+							type="submit"
+						>
+							<HeartIcon class="h-4 w-4" />
+							{data.myBookRelation?.isRecommended ? 'Recommended' : 'Recommend'}
+						</Button>
+					</form>
+				</div>
+
+				<details class="rounded-lg border border-border">
+					<summary class="cursor-pointer px-4 py-3 font-medium">
+						{data.myBookRelation?.note ? 'Edit Review / Notes' : 'Add Review / Notes'}
+					</summary>
+					<form
+						method="POST"
+						action="?/updateNote"
+						use:enhance={() => {
+							return async ({ result, update }) => {
+								await update({ reset: false });
+								if (result.type === 'success') toast.success('Review updated!');
+							};
+						}}
+						class="space-y-3 border-t border-border/60 px-4 py-4"
+					>
+						<Textarea
+							name="note"
+							rows={4}
+							placeholder="Add a review or note about your experience with this book"
+							value={data.myBookRelation?.note ?? ''}
+						/>
+						<label class="flex items-center gap-2 text-sm text-muted-foreground">
+							<input
+								type="checkbox"
+								name="containsSpoilers"
+								class="rounded border-input"
+								checked={data.myBookRelation?.containsSpoilers ?? false}
+							/>
+							This note contains spoilers
+						</label>
+						<div class="flex items-center gap-2">
+							<Button type="submit" size="sm">Save notes</Button>
+						</div>
+					</form>
+				</details>
 			</div>
 		</div>
 	</div>
@@ -161,6 +209,71 @@
 			</Card.Header>
 			<Card.Content>
 				<p class="text-sm leading-relaxed text-muted-foreground">{data.book.description}</p>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	{#if data.memberConnections.length > 0}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">Member Activity</Card.Title>
+				<Card.Description>
+					See who has read, recommended, or left notes for this book.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				{#each data.memberConnections as item (item.member.id)}
+					<div class="rounded-lg border border-border/60 p-3">
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+							<div class="flex min-w-0 items-center gap-3">
+								<Avatar.Root class="h-9 w-9 shrink-0">
+									{#if item.member.avatarUrl}
+										<Avatar.Image src={item.member.avatarUrl} alt={item.member.displayName} />
+									{/if}
+									<Avatar.Fallback>
+										{item.member.displayName.charAt(0).toUpperCase()}
+									</Avatar.Fallback>
+								</Avatar.Root>
+								<div class="min-w-0">
+									{#if item.canViewProfile}
+										<a
+											href={resolve(`/members/${item.member.id}`)}
+											class="font-medium hover:underline"
+										>
+											{item.member.displayName}
+										</a>
+									{:else}
+										<p class="font-medium">{item.member.displayName}</p>
+									{/if}
+									<p class="text-xs text-muted-foreground">
+										Updated {formatDate(item.relation.updatedAt, { timeZone })}
+									</p>
+								</div>
+							</div>
+
+							<div class="flex flex-wrap items-center gap-2">
+								<Badge variant="outline">{statusLabel(item.relation.readingStatus)}</Badge>
+								{#if item.relation.isRecommended}
+									<Badge>Recommended</Badge>
+								{/if}
+								{#if item.relation.containsSpoilers && item.relation.note}
+									<Badge variant="secondary">Spoilers</Badge>
+								{/if}
+							</div>
+						</div>
+
+						{#if item.relation.note}
+							<details class="mt-3 text-sm text-muted-foreground">
+								<summary class="cursor-pointer list-none font-medium text-foreground">
+									{item.relation.containsSpoilers ? 'Show spoiler note' : 'Show note'}
+								</summary>
+								<p class="mt-2 rounded-md bg-muted/40 p-3 whitespace-pre-wrap">
+									{item.relation.note}
+								</p>
+							</details>
+						{/if}
+					</div>
+				{/each}
 			</Card.Content>
 		</Card.Root>
 	{/if}

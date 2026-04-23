@@ -1,7 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { books, userSubjects, threadSubjects, threads, users } from '$lib/server/db/schema';
-import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import {
+	books,
+	userProfiles,
+	userSubjects,
+	threadSubjects,
+	threads,
+	users
+} from '$lib/server/db/schema';
+import { eq, and, isNull, isNotNull, desc, sql, or, ne } from 'drizzle-orm';
 
 const SUBJECT = 'book';
 
@@ -15,6 +22,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!book || book.deletedAt) {
 		throw error(404, 'Book not found');
 	}
+
+	const viewerId = locals.user.id;
 
 	// Load user's personal relationship to this book
 	const myBookRelation = await locals.db
@@ -85,9 +94,49 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		)
 	);
 
+	const memberConnections = await locals.db
+		.select({
+			member: {
+				id: users.id,
+				displayName: users.displayName,
+				avatarUrl: users.avatarUrl
+			},
+			relation: {
+				readingStatus: userSubjects.readingStatus,
+				isRecommended: userSubjects.isRecommended,
+				note: userSubjects.note,
+				containsSpoilers: userSubjects.containsSpoilers,
+				updatedAt: userSubjects.updatedAt
+			},
+			profile: {
+				showProfile: userProfiles.showProfile
+			}
+		})
+		.from(userSubjects)
+		.innerJoin(users, eq(userSubjects.userId, users.id))
+		.leftJoin(userProfiles, eq(userProfiles.userId, users.id))
+		.where(
+			and(
+				eq(userSubjects.subjectType, SUBJECT),
+				eq(userSubjects.subjectId, book.id),
+				eq(users.status, 'active'),
+				or(
+					eq(userSubjects.isRecommended, true),
+					ne(userSubjects.readingStatus, 'want_to_read'),
+					isNotNull(userSubjects.note)
+				)
+			)
+		)
+		.orderBy(desc(userSubjects.isRecommended), desc(userSubjects.updatedAt))
+		.all();
+
 	return {
 		book,
 		myBookRelation: myBookRelation ?? null,
+		memberConnections: memberConnections.map((entry) => ({
+			...entry,
+			canViewProfile: entry.profile?.showProfile !== false || entry.member.id === viewerId
+		})),
 		relatedThreads: uniqueThreads,
 		stats: {
 			recommendations: recommendCount,
@@ -109,12 +158,62 @@ export const actions: Actions = {
 			return fail(400, { error: 'Missing reading status.' });
 		}
 
+		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
+
+		if (!book || book.deletedAt) {
+			throw error(404, 'Book not found');
+		}
+
+		if (readingStatus === '__clear__') {
+			const existing = await locals.db
+				.select()
+				.from(userSubjects)
+				.where(
+					and(
+						eq(userSubjects.userId, locals.user.id),
+						eq(userSubjects.subjectType, SUBJECT),
+						eq(userSubjects.subjectId, book.id)
+					)
+				)
+				.get();
+
+			if (existing) {
+				if (existing.isRecommended || existing.note || existing.featuredOnProfile) {
+					await locals.db
+						.update(userSubjects)
+						.set({
+							readingStatus: 'want_to_read',
+							updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
+						})
+						.where(
+							and(
+								eq(userSubjects.userId, locals.user.id),
+								eq(userSubjects.subjectType, SUBJECT),
+								eq(userSubjects.subjectId, book.id)
+							)
+						);
+				} else {
+					await locals.db
+						.delete(userSubjects)
+						.where(
+							and(
+								eq(userSubjects.userId, locals.user.id),
+								eq(userSubjects.subjectType, SUBJECT),
+								eq(userSubjects.subjectId, book.id)
+							)
+						);
+				}
+			}
+
+			return { statusUpdated: true };
+		}
+
 		await locals.db
 			.insert(userSubjects)
 			.values({
 				userId: locals.user.id,
 				subjectType: SUBJECT,
-				subjectId: sql`(SELECT ${books.id} FROM ${books} WHERE ${books.slug} = ${params.slug})`,
+				subjectId: book.id,
 				readingStatus
 			})
 			.onConflictDoUpdate({
@@ -126,6 +225,71 @@ export const actions: Actions = {
 			});
 
 		return { statusUpdated: true };
+	},
+
+	updateNote: async ({ request, locals, params }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
+
+		if (!book || book.deletedAt) {
+			throw error(404, 'Book not found');
+		}
+
+		const data = await request.formData();
+		const note = data.get('note')?.toString().trim() || null;
+		const containsSpoilers = note ? data.get('containsSpoilers') === 'on' : false;
+
+		const existing = await locals.db
+			.select()
+			.from(userSubjects)
+			.where(
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.subjectType, SUBJECT),
+					eq(userSubjects.subjectId, book.id)
+				)
+			)
+			.get();
+
+		if (!note && existing && !existing.isRecommended && !existing.featuredOnProfile) {
+			if (existing.readingStatus === 'want_to_read') {
+				await locals.db
+					.delete(userSubjects)
+					.where(
+						and(
+							eq(userSubjects.userId, locals.user.id),
+							eq(userSubjects.subjectType, SUBJECT),
+							eq(userSubjects.subjectId, book.id)
+						)
+					);
+				return { noteUpdated: true };
+			}
+		}
+
+		await locals.db
+			.insert(userSubjects)
+			.values({
+				userId: locals.user.id,
+				subjectType: SUBJECT,
+				subjectId: book.id,
+				note,
+				containsSpoilers,
+				readingStatus: existing?.readingStatus ?? 'want_to_read',
+				isRecommended: existing?.isRecommended ?? false
+			})
+			.onConflictDoUpdate({
+				target: [userSubjects.userId, userSubjects.subjectType, userSubjects.subjectId],
+				set: {
+					note,
+					containsSpoilers,
+					updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
+				}
+			});
+
+		return { noteUpdated: true };
 	},
 
 	toggleRecommend: async ({ locals, params }) => {
