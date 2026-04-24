@@ -38,12 +38,11 @@
 			<Button
 				{...props}
 				variant="outline"
-				class={['h-auto min-h-11 w-full justify-between px-3 py-2 text-left', className]}
+				class={['h-auto w-full justify-between px-3 py-2 text-left', className]}
 			>
-				<span class="flex min-w-0 items-start gap-3 text-left">
-					<span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted">
-						<CalendarIcon class="h-4 w-4 text-muted-foreground" />
-					</span>
+				<span class="flex min-w-0 items-center gap-3 text-left">
+					<CalendarIcon class="h-4 w-4 text-muted-foreground" />
+
 					<span class={['min-w-0 flex-1', !selectedId && 'text-muted-foreground']}>
 						{#if selected}
 							<span class="block truncate font-medium">{selected.title}</span>
