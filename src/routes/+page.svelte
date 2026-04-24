@@ -84,50 +84,51 @@
 		</section>
 	{/if}
 
-	{#if data.pastSessions.length > 0}
-		<section class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-			<span>Recent sessions:</span>
-			{#each data.pastSessions as session (session.id)}
-				<a href={resolve('/sessions/[slug]', { slug: session.slug })} class="hover:text-foreground">
-					{session.title}
-				</a>
-			{/each}
-			<a href={resolve('/sessions')} class="font-medium text-foreground hover:underline"
-				>All sessions</a
-			>
+	{#if data.featuredDiscussion}
+		<section>
+			<Card.Root class="border-primary/30">
+				<Card.Header class="space-y-2">
+					<div class="flex items-center gap-2 text-sm font-medium text-primary">
+						<MessageSquareIcon class="h-4 w-4" />
+						Main discussion
+					</div>
+					<Card.Title class="text-xl">{data.featuredDiscussion.thread.title}</Card.Title>
+					<Card.Description>
+						Started by {data.featuredDiscussion.author.displayName}
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="space-y-4">
+					<p class="line-clamp-3 text-sm leading-6 text-muted-foreground">
+						{data.featuredDiscussion.thread.bodySource}
+					</p>
+					<div class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+						<span>
+							{data.featuredDiscussion.thread.replyCount}
+							{data.featuredDiscussion.thread.replyCount === 1 ? 'reply' : 'replies'}
+						</span>
+						<span>·</span>
+						<span
+							>{formatDate(
+								data.featuredDiscussion.thread.lastPostAt ??
+									data.featuredDiscussion.thread.createdAt,
+								{ time: 'never', timeZone }
+							)}</span
+						>
+					</div>
+					<Button
+						variant="outline"
+						href={resolve('/thread/[slug]', { slug: data.featuredDiscussion.thread.slug })}
+					>
+						Open Discussion
+					</Button>
+				</Card.Content>
+			</Card.Root>
 		</section>
 	{/if}
 
-	<!-- Categories -->
-	<section>
-		<h2 class="mb-3 text-lg font-semibold">Categories</h2>
-		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-			{#each data.categories as category (category.id)}
-				<a href={resolve(`/category/${category.slug}`)} class="block">
-					<Card.Root class="h-full transition-colors hover:border-primary/50">
-						<Card.Header class="flex flex-row justify-between pb-2">
-							<Card.Title class="text-base">{category.name}</Card.Title>
-							<Badge variant="secondary" class="px-1.5 py-0 text-xs"
-								>{category.size}
-								{category.size === 1 ? 'thread' : 'threads'}</Badge
-							>
-						</Card.Header>
-						{#if category.description}
-							<Card.Content>
-								<p class="text-sm text-muted-foreground">{category.description}</p>
-							</Card.Content>
-						{/if}
-					</Card.Root>
-				</a>
-			{/each}
-		</div>
-	</section>
-
-	<Separator />
-
 	<!-- Recent Threads -->
 	<section>
-		<h2 class="mb-3 text-lg font-semibold">Recent Threads</h2>
+		<h2 class="mb-3 text-lg font-semibold">Recent Activity</h2>
 		{#if data.recentThreads.length === 0}
 			<Card.Root>
 				<Card.Content class="py-12 text-center text-muted-foreground">
@@ -178,5 +179,38 @@
 				{/each}
 			</div>
 		{/if}
+	</section>
+
+	<Separator />
+
+	{#if data.pastSessions.length > 0}
+		<section class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+			<span>Recent sessions:</span>
+			{#each data.pastSessions as session (session.id)}
+				<a href={resolve('/sessions/[slug]', { slug: session.slug })} class="hover:text-foreground">
+					{session.title}
+				</a>
+			{/each}
+			<a href={resolve('/sessions')} class="font-medium text-foreground hover:underline"
+				>All sessions</a
+			>
+		</section>
+	{/if}
+
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+			Categories
+		</h2>
+		<div class="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+			{#each data.categories as category (category.id)}
+				<a
+					href={resolve(`/category/${category.slug}`)}
+					class="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<span>{category.name}</span>
+					<span class="text-xs">{category.size}</span>
+				</a>
+			{/each}
+		</div>
 	</section>
 </div>

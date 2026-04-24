@@ -84,6 +84,79 @@ export interface DigestThreadPost {
 	createdAt: string;
 }
 
+export interface NewThreadNotificationTemplateArgs {
+	threadTitle: string;
+	threadSlug: string;
+	threadAuthor: string;
+	categoryName: string;
+	threadPreview: string;
+	baseUrl: string;
+}
+
+export function renderNewThreadNotificationEmail(args: NewThreadNotificationTemplateArgs): {
+	subject: string;
+	textBody: string;
+	htmlBody: string;
+} {
+	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
+	return {
+		subject: `New thread in ${args.categoryName} — BTS Discussions`,
+		textBody: `${args.threadAuthor} started "${args.threadTitle}" in ${args.categoryName}.\n\n${args.threadPreview}\n\nJoin the conversation: ${threadUrl}`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society Discussions</p>
+        <h3 style="color: #1a1a2e; margin-top: 0;">New thread in ${escapeHtml(args.categoryName)}</h3>
+        <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${escapeHtml(args.threadAuthor)}</strong> started <strong>${escapeHtml(args.threadTitle)}</strong>.</p>
+        <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
+          <p style="color: #444; margin: 0; line-height: 1.5;">${escapeHtml(args.threadPreview)}</p>
+        </div>
+        <div style="margin: 24px 0;">
+          <a href="${threadUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            View Thread
+          </a>
+        </div>
+        <p style="color: #aaa; font-size: 12px;">You're receiving this because you follow ${escapeHtml(args.categoryName)}.</p>
+      </div>
+    `.trim()
+	};
+}
+
+export interface AnnouncementBroadcastTemplateArgs {
+	threadTitle: string;
+	threadSlug: string;
+	threadAuthor: string;
+	threadPreview: string;
+	baseUrl: string;
+}
+
+export function renderAnnouncementBroadcastEmail(args: AnnouncementBroadcastTemplateArgs): {
+	subject: string;
+	textBody: string;
+	htmlBody: string;
+} {
+	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
+	return {
+		subject: `Announcement: ${args.threadTitle}`,
+		textBody: `${args.threadAuthor} posted a new announcement.\n\n${args.threadTitle}\n\n${args.threadPreview}\n\nRead it here: ${threadUrl}`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society</p>
+        <h3 style="color: #1a1a2e; margin-top: 0;">New announcement</h3>
+        <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${escapeHtml(args.threadAuthor)}</strong> posted <strong>${escapeHtml(args.threadTitle)}</strong>.</p>
+        <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
+          <p style="color: #444; margin: 0; line-height: 1.5;">${escapeHtml(args.threadPreview)}</p>
+        </div>
+        <div style="margin: 24px 0;">
+          <a href="${threadUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Read Announcement
+          </a>
+        </div>
+        <p style="color: #aaa; font-size: 12px;">You're receiving this because you use the society discussion system.</p>
+      </div>
+    `.trim()
+	};
+}
+
 export interface DigestFollowedThread {
 	threadId: string;
 	threadSlug: string;
@@ -190,9 +263,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		`${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'}, ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} in the last day.`
 	);
 	textLines.push('');
-	textLines.push(
-		'Update your preferences at ' + args.baseUrl + '/settings.'
-	);
+	textLines.push('Update your preferences at ' + args.baseUrl + '/settings.');
 
 	// ─── HTML body ──────────────────────────────────────────────────────────
 	const htmlParts: string[] = [];

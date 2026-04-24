@@ -11,6 +11,13 @@
 
 	let { data, form } = $props();
 	let loading = $state(false);
+	let categoryId = $derived(
+		form?.categoryId ??
+			data.categories.find((category) => category.slug === data.preselectedCategory)?.id ??
+			''
+	);
+
+	const showAnnouncementBroadcast = $derived(categoryId === data.announcementCategoryId);
 </script>
 
 <svelte:head>
@@ -30,7 +37,7 @@
 	</div>
 
 	<Card.Root>
-		<Card.Content class="pt-6">
+		<Card.Content>
 			<form
 				method="POST"
 				use:enhance={() => {
@@ -44,14 +51,10 @@
 			>
 				<div class="space-y-2">
 					<Label for="categoryId">Category</Label>
-					<NativeSelect id="categoryId" name="categoryId" required>
+					<NativeSelect id="categoryId" name="categoryId" bind:value={categoryId} required>
 						<NativeSelectOption value="">Select a category…</NativeSelectOption>
 						{#each data.categories as category (category.id)}
-							<NativeSelectOption
-								value={category.id}
-								selected={form?.categoryId === category.id ||
-									data.preselectedCategory === category.slug}
-							>
+							<NativeSelectOption value={category.id} selected={categoryId === category.id}>
 								{category.name}
 							</NativeSelectOption>
 						{/each}
@@ -85,6 +88,23 @@
 						Supports Markdown: **bold**, *italic*, [links](url), lists, and more.
 					</p>
 				</div>
+
+				{#if showAnnouncementBroadcast}
+					<label class="flex items-start gap-3 rounded-md border p-3 text-sm">
+						<input
+							type="checkbox"
+							name="notifyAllMembersByEmail"
+							class="mt-0.5 rounded border-input"
+						/>
+						<span>
+							<span class="block font-medium">Notify all active members by email</span>
+							<span class="block text-muted-foreground">
+								This sends the announcement immediately even if someone is not subscribed to the
+								category.
+							</span>
+						</span>
+					</label>
+				{/if}
 
 				{#if form?.error}
 					<p class="text-sm text-destructive">{form.error}</p>

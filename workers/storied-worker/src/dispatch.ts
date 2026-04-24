@@ -1,6 +1,7 @@
 import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { handleSubjectResolve } from './subject/queue-resolve';
+import { handleNewThreadFanout } from './notifications/queue-new-thread-fanout';
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
 import { runDailyDigest } from './notifications/scheduled-digest';
 
@@ -19,6 +20,9 @@ export async function dispatchWorkerMessage(
 			return;
 		case 'notifications.thread-reply':
 			await handleThreadReplyFanout(message.payload, context);
+			return;
+		case 'notifications.new-thread':
+			await handleNewThreadFanout(message.payload, context);
 			return;
 		default: {
 			const _exhaustive: never = message;

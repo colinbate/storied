@@ -11,12 +11,18 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
-import { slugify } from '$lib/server/slugify';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import type { SubjectSourceType } from '$shared/worker-messages';
+import {
+	ANNOUNCEMENTS_CATEGORY_ID,
+	SESSION_DISCUSSIONS_CATEGORY_ID,
+	createUniqueThreadSlug,
+	isAnnouncementsCategory,
+	isSessionDiscussionsCategory
+} from '$lib/server/discussions';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -29,13 +35,25 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.orderBy(asc(categories.sortOrder))
 		.all();
 
+	const canPostAnnouncements = locals.permissions.has('moderate');
+	const availableCategories = allCategories.filter((category) => {
+		if (category.id === SESSION_DISCUSSIONS_CATEGORY_ID) return false;
+		if (category.id === ANNOUNCEMENTS_CATEGORY_ID && !canPostAnnouncements) return false;
+		return true;
+	});
+
 	const preselectedCategory = url.searchParams.get('category') ?? '';
 
-	return { categories: allCategories, preselectedCategory };
+	return {
+		categories: availableCategories,
+		preselectedCategory,
+		announcementCategoryId: ANNOUNCEMENTS_CATEGORY_ID,
+		canPostAnnouncements
+	};
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals, platform }) => {
+	default: async ({ request, locals, platform, url }) => {
 		if (!locals.user) {
 			throw redirect(302, '/auth/login');
 		}
@@ -44,6 +62,7 @@ export const actions: Actions = {
 		const title = data.get('title')?.toString()?.trim();
 		const bodySource = data.get('body')?.toString()?.trim();
 		const categoryId = data.get('categoryId')?.toString();
+		const notifyAllMembersByEmail = data.get('notifyAllMembersByEmail') === 'on';
 
 		if (!title || title.length < 3 || title.length > 200) {
 			return fail(400, {
@@ -86,8 +105,26 @@ export const actions: Actions = {
 			});
 		}
 
+		if (isSessionDiscussionsCategory(category.id)) {
+			return fail(400, {
+				error: 'Session discussion threads are created automatically from sessions.',
+				title,
+				body: bodySource,
+				categoryId
+			});
+		}
+
+		if (isAnnouncementsCategory(category.id) && !locals.permissions.has('moderate')) {
+			return fail(403, {
+				error: 'Only moderators and admins can start announcement threads.',
+				title,
+				body: bodySource,
+				categoryId
+			});
+		}
+
 		const bodyHtml = renderMarkdown(bodySource);
-		const slug = slugify(title);
+		const slug = await createUniqueThreadSlug(locals.db, title);
 		const threadId = newId();
 		const now = new Date().toISOString();
 
@@ -185,6 +222,13 @@ export const actions: Actions = {
 					.onConflictDoNothing();
 			}
 		}
+
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'notifications.new-thread', {
+			threadId,
+			threadAuthorUserId: locals.user.id,
+			baseUrl: url.origin,
+			broadcastToAllMembers: notifyAllMembersByEmail && isAnnouncementsCategory(category.id)
+		});
 
 		throw redirect(302, `/thread/${slug}`);
 	}

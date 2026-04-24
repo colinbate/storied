@@ -1,11 +1,13 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { sessions } from '$lib/server/db/schema';
+import { sessions, subscriptions } from '$lib/server/db/schema';
 import { desc, eq } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
 import { renderMarkdown } from '$lib/server/markdown';
+import { createPrimarySessionThread } from '$lib/server/discussions';
+import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 
@@ -44,8 +46,9 @@ export const actions: Actions = {
 		}
 
 		const slug = slugify(getOptionalString(data, 'slug') ?? title);
+		const sessionId = newId();
 		await locals.db.insert(sessions).values({
-			id: newId(),
+			id: sessionId,
 			slug,
 			title,
 			status: getSessionStatus(data),
@@ -62,6 +65,22 @@ export const actions: Actions = {
 			astroPath: getOptionalString(data, 'astroPath'),
 			externalUrl: getOptionalString(data, 'externalUrl')
 		});
+
+		const primaryThread = await createPrimarySessionThread({
+			db: locals.db,
+			session: { id: sessionId, title, themeTitle },
+			authorUserId: locals.user!.id
+		});
+
+		const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user!.id);
+		if (prefs.autoSubscribeOwn) {
+			await locals.db.insert(subscriptions).values({
+				id: newId(),
+				userId: locals.user!.id,
+				threadId: primaryThread.id,
+				mode: prefs.defaultSubMode
+			});
+		}
 
 		return { created: true };
 	},

@@ -15,7 +15,7 @@ import {
 	type SubjectType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc, inArray, ne } from 'drizzle-orm';
+import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
@@ -493,31 +493,13 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		const rawSessionId = data.get('sessionId')?.toString();
 		const sessionId = rawSessionId && rawSessionId.length > 0 ? rawSessionId : null;
-		const rawSessionThreadRole = data.get('sessionThreadRole')?.toString();
-		const sessionThreadRole =
-			sessionId && (rawSessionThreadRole === 'primary' || rawSessionThreadRole === 'related')
-				? rawSessionThreadRole
-				: sessionId
-					? 'related'
-					: null;
+		const sessionThreadRole = sessionId ? 'related' : null;
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
 
 		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
 		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
 
 		const now = new Date().toISOString();
-		if (sessionId && sessionThreadRole === 'primary') {
-			await locals.db
-				.update(threads)
-				.set({ sessionThreadRole: 'related', updatedAt: now })
-				.where(
-					and(
-						eq(threads.sessionId, sessionId),
-						eq(threads.sessionThreadRole, 'primary'),
-						ne(threads.id, threadId)
-					)
-				);
-		}
 		await locals.db
 			.update(threads)
 			.set({ sessionId, sessionThreadRole, updatedAt: now })

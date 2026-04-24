@@ -1,20 +1,28 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import * as NativeSelect from '$lib/components/ui/native-select';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+	import BellIcon from '@lucide/svelte/icons/bell';
+	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
-	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDate } from '$lib/date-format';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
+	let replyBody = $state('');
+	let replying = $state(false);
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 title' : `${items.length} titles`;
@@ -30,6 +38,40 @@
 		{ title: 'Discussed', items: data.discussedSubjects },
 		{ title: 'Off-Theme Mentions', items: data.offThemeSubjects }
 	]);
+
+	const subscriptionModeLabels: Record<string, string> = {
+		immediate: 'now notifying immediately',
+		daily_digest: 'now in your daily digest',
+		mute: 'muted',
+		none: 'no longer watching'
+	};
+
+	const replyEnhance: SubmitFunction = () => {
+		replying = true;
+		return async ({ result, update }) => {
+			replying = false;
+			await update();
+			if (result.type === 'success') {
+				replyBody = '';
+				toast.success('Reply posted.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
+
+	const subscriptionModeEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				const mode = result.data?.subscriptionMode;
+				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
+				toast.success(label ? `Discussion ${label}.` : 'Notification preference updated.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -96,49 +138,6 @@
 		</section>
 	{/if}
 
-	{#if data.primaryThread}
-		<Card.Root>
-			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div class="min-w-0">
-					<div class="flex items-center gap-2 font-medium">
-						<MessageSquareIcon class="h-4 w-4 text-primary" />
-						<span>Main discussion thread</span>
-					</div>
-					<p class="mt-1 truncate text-sm text-muted-foreground">
-						{data.primaryThread.thread.title} by {data.primaryThread.author.displayName}
-					</p>
-				</div>
-				<Button href={resolve('/thread/[slug]', { slug: data.primaryThread.thread.slug })}>
-					Open Thread
-				</Button>
-			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if data.participants.length > 0}
-		<section class="space-y-3">
-			<h2 class="text-lg font-semibold">Participants</h2>
-			<div class="flex flex-wrap gap-2">
-				{#each data.participants as { participant, user } (user.id)}
-					<div class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-						<Avatar.Root class="h-7 w-7">
-							{#if user.avatarUrl}
-								<Avatar.Image src={user.avatarUrl} alt={user.displayName} />
-							{/if}
-							<Avatar.Fallback class="text-xs"
-								>{user.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
-							>
-						</Avatar.Root>
-						<a href={resolve('/members/[id]', { id: user.id })} class="font-medium hover:underline">
-							{user.displayName}
-						</a>
-						<Badge variant="secondary" class="text-xs">{participant.attendanceStatus}</Badge>
-					</div>
-				{/each}
-			</div>
-		</section>
-	{/if}
-
 	<section class="grid gap-4 lg:grid-cols-2">
 		{#each subjectGroups as group (group.title)}
 			<Card.Root>
@@ -178,9 +177,160 @@
 		{/each}
 	</section>
 
+	{#if data.participants.length > 0}
+		<section class="space-y-3">
+			<h2 class="text-lg font-semibold">Participant Reads</h2>
+			<div class="flex flex-wrap gap-2">
+				{#each data.participants as { participant, user } (user.id)}
+					<div class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+						<Avatar.Root class="h-7 w-7">
+							{#if user.avatarUrl}
+								<Avatar.Image src={user.avatarUrl} alt={user.displayName} />
+							{/if}
+							<Avatar.Fallback class="text-xs"
+								>{user.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
+							>
+						</Avatar.Root>
+						<a href={resolve('/members/[id]', { id: user.id })} class="font-medium hover:underline">
+							{user.displayName}
+						</a>
+						<Badge variant="secondary" class="text-xs">{participant.attendanceStatus}</Badge>
+					</div>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
+	{#if data.primaryThread}
+		<section class="space-y-4">
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-1">
+					<h2 class="text-lg font-semibold">Discussion</h2>
+					<p class="text-sm text-muted-foreground">
+						Questions, reactions, reading notes, and follow-up conversation for this session.
+					</p>
+				</div>
+				<div class="flex flex-wrap items-center gap-3">
+					<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
+						<label for="session-discussion-sub-mode" class="sr-only">Notify me</label>
+						<div class="flex items-center gap-2">
+							{#if data.primarySubscriptionMode === 'none' || data.primarySubscriptionMode === 'mute'}
+								<BellOffIcon class="h-4 w-4 text-muted-foreground" />
+							{:else}
+								<BellIcon class="h-4 w-4 text-muted-foreground" />
+							{/if}
+							<NativeSelect.Root
+								id="session-discussion-sub-mode"
+								name="mode"
+								value={data.primarySubscriptionMode}
+								onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
+							>
+								<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
+								<NativeSelect.Option value="daily_digest"
+									>Notify me: In my digest</NativeSelect.Option
+								>
+								<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
+								<NativeSelect.Option value="none">Notify me: Off</NativeSelect.Option>
+							</NativeSelect.Root>
+						</div>
+					</form>
+					<Button
+						variant="outline"
+						class="h-10"
+						href={resolve('/thread/[slug]', { slug: data.primaryThread.thread.slug })}
+					>
+						View full thread
+					</Button>
+				</div>
+			</div>
+
+			<Card.Root>
+				<Card.Content class="space-y-5 py-5">
+					<div class="flex gap-3">
+						<Avatar.Root class="mt-0.5 h-10 w-10 shrink-0">
+							{#if data.primaryThread.author.avatarUrl}
+								<Avatar.Image
+									src={data.primaryThread.author.avatarUrl}
+									alt={data.primaryThread.author.displayName}
+								/>
+							{/if}
+							<Avatar.Fallback>
+								{data.primaryThread.author.displayName.charAt(0).toUpperCase()}
+							</Avatar.Fallback>
+						</Avatar.Root>
+						<div class="min-w-0 flex-1">
+							<div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+								<span class="font-medium text-foreground"
+									>{data.primaryThread.author.displayName}</span
+								>
+								<span>·</span>
+								<span
+									>{formatDate(data.primaryThread.thread.createdAt, {
+										time: 'never',
+										timeZone
+									})}</span
+								>
+							</div>
+							<div class="prose mt-3 max-w-none wrap-anywhere dark:prose-invert">
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html data.primaryThread.thread.bodyHtml}
+							</div>
+						</div>
+					</div>
+
+					{#if data.primaryPosts.length > 0}
+						<div class="space-y-4 border-t pt-5">
+							{#each data.primaryPosts as { post, author } (post.id)}
+								<div class="flex gap-3">
+									<Avatar.Root class="mt-0.5 h-9 w-9 shrink-0">
+										{#if author.avatarUrl}
+											<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
+										{/if}
+										<Avatar.Fallback>{author.displayName.charAt(0).toUpperCase()}</Avatar.Fallback>
+									</Avatar.Root>
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+											<span class="font-medium text-foreground">{author.displayName}</span>
+											<span>·</span>
+											<span>{formatDate(post.createdAt, { time: 'never', timeZone })}</span>
+										</div>
+										<div class="prose mt-2 max-w-none wrap-anywhere dark:prose-invert">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											{@html post.bodyHtml}
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+					<form
+						method="POST"
+						action="?/reply"
+						use:enhance={replyEnhance}
+						class="space-y-3 border-t pt-5"
+					>
+						<Textarea
+							name="body"
+							rows={4}
+							placeholder="Add your thoughts…"
+							required
+							bind:value={replyBody}
+						/>
+						<div class="flex justify-end">
+							<Button type="submit" disabled={replying}>
+								{replying ? 'Posting…' : 'Post Reply'}
+							</Button>
+						</div>
+					</form>
+				</Card.Content>
+			</Card.Root>
+		</section>
+	{/if}
+
 	{#if data.relatedThreads.length > 0}
 		<section class="space-y-3">
-			<h2 class="text-lg font-semibold">Related Threads</h2>
+			<h2 class="text-lg font-semibold">Related Conversations</h2>
 			<div class="grid gap-3 sm:grid-cols-2">
 				{#each data.relatedThreads as { thread, author } (thread.id)}
 					<a href={resolve('/thread/[slug]', { slug: thread.slug })} class="block">

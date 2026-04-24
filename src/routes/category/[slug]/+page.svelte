@@ -1,18 +1,44 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import * as NativeSelect from '$lib/components/ui/native-select';
 	import PlusIcon from '@lucide/svelte/icons/plus';
+	import BellIcon from '@lucide/svelte/icons/bell';
+	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import PinIcon from '@lucide/svelte/icons/pin';
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
 	import { formatDate } from '$lib/date-format';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
+
+	const subscriptionModeLabels: Record<string, string> = {
+		immediate: 'now notifying immediately',
+		daily_digest: 'now in your daily digest',
+		mute: 'muted',
+		none: 'no longer watching'
+	};
+
+	const subscriptionModeEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			await update();
+			if (result.type === 'success') {
+				const mode = result.data?.subscriptionMode;
+				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
+				toast.success(label ? `Category ${label}.` : 'Notification preference updated.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -35,12 +61,45 @@
 					<p class="text-muted-foreground">{data.category.description}</p>
 				{/if}
 			</div>
-			<Button href={resolve(`/new?category=${data.category.slug}`)}>
-				<PlusIcon class="h-4 w-4" />
-				New Thread
-			</Button>
+			{#if data.canCreateThread}
+				<Button href={resolve(`/new?category=${data.category.slug}`)}>
+					<PlusIcon class="h-4 w-4" />
+					New Thread
+				</Button>
+			{/if}
 		</div>
 	</div>
+
+	<Card.Root>
+		<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			<div class="space-y-1">
+				<div class="flex items-center gap-2 font-medium">
+					{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
+						<BellOffIcon class="h-4 w-4 text-muted-foreground" />
+					{:else}
+						<BellIcon class="h-4 w-4 text-muted-foreground" />
+					{/if}
+					<span>Category notifications</span>
+				</div>
+				<p class="text-sm text-muted-foreground">
+					Get new threads from this category right away or in your daily digest.
+				</p>
+			</div>
+			<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
+				<label for="category-sub-mode" class="sr-only">Notify me</label>
+				<NativeSelect.Root
+					id="category-sub-mode"
+					name="mode"
+					value={data.subscriptionMode}
+					onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
+				>
+					<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
+					<NativeSelect.Option value="daily_digest">Notify me: In my digest</NativeSelect.Option>
+					<NativeSelect.Option value="none">Notify me: Off</NativeSelect.Option>
+				</NativeSelect.Root>
+			</form>
+		</Card.Content>
+	</Card.Root>
 
 	{#if data.threads.length === 0}
 		<Card.Root>

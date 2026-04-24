@@ -47,6 +47,10 @@
 			<Card.Title class="text-2xl">Welcome</Card.Title>
 			<Card.Description>
 				Sign in to Bermuda Triangle Society Discussions.
+				<span class="block text-muted-foreground">
+					By using this system, you agree that we may send you email related to the society and its
+					discussions.
+				</span>
 				{#if data.signupMode === 'moderated'}
 					<span class="block text-muted-foreground">
 						New member sign ups are reviewed before access is granted.

@@ -75,12 +75,24 @@ export interface ThreadReplyFanoutPayload {
 }
 
 // ────────────────────────────────────────────────
+// notifications.new-thread — fan out category or announcement emails
+// ────────────────────────────────────────────────
+
+export interface NewThreadFanoutPayload {
+	threadId: string;
+	threadAuthorUserId: string;
+	baseUrl: string;
+	broadcastToAllMembers?: boolean;
+}
+
+// ────────────────────────────────────────────────
 // Discriminated union
 // ────────────────────────────────────────────────
 
 export type WorkerMessage =
 	| { topic: 'subject.resolve'; payload: SubjectResolvePayload }
-	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload };
+	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload }
+	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload };
 
 export type WorkerTopic = WorkerMessage['topic'];
 

@@ -334,36 +334,9 @@
 										</NativeSelect.Root>
 									</form>
 									{#if data.thread.sessionId}
-										<form
-											method="POST"
-											action="?/linkSession"
-											use:enhance={modEnhance('Session thread role updated.')}
-											class="inline-flex items-center gap-2"
-										>
-											<input type="hidden" name="threadId" value={data.thread.id} />
-											<input type="hidden" name="sessionId" value={data.thread.sessionId} />
-											<label for="session-role-select" class="text-muted-foreground">Role</label>
-											<NativeSelect.Root
-												id="session-role-select"
-												name="sessionThreadRole"
-												onchange={(e) => {
-													(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-												}}
-											>
-												<NativeSelect.Option
-													value="primary"
-													selected={data.thread.sessionThreadRole === 'primary'}
-												>
-													Primary
-												</NativeSelect.Option>
-												<NativeSelect.Option
-													value="related"
-													selected={data.thread.sessionThreadRole !== 'primary'}
-												>
-													Related
-												</NativeSelect.Option>
-											</NativeSelect.Root>
-										</form>
+										<p class="text-sm text-muted-foreground">
+											Manually linked session threads are treated as related conversations.
+										</p>
 									{/if}
 								{/if}
 							</Popover.Content>
