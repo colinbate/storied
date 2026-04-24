@@ -45,6 +45,11 @@ export interface SubjectSeriesBookLink {
 	positionSort?: number | null;
 }
 
+export interface SubjectUserFeatureLink {
+	userId: string;
+	featuredOrder?: number | null;
+}
+
 export interface SubjectResolvePayload {
 	subjectSourceId: string;
 	sourceType: SubjectSourceType;
@@ -54,6 +59,7 @@ export interface SubjectResolvePayload {
 	postId?: string;
 	sessionLink?: SubjectSessionLink;
 	seriesBookLink?: SubjectSeriesBookLink;
+	userFeatureLink?: SubjectUserFeatureLink;
 }
 
 // ────────────────────────────────────────────────

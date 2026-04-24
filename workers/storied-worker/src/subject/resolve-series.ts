@@ -2,7 +2,13 @@ import type { SubjectResolvePayload } from '$shared/worker-messages';
 import type { Env } from '../env';
 import { generateId, generateSlug } from '../shared/ids';
 import { scrapeGoodreadsSeries, type GoodreadsSeriesMetadata } from './scrapers';
-import { linkThreadSubject, linkSessionSubject, linkSeriesBook, markSourceFailed } from './links';
+import {
+	linkThreadSubject,
+	linkSessionSubject,
+	linkSeriesBook,
+	linkUserFeaturedSubject,
+	markSourceFailed
+} from './links';
 
 async function findExistingSeries(
 	db: D1Database,
@@ -19,7 +25,8 @@ export async function resolveGoodreadsSeries(
 	payload: SubjectResolvePayload,
 	env: Env
 ): Promise<void> {
-	const { subjectSourceId, sourceUrl, threadId, postId, sessionLink, seriesBookLink } = payload;
+	const { subjectSourceId, sourceUrl, threadId, postId, sessionLink, seriesBookLink, userFeatureLink } =
+		payload;
 
 	const metadata = await scrapeGoodreadsSeries(sourceUrl);
 	if (!metadata) {
@@ -81,4 +88,5 @@ export async function resolveGoodreadsSeries(
 	await linkThreadSubject(env.DB, 'series', seriesId, threadId, postId);
 	await linkSessionSubject(env.DB, 'series', seriesId, sessionLink);
 	await linkSeriesBook(env.DB, 'series', seriesId, seriesBookLink);
+	await linkUserFeaturedSubject(env.DB, 'series', seriesId, userFeatureLink);
 }

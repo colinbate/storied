@@ -31,9 +31,10 @@
 	let prefsSaving = $state(false);
 	let dyslexicSaving = $state(false);
 	let featureSaving = $state(false);
-	let featureKind = $state<'book' | 'series'>('book');
+	let featureKind = $state<'book' | 'series' | 'url'>('book');
 	let featureBookId = $state<string | undefined>(undefined);
 	let featureSeriesId = $state<string | undefined>(undefined);
+	let featureUrl = $state<string | undefined>(undefined);
 	let profileGenres = $derived([...(data.profileGenres ?? [])]);
 
 	let dyslexicFont = $derived(!!data.user.dyslexicFont);
@@ -287,9 +288,12 @@
 						if (result.type === 'success') {
 							if (result.data?.featureAdded) {
 								toast.success('Featured subject updated.');
-								featureBookId = undefined;
-								featureSeriesId = undefined;
+							} else if (result.data?.featureQueued) {
+								toast.success('URL queued for processing.');
 							}
+							featureBookId = undefined;
+							featureSeriesId = undefined;
+							featureUrl = undefined;
 						} else if (result.type === 'failure' && result.data?.featureError) {
 							toast.error(String(result.data.featureError));
 						}
@@ -299,7 +303,7 @@
 			>
 				<div class="flex flex-col gap-2">
 					<div class="space-y-1">
-						<div class="flex gap-2">
+						<div class="flex items-center gap-2">
 							<Button
 								type="button"
 								size="sm"
@@ -316,10 +320,23 @@
 							>
 								Series
 							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant={featureKind === 'url' ? 'default' : 'outline'}
+								onclick={() => (featureKind = 'url')}
+							>
+								URL
+							</Button>
+							{#if featureKind === 'url'}
+								<p class="mb-1 hidden text-sm text-muted-foreground md:block">
+									Paste a Goodreads book or series URL to import.
+								</p>
+							{/if}
 						</div>
 					</div>
 					<input type="hidden" name="kind" value={featureKind} />
-					<div class="flex gap-2">
+					<div class="flex items-end gap-2">
 						<div class="flex-1">
 							{#if featureKind === 'book'}
 								<BookPicker
@@ -328,12 +345,24 @@
 									name="subjectId"
 									placeholder="Search books to feature..."
 								/>
-							{:else}
+							{:else if featureKind === 'series'}
 								<SeriesPicker
 									series={availableSeries}
 									bind:selectedId={featureSeriesId}
 									name="subjectId"
 									placeholder="Search series to feature..."
+								/>
+							{:else}
+								<p class="mb-1 text-sm text-muted-foreground md:hidden">
+									Paste a Goodreads book or series URL to import.
+								</p>
+								<Input
+									id="featured-url"
+									name="url"
+									type="url"
+									bind:value={featureUrl}
+									placeholder="https://www.goodreads.com/book/show/..."
+									class="flex-1"
 								/>
 							{/if}
 						</div>
@@ -342,7 +371,11 @@
 							type="submit"
 							disabled={featureSaving ||
 								featuredCount >= 5 ||
-								(featureKind === 'book' ? !featureBookId : !featureSeriesId)}
+								(featureKind === 'book'
+									? !featureBookId
+									: featureKind === 'series'
+										? !featureSeriesId
+										: !featureUrl?.startsWith('https://www.goodreads.com/'))}
 						>
 							<PlusIcon class="h-4 w-4" />
 							Add

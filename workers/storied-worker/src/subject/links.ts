@@ -1,7 +1,8 @@
 import type {
 	SubjectType,
 	SubjectSessionLink,
-	SubjectSeriesBookLink
+	SubjectSeriesBookLink,
+	SubjectUserFeatureLink
 } from '$shared/worker-messages';
 import { generateId } from '../shared/ids';
 
@@ -81,6 +82,52 @@ export async function linkSeriesBook(
 			seriesBookLink.positionSort ?? null,
 			new Date().toISOString()
 		)
+		.run();
+}
+
+export async function linkUserFeaturedSubject(
+	db: D1Database,
+	subjectType: SubjectType,
+	subjectId: string,
+	userFeatureLink?: SubjectUserFeatureLink
+): Promise<void> {
+	if (!userFeatureLink) return;
+
+	const existingFeatured = await db
+		.prepare(
+			`SELECT subject_type, subject_id, featured_order
+			 FROM user_subjects
+			 WHERE user_id = ? AND featured_on_profile = 1`
+		)
+		.bind(userFeatureLink.userId)
+		.all<{
+			subject_type: SubjectType;
+			subject_id: string;
+			featured_order: number | null;
+		}>();
+
+	const featuredRows = existingFeatured.results ?? [];
+	const alreadyFeatured = featuredRows.some(
+		(row) => row.subject_type === subjectType && row.subject_id === subjectId
+	);
+	if (!alreadyFeatured && featuredRows.length >= 5) return;
+
+	const featuredOrder =
+		userFeatureLink.featuredOrder ??
+		featuredRows.reduce((max, row) => Math.max(max, row.featured_order ?? 0), 0) + 1;
+	const now = new Date().toISOString();
+
+	await db
+		.prepare(
+			`INSERT INTO user_subjects
+				(user_id, subject_type, subject_id, reading_status, is_recommended, featured_on_profile, featured_order, created_at, updated_at)
+			 VALUES (?, ?, ?, 'want_to_read', 0, 1, ?, ?, ?)
+			 ON CONFLICT(user_id, subject_type, subject_id) DO UPDATE SET
+				featured_on_profile = 1,
+				featured_order = excluded.featured_order,
+				updated_at = excluded.updated_at`
+		)
+		.bind(userFeatureLink.userId, subjectType, subjectId, featuredOrder, now, now)
 		.run();
 }
 

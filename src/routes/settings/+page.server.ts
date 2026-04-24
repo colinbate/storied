@@ -16,6 +16,7 @@ import {
 	getOrCreateNotificationPreferences,
 	isValidTimezone
 } from '$lib/server/notification-preferences';
+import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 
 type NotificationMode = 'off' | 'immediate' | 'daily_digest';
 type DefaultSubMode = 'immediate' | 'daily_digest';
@@ -169,15 +170,53 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	addFeaturedSubject: async ({ request, locals }) => {
+	addFeaturedSubject: async ({ request, locals, platform }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
 
 		const data = await request.formData();
 		const subjectType = data.get('kind')?.toString();
-		const subjectId = data.get('subjectId')?.toString();
+		if (subjectType === 'url') {
+			const url = data.get('url')?.toString()?.trim() || '';
+			if (!url) {
+				return fail(400, { featureError: 'Paste a Goodreads book or series URL.' });
+			}
+
+			const link = detectFirstSubjectLink(url);
+			if (!link) {
+				return fail(400, { featureError: 'Only Goodreads book or series URLs are supported.' });
+			}
+
+			const existingFeatured = await locals.db
+				.select()
+				.from(userSubjects)
+				.where(
+					and(eq(userSubjects.userId, locals.user.id), eq(userSubjects.featuredOnProfile, true))
+				)
+				.all();
+			if (existingFeatured.length >= 5) {
+				return fail(400, { featureError: 'You can feature up to 5 subjects.' });
+			}
+
+			const nextOrder =
+				existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) +
+				1;
+			const result = await ensureSubjectSource(locals.db, link, platform?.env, {
+				userFeatureLink: {
+					userId: locals.user.id,
+					featuredOrder: nextOrder
+				}
+			});
+
+			if (result.resolvedSubjectId) {
+				return { featureAdded: true };
+			}
+
+			return { featureQueued: true };
+		}
 		if (subjectType !== 'book' && subjectType !== 'series') {
 			return fail(400, { featureError: 'Choose a book or series.' });
 		}
+		const subjectId = data.get('subjectId')?.toString();
 		if (!subjectId) {
 			return fail(400, { featureError: 'Choose something to feature.' });
 		}

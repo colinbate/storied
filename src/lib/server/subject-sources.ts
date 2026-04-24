@@ -5,6 +5,7 @@ import {
 	threadSubjects,
 	sessionSubjects,
 	seriesBooks,
+	userSubjects,
 	type SessionSubjectStatus
 } from './db/schema';
 import { newId } from './ids';
@@ -14,10 +15,15 @@ import type {
 	SubjectResolvePayload,
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
+	SubjectUserFeatureLink,
 	SubjectSourceType
 } from '$shared/worker-messages';
 
-export type { SubjectSessionLink, SubjectSeriesBookLink } from '$shared/worker-messages';
+export type {
+	SubjectSessionLink,
+	SubjectSeriesBookLink,
+	SubjectUserFeatureLink
+} from '$shared/worker-messages';
 
 /** Env subset we need to enqueue worker messages. */
 export interface WorkerQueueEnv {
@@ -45,6 +51,7 @@ export async function ensureSubjectSource(
 		postId?: string;
 		sessionLink?: SubjectSessionLink;
 		seriesBookLink?: SubjectSeriesBookLink;
+		userFeatureLink?: SubjectUserFeatureLink;
 	} = {}
 ): Promise<ResolveOrEnqueueResult> {
 	const existing = await db
@@ -89,7 +96,8 @@ export async function ensureSubjectSource(
 			threadId: sideEffects.threadId,
 			postId: sideEffects.postId,
 			sessionLink: sideEffects.sessionLink,
-			seriesBookLink: sideEffects.seriesBookLink
+			seriesBookLink: sideEffects.seriesBookLink,
+			userFeatureLink: sideEffects.userFeatureLink
 		};
 		await publishWorkerMessage(env?.WORKER_QUEUE, 'subject.resolve', payload);
 	}
@@ -143,7 +151,48 @@ export async function ensureSubjectSource(
 						position: sideEffects.seriesBookLink.position ?? null,
 						positionSort: sideEffects.seriesBookLink.positionSort ?? null
 					})
-					.onConflictDoNothing();
+				.onConflictDoNothing();
+			}
+		}
+		if (sideEffects.userFeatureLink) {
+			const existingFeatured = await db
+				.select()
+				.from(userSubjects)
+				.where(
+					and(
+						eq(userSubjects.userId, sideEffects.userFeatureLink.userId),
+						eq(userSubjects.featuredOnProfile, true)
+					)
+				)
+				.all();
+			const alreadyFeatured = existingFeatured.some(
+				(relation) =>
+					relation.subjectType === resolvedSubjectType && relation.subjectId === resolvedSubjectId
+			);
+
+			if (alreadyFeatured || existingFeatured.length < 5) {
+				const featuredOrder =
+					sideEffects.userFeatureLink.featuredOrder ??
+					existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) + 1;
+
+				await db
+					.insert(userSubjects)
+					.values({
+						userId: sideEffects.userFeatureLink.userId,
+						subjectType: resolvedSubjectType,
+						subjectId: resolvedSubjectId,
+						readingStatus: 'want_to_read',
+						featuredOnProfile: true,
+						featuredOrder
+					})
+					.onConflictDoUpdate({
+						target: [userSubjects.userId, userSubjects.subjectType, userSubjects.subjectId],
+						set: {
+							featuredOnProfile: true,
+							featuredOrder,
+							updatedAt: new Date().toISOString()
+						}
+					});
 			}
 		}
 	}
