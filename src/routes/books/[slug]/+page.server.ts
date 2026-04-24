@@ -2,13 +2,15 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	genres,
+	genreLinks,
 	userProfiles,
 	userSubjects,
 	threadSubjects,
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { eq, and, isNull, isNotNull, desc, sql, or, ne } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne } from 'drizzle-orm';
 
 const SUBJECT = 'book';
 
@@ -24,6 +26,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	const viewerId = locals.user.id;
+
+	const bookGenres = await locals.db
+		.select({
+			id: genres.id,
+			name: genres.name,
+			slug: genres.slug
+		})
+		.from(genreLinks)
+		.innerJoin(genres, eq(genreLinks.genreId, genres.id))
+		.where(and(eq(genreLinks.subjectType, SUBJECT), eq(genreLinks.subjectId, book.id)))
+		.orderBy(asc(genres.name))
+		.all();
 
 	// Load user's personal relationship to this book
 	const myBookRelation = await locals.db
@@ -132,6 +146,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		book,
+		bookGenres,
 		myBookRelation: myBookRelation ?? null,
 		memberConnections: memberConnections.map((entry) => ({
 			...entry,

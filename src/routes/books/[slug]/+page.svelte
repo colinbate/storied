@@ -74,23 +74,42 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-wrap items-center gap-2">
-				{#if data.book.firstPublishYear}
-					<Badge variant="outline">{data.book.firstPublishYear}</Badge>
-				{/if}
-				{#if data.book.isbn13}
-					<Badge variant="outline">ISBN {data.book.isbn13}</Badge>
-				{/if}
-				{#if data.book.goodreadsUrl}
-					<a
-						href={data.book.goodreadsUrl}
-						target="_blank"
-						rel="noopener noreferrer external"
-						class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-					>
-						<ExternalLinkIcon class="h-3.5 w-3.5" />
-						Goodreads
-					</a>
+			<div class="space-y-2">
+				<div class="flex flex-wrap items-center gap-2">
+					{#if data.book.firstPublishYear}
+						<Badge variant="outline">{data.book.firstPublishYear}</Badge>
+					{/if}
+					{#if data.book.isbn13}
+						<Badge variant="outline">ISBN {data.book.isbn13}</Badge>
+					{/if}
+					{#if data.book.goodreadsUrl}
+						<a
+							href={data.book.goodreadsUrl}
+							target="_blank"
+							rel="noopener noreferrer external"
+							class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+						>
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+							Goodreads
+						</a>
+					{/if}
+					{#if data.permissions.has('book:edit')}
+						<Button
+							variant="outline"
+							size="sm"
+							href={resolve('/admin/books/[slug]', { slug: data.book.slug })}
+						>
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+							Book Admin
+						</Button>
+					{/if}
+				</div>
+				{#if data.bookGenres.length > 0}
+					<div class="flex flex-wrap items-center gap-2">
+						{#each data.bookGenres as genre (genre.id)}
+							<Badge variant="secondary">{genre.name}</Badge>
+						{/each}
+					</div>
 				{/if}
 			</div>
 
@@ -287,7 +306,7 @@
 				{#each data.relatedThreads as { thread, author } (thread.id)}
 					<a href={resolve(`/thread/${thread.slug}`)} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
-							<Card.Content class="flex items-start gap-3 py-3">
+							<Card.Content class="flex items-start gap-3">
 								<Avatar.Root class="mt-0.5 h-8 w-8 shrink-0">
 									{#if author.avatarUrl}
 										<Avatar.Image src={author.avatarUrl} alt={author.displayName} />

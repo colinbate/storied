@@ -4,6 +4,8 @@ import {
 	series,
 	seriesBooks,
 	books,
+	genres,
+	genreLinks,
 	userSubjects,
 	threadSubjects,
 	threads,
@@ -27,6 +29,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!seriesRecord || seriesRecord.deletedAt) {
 		throw error(404, 'Series not found');
 	}
+
+	const seriesGenres = await locals.db
+		.select({
+			id: genres.id,
+			name: genres.name,
+			slug: genres.slug
+		})
+		.from(genreLinks)
+		.innerJoin(genres, eq(genreLinks.genreId, genres.id))
+		.where(and(eq(genreLinks.subjectType, SUBJECT), eq(genreLinks.subjectId, seriesRecord.id)))
+		.orderBy(asc(genres.name))
+		.all();
 
 	const mySeriesRelation = await locals.db
 		.select()
@@ -117,6 +131,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		series: seriesRecord,
+		seriesGenres,
 		mySeriesRelation: mySeriesRelation ?? null,
 		relatedThreads: uniqueThreads,
 		seriesEntries,

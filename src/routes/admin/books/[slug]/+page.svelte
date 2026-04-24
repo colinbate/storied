@@ -75,6 +75,16 @@
 		{#if data.book.deletedAt}
 			<Badge variant="outline">deleted</Badge>
 		{/if}
+		{#if !data.book.deletedAt}
+			<Button
+				variant="outline"
+				size="sm"
+				href={resolve('/books/[slug]', { slug: data.book.slug })}
+				class="ml-auto"
+			>
+				View Public Page
+			</Button>
+		{/if}
 	</div>
 
 	<!-- Metadata -->

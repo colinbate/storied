@@ -67,32 +67,51 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-wrap items-center gap-2">
-				<Badge variant="outline">
-					{data.series.bookCount ?? data.seriesEntries.length}
-					{data.series.bookCount === 1 || data.seriesEntries.length === 1 ? ' book' : ' books'}
-				</Badge>
+			<div class="space-y-2">
+				<div class="flex flex-wrap items-center gap-2">
+					<Badge variant="outline">
+						{data.series.bookCount ?? data.seriesEntries.length}
+						{data.series.bookCount === 1 || data.seriesEntries.length === 1 ? ' book' : ' books'}
+					</Badge>
 
-				<Badge variant="outline" class="inline-flex items-center gap-1">
-					{#if data.series.isComplete}
-						<CheckCircle2Icon class="h-3.5 w-3.5" />
-						Complete
-					{:else}
-						<CircleDashedIcon class="h-3.5 w-3.5" />
-						Ongoing
+					<Badge variant="outline" class="inline-flex items-center gap-1">
+						{#if data.series.isComplete}
+							<CheckCircle2Icon class="h-3.5 w-3.5" />
+							Complete
+						{:else}
+							<CircleDashedIcon class="h-3.5 w-3.5" />
+							Ongoing
+						{/if}
+					</Badge>
+
+					{#if data.series.goodreadsUrl}
+						<a
+							href={data.series.goodreadsUrl}
+							target="_blank"
+							rel="noopener noreferrer external"
+							class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+						>
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+							Goodreads
+						</a>
 					{/if}
-				</Badge>
-
-				{#if data.series.goodreadsUrl}
-					<a
-						href={data.series.goodreadsUrl}
-						target="_blank"
-						rel="noopener noreferrer external"
-						class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-					>
-						<ExternalLinkIcon class="h-3.5 w-3.5" />
-						Goodreads
-					</a>
+					{#if data.permissions.has('series:edit')}
+						<Button
+							variant="outline"
+							size="sm"
+							href={resolve('/admin/series/[slug]', { slug: data.series.slug })}
+						>
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+							Series Admin
+						</Button>
+					{/if}
+				</div>
+				{#if data.seriesGenres.length > 0}
+					<div class="flex flex-wrap items-center gap-2">
+						{#each data.seriesGenres as genre (genre.id)}
+							<Badge variant="secondary">{genre.name}</Badge>
+						{/each}
+					</div>
 				{/if}
 			</div>
 
@@ -226,7 +245,7 @@
 				{#each data.relatedThreads as { thread, author } (thread.id)}
 					<a href={resolve(`/thread/${thread.slug}`)} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
-							<Card.Content class="flex items-start gap-3 py-3">
+							<Card.Content class="flex items-start gap-3">
 								<Avatar.Root class="mt-0.5 h-8 w-8 shrink-0">
 									{#if author.avatarUrl}
 										<Avatar.Image src={author.avatarUrl} alt={author.displayName} />

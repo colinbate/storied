@@ -245,7 +245,7 @@
 			</div>
 
 			<Card.Root>
-				<Card.Content class="space-y-5 py-5">
+				<Card.Content class="space-y-5">
 					<div class="flex gap-3">
 						<Avatar.Root class="mt-0.5 h-10 w-10 shrink-0">
 							{#if data.primaryThread.author.avatarUrl}
