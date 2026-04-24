@@ -1,4 +1,4 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
@@ -11,12 +11,11 @@ import {
 	subjectSources,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
-import { eq, and, desc, inArray, asc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
-import { newId } from '$lib/server/ids';
 
 const SUBJECT = 'book' as const;
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);

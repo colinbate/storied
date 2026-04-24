@@ -25,7 +25,9 @@
 	let saving = $state(false);
 
 	// Genre multi-picker state
-	let selectedGenreIds = $derived(data.genreLinks.map((g) => g.genreId));
+	let selectedGenres = $derived(
+		data.genreLinks.map((g) => ({ id: g.genre.id, name: g.genre.name }))
+	);
 
 	// Series add state
 	let addSeriesId = $state<string | undefined>(undefined);
@@ -202,12 +204,8 @@
 				}}
 				class="space-y-3"
 			>
-				<GenreMultiPicker
-					genres={genrePickerItems}
-					bind:selectedIds={selectedGenreIds}
-					name="genreIds"
-				/>
-				<Button type="submit" size="sm" disabled={saving}>Save Genres</Button>
+				<GenreMultiPicker genres={genrePickerItems} {selectedGenres} name="genreIds" />
+				<Button type="submit" disabled={saving}>Save Genres</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>

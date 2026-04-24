@@ -215,7 +215,7 @@
 					<Label for="favoriteGenresText">Favorite Genres ({profileGenres.length}/5)</Label>
 					<ProfileGenrePicker
 						genres={data.allGenres}
-						bind:selectedGenres={profileGenres}
+						selectedGenres={profileGenres}
 						name="favoriteGenresText"
 					/>
 				</div>
