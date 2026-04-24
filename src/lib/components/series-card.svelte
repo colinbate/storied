@@ -75,7 +75,9 @@
 		</div>
 	</a>
 {:else}
-	<Card.Root class="group overflow-hidden border-border/70 transition-colors hover:border-primary/40">
+	<Card.Root
+		class="group overflow-hidden border-border/70 transition-colors hover:border-primary/40"
+	>
 		<a
 			href={resolve(`/series/${series.slug}`)}
 			class="flex gap-4 p-4 sm:gap-5 sm:p-5"
@@ -103,7 +105,8 @@
 					</Badge>
 					{#if series.bookCount != null}
 						<Badge variant="secondary">
-							{series.bookCount} {series.bookCount === 1 ? 'book' : 'books'}
+							{series.bookCount}
+							{series.bookCount === 1 ? 'book' : 'books'}
 						</Badge>
 					{/if}
 					{#if series.isComplete != null}

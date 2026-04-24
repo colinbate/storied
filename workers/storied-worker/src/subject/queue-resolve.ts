@@ -14,8 +14,15 @@ export async function handleSubjectResolve(
 	payload: SubjectResolvePayload,
 	{ env }: HandlerContext
 ): Promise<void> {
-	const { subjectSourceId, sourceType, threadId, postId, sessionLink, seriesBookLink, userFeatureLink } =
-		payload;
+	const {
+		subjectSourceId,
+		sourceType,
+		threadId,
+		postId,
+		sessionLink,
+		seriesBookLink,
+		userFeatureLink
+	} = payload;
 
 	const source = await env.DB.prepare(
 		`SELECT id, fetch_status, subject_type, subject_id FROM subject_sources WHERE id = ?`

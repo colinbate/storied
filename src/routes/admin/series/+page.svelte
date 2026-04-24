@@ -318,13 +318,10 @@
 					</Card.Title>
 				</div>
 				<div class="relative w-64 max-w-full">
-					<SearchIcon class="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						type="search"
-						placeholder="Filter series..."
-						class="pl-8"
-						bind:value={filter}
+					<SearchIcon
+						class="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
 					/>
+					<Input type="search" placeholder="Filter series..." class="pl-8" bind:value={filter} />
 				</div>
 			</div>
 		</Card.Header>
@@ -333,7 +330,9 @@
 				{#each filteredSeries as s (s.id)}
 					<a
 						href={resolve('/admin/series/[slug]', { slug: s.slug })}
-						class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50 {s.deletedAt ? 'opacity-60' : ''}"
+						class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50 {s.deletedAt
+							? 'opacity-60'
+							: ''}"
 					>
 						{#if s.coverUrl}
 							<img

@@ -70,9 +70,7 @@
 							</ConfirmButton>
 						</div>
 					{:else}
-						<div class="py-8 text-center text-sm text-muted-foreground">
-							No deleted threads.
-						</div>
+						<div class="py-8 text-center text-sm text-muted-foreground">No deleted threads.</div>
 					{/each}
 				</div>
 			</Card.Content>

@@ -151,7 +151,7 @@ export async function ensureSubjectSource(
 						position: sideEffects.seriesBookLink.position ?? null,
 						positionSort: sideEffects.seriesBookLink.positionSort ?? null
 					})
-				.onConflictDoNothing();
+					.onConflictDoNothing();
 			}
 		}
 		if (sideEffects.userFeatureLink) {
@@ -173,7 +173,10 @@ export async function ensureSubjectSource(
 			if (alreadyFeatured || existingFeatured.length < 5) {
 				const featuredOrder =
 					sideEffects.userFeatureLink.featuredOrder ??
-					existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) + 1;
+					existingFeatured.reduce(
+						(max, relation) => Math.max(max, relation.featuredOrder ?? 0),
+						0
+					) + 1;
 
 				await db
 					.insert(userSubjects)

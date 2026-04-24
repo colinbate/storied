@@ -78,7 +78,9 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="text-base">Create a New Genre</Card.Title>
-				<Card.Description>Genres can be nested. Leave parent empty for a top-level genre.</Card.Description>
+				<Card.Description
+					>Genres can be nested. Leave parent empty for a top-level genre.</Card.Description
+				>
 			</Card.Header>
 			<Card.Content>
 				<form
@@ -188,12 +190,7 @@
 							<div class="grid gap-3 sm:grid-cols-2">
 								<div class="space-y-1">
 									<Label for="edit-name-{genre.id}">Name</Label>
-									<Input
-										id="edit-name-{genre.id}"
-										name="name"
-										value={genre.name}
-										required
-									/>
+									<Input id="edit-name-{genre.id}" name="name" value={genre.name} required />
 								</div>
 								<div class="space-y-1">
 									<Label>Parent</Label>
@@ -224,11 +221,7 @@
 										class="h-4 w-4"
 									/>
 									<Label for="edit-speculative-{genre.id}">Speculative fiction</Label>
-									<input
-										type="hidden"
-										name="isSpeculative"
-										value={editIsSpeculative ? '1' : '0'}
-									/>
+									<input type="hidden" name="isSpeculative" value={editIsSpeculative ? '1' : '0'} />
 								</div>
 							</div>
 							<div class="flex items-center gap-2">
@@ -274,11 +267,7 @@
 									</p>
 								{/if}
 							</div>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								onclick={() => startEdit(genre.id)}
-							>
+							<Button variant="ghost" size="icon-sm" onclick={() => startEdit(genre.id)}>
 								<PencilIcon class="h-4 w-4" />
 							</Button>
 						</div>

@@ -178,7 +178,13 @@
 						</div>
 						<div class="space-y-2">
 							<Label for="firstPublishYear">First Publish Year</Label>
-							<Input id="firstPublishYear" name="firstPublishYear" type="number" min="0" max="9999" />
+							<Input
+								id="firstPublishYear"
+								name="firstPublishYear"
+								type="number"
+								min="0"
+								max="9999"
+							/>
 						</div>
 						<div class="space-y-2">
 							<Label for="amazonAsin">Amazon ASIN</Label>
@@ -319,16 +325,15 @@
 			<div class="flex items-center justify-between gap-2">
 				<div class="flex items-center gap-2">
 					<BookOpenIcon class="h-5 w-5 text-primary" />
-					<Card.Title class="text-base">All Books ({filteredBooks.length} / {data.books.length})</Card.Title>
+					<Card.Title class="text-base"
+						>All Books ({filteredBooks.length} / {data.books.length})</Card.Title
+					>
 				</div>
 				<div class="relative w-64 max-w-full">
-					<SearchIcon class="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						type="search"
-						placeholder="Filter books..."
-						class="pl-8"
-						bind:value={filter}
+					<SearchIcon
+						class="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
 					/>
+					<Input type="search" placeholder="Filter books..." class="pl-8" bind:value={filter} />
 				</div>
 			</div>
 		</Card.Header>
@@ -337,7 +342,9 @@
 				{#each filteredBooks as book (book.id)}
 					<a
 						href={resolve('/admin/books/[slug]', { slug: book.slug })}
-						class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50 {book.deletedAt ? 'opacity-60' : ''}"
+						class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50 {book.deletedAt
+							? 'opacity-60'
+							: ''}"
 					>
 						{#if book.coverUrl}
 							<img

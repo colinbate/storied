@@ -79,9 +79,7 @@
 						{#each genres as g (g.id)}
 							<Command.Item value={g.name} onSelect={() => toggle(g.id)}>
 								{g.name}
-								<Check
-									class={['ml-auto', !selectedSet.has(g.id) && 'text-transparent']}
-								/>
+								<Check class={['ml-auto', !selectedSet.has(g.id) && 'text-transparent']} />
 							</Command.Item>
 						{/each}
 					</div>

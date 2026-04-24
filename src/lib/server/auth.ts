@@ -1,9 +1,17 @@
 import { nanoid } from 'nanoid';
 import { eq, and, gt, gte, isNull, sql, or } from 'drizzle-orm';
 import type { ORM } from './db';
-import { users, authMagicLinks, userSessions, notificationPreferences, invites } from './db/schema';
+import {
+	users,
+	authMagicLinks,
+	userSessions,
+	notificationPreferences,
+	invites,
+	subscriptions
+} from './db/schema';
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
+import { ANNOUNCEMENTS_CATEGORY_ID } from './discussions';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
@@ -228,6 +236,15 @@ export async function findOrCreateUser(
 	// Seed a notification_preferences row for the new user. The migration
 	// backfills existing users; this handles new ones.
 	await db.insert(notificationPreferences).values({ userId: id }).onConflictDoNothing();
+	await db
+		.insert(subscriptions)
+		.values({
+			id: nanoid(),
+			userId: id,
+			categoryId: ANNOUNCEMENTS_CATEGORY_ID,
+			mode: 'immediate'
+		})
+		.onConflictDoNothing();
 
 	return { id, isNew: true };
 }

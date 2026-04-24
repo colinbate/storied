@@ -283,10 +283,7 @@ async function runDigestForUser(
 		followedThreadCount: followedThreads.length,
 		followedPostCount: followedThreads.reduce((acc, t) => acc + t.posts.length, 0),
 		followedCategoryCount: followedCategories.length,
-		followedCategoryThreadCount: followedCategories.reduce(
-			(acc, c) => acc + c.threads.length,
-			0
-		),
+		followedCategoryThreadCount: followedCategories.reduce((acc, c) => acc + c.threads.length, 0),
 		siteCounts
 	};
 

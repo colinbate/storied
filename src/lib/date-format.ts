@@ -40,7 +40,10 @@ function parseDate(value: string) {
 	return new Date(value);
 }
 
-export function formatDate(value: string | Date | null | undefined, options: FormatDateOptions = {}) {
+export function formatDate(
+	value: string | Date | null | undefined,
+	options: FormatDateOptions = {}
+) {
 	if (!value) return options.empty ?? 'Date to be announced';
 
 	let source: string | null = null;

@@ -25,8 +25,15 @@ export async function resolveGoodreadsSeries(
 	payload: SubjectResolvePayload,
 	env: Env
 ): Promise<void> {
-	const { subjectSourceId, sourceUrl, threadId, postId, sessionLink, seriesBookLink, userFeatureLink } =
-		payload;
+	const {
+		subjectSourceId,
+		sourceUrl,
+		threadId,
+		postId,
+		sessionLink,
+		seriesBookLink,
+		userFeatureLink
+	} = payload;
 
 	const metadata = await scrapeGoodreadsSeries(sourceUrl);
 	if (!metadata) {
