@@ -88,7 +88,7 @@
 					saving = true;
 					return async ({ result, update }) => {
 						saving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
 							if (result.data?.updated) toast.success('Series updated.');
 							if (result.data?.error) toast.error(String(result.data.error));

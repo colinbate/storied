@@ -89,7 +89,7 @@
 					saving = true;
 					return async ({ result, update }) => {
 						saving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
 							if (result.data?.updated) toast.success('Book updated.');
 							if (result.data?.error) toast.error(String(result.data.error));
@@ -489,7 +489,9 @@
 						<NativeSelect.Option value="starter">starter</NativeSelect.Option>
 						<NativeSelect.Option value="featured">featured</NativeSelect.Option>
 						<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-						<NativeSelect.Option value="mentioned_off_theme">mentioned off theme</NativeSelect.Option>
+						<NativeSelect.Option value="mentioned_off_theme"
+							>mentioned off theme</NativeSelect.Option
+						>
 					</NativeSelect.Root>
 				</div>
 				<div class="flex-1 space-y-1">

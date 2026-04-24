@@ -289,7 +289,7 @@
 							if (result.data?.featureAdded) {
 								toast.success('Featured subject updated.');
 							} else if (result.data?.featureQueued) {
-								toast.success('URL queued for processing.');
+								toast.success('URL queued for processing. Give it a minute to show up.');
 							}
 							featureBookId = undefined;
 							featureSeriesId = undefined;
