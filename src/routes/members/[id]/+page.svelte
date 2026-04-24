@@ -85,55 +85,9 @@
 					{#each data.featuredSubjects as item (item.relation.subjectType + item.relation.subjectId)}
 						<div class="space-y-2">
 							{#if item.kind === 'book'}
-								<a
-									href={resolve('/books/[slug]', { slug: item.book.slug })}
-									class="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:border-primary/40"
-								>
-									{#if item.book.coverUrl}
-										<img
-											src={item.book.coverUrl}
-											alt={item.book.title}
-											class="h-24 w-16 shrink-0 rounded object-cover shadow-sm"
-										/>
-									{:else}
-										<div
-											class="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-muted"
-										>
-											<StarIcon class="h-5 w-5 text-muted-foreground" />
-										</div>
-									{/if}
-									<div class="min-w-0 flex-1">
-										<h3 class="leading-tight font-medium">{item.book.title}</h3>
-										{#if item.book.authorText}
-											<p class="mt-1 text-sm text-muted-foreground">{item.book.authorText}</p>
-										{/if}
-									</div>
-								</a>
+								<BookCard book={item.book} />
 							{:else}
-								<a
-									href={resolve('/series/[slug]', { slug: item.series.slug })}
-									class="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:border-primary/40"
-								>
-									{#if item.series.coverUrl}
-										<img
-											src={item.series.coverUrl}
-											alt={item.series.title}
-											class="h-24 w-16 shrink-0 rounded object-cover shadow-sm"
-										/>
-									{:else}
-										<div
-											class="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-muted"
-										>
-											<StarIcon class="h-5 w-5 text-muted-foreground" />
-										</div>
-									{/if}
-									<div class="min-w-0 flex-1">
-										<h3 class="leading-tight font-medium">{item.series.title}</h3>
-										{#if item.series.authorText}
-											<p class="mt-1 text-sm text-muted-foreground">{item.series.authorText}</p>
-										{/if}
-									</div>
-								</a>
+								<SeriesCard series={item.series} />
 							{/if}
 							{#if item.relation.note}
 								<details class="px-2 text-xs text-muted-foreground">
