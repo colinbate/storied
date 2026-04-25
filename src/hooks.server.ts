@@ -6,10 +6,13 @@ import { sequence } from '@sveltejs/kit/hooks';
 const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?: boolean }[] = [
 	{ route: '/api/', isPrefix: true, perms: undefined },
 	{ route: '/auth/', isPrefix: true, perms: undefined },
+	{ route: '/author', isPrefix: true, perms: 'access:general' },
 	{ route: '/admin', isPrefix: true, perms: 'admin:view' },
 	{ route: '/books/', isPrefix: true, perms: 'access:general' },
 	{ route: '/category/', isPrefix: true, perms: 'access:general' },
 	{ route: '/new', isPrefix: false, perms: 'access:general' },
+	{ route: '/search', isPrefix: true, perms: 'access:general' },
+	{ route: '/series', isPrefix: true, perms: 'access:general' },
 	{ route: '/settings', isPrefix: true, perms: 'access:general' },
 	{ route: '/thread', isPrefix: true, perms: 'access:general' },
 	{ route: '/', isPrefix: false, perms: 'access:general' },
@@ -36,7 +39,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 		'genre:edit',
 		'series:edit',
 		'members:edit',
-		'sessions:edit'
+		'sessions:edit',
+		'search:rebuild'
 	]
 };
 

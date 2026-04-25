@@ -1,6 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { users, threads, posts, categories } from '$lib/server/db/schema';
 import { count } from 'drizzle-orm';
+import type { Actions } from './$types';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const [userCount] = await locals.db.select({ count: count() }).from(users);
@@ -16,4 +18,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			categories: categoryCount.count
 		}
 	};
+};
+
+export const actions: Actions = {
+	rebuildSearch: async ({ platform, locals }) => {
+		if (!locals.permissions.has('search:rebuild')) return { searchRebuildQueued: false };
+		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'search.rebuild', { scope: 'all' });
+		return { searchRebuildQueued: true };
+	}
 };

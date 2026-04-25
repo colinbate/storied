@@ -4,6 +4,8 @@
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import MessagesSquareIcon from '@lucide/svelte/icons/messages-square';
 	import FolderIcon from '@lucide/svelte/icons/folder';
+	import SearchIcon from '@lucide/svelte/icons/search';
+	import { Button } from '$lib/components/ui/button/index.js';
 
 	let { data } = $props();
 
@@ -37,4 +39,21 @@
 			</Card.Root>
 		{/each}
 	</div>
+
+	{#if data.permissions.has('search:rebuild')}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">Search index</Card.Title>
+				<Card.Description>Queue a full rebuild of the derived FTS indexes.</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<form method="POST" action="?/rebuildSearch">
+					<Button type="submit" variant="outline">
+						<SearchIcon class="h-4 w-4" />
+						Rebuild Search
+					</Button>
+				</form>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 </div>

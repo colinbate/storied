@@ -9,6 +9,7 @@ import {
 	linkUserFeaturedSubject,
 	markSourceFailed
 } from './links';
+import { reindexSession, reindexSubject, reindexThread } from '$shared/search';
 
 async function findExistingSeries(
 	db: D1Database,
@@ -96,4 +97,8 @@ export async function resolveGoodreadsSeries(
 	await linkSessionSubject(env.DB, 'series', seriesId, sessionLink);
 	await linkSeriesBook(env.DB, 'series', seriesId, seriesBookLink);
 	await linkUserFeaturedSubject(env.DB, 'series', seriesId, userFeatureLink);
+	await reindexSubject(env.DB, 'series', seriesId);
+	if (seriesBookLink?.bookId) await reindexSubject(env.DB, 'book', seriesBookLink.bookId);
+	if (threadId) await reindexThread(env.DB, threadId);
+	if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);
 }

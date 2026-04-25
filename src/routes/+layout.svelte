@@ -12,6 +12,7 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import UserIcon from '@lucide/svelte/icons/user';
 	import { resolve } from '$app/paths';
@@ -36,6 +37,18 @@
 
 			<div class="flex items-center gap-2">
 				{#if user}
+					<form action={resolve('/search')} method="GET" class="relative hidden md:block">
+						<SearchIcon
+							class="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+						/>
+						<input
+							type="search"
+							name="q"
+							aria-label="Search"
+							placeholder="Search"
+							class="h-9 w-36 rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:w-48"
+						/>
+					</form>
 					<Button
 						href={resolve('/sessions')}
 						variant="ghost"

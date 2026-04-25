@@ -8,6 +8,7 @@ import { dispatchWorkerMessage, dispatchScheduled } from '../dispatch';
  *
  *   POST /test/queue          body: WorkerMessage      — run a queue handler
  *   POST /test/cron?cron=…                             — run the scheduled dispatcher
+ *   POST /test/search/rebuild?scope=all|subject|thread|session
  *   GET  /resolve?id=&thread=&post=                     — shortcut for subject.resolve
  *   GET  /                                              — health
  */
@@ -38,6 +39,25 @@ export async function handleFetchTestRoute(
 		try {
 			await dispatchScheduled(cron, { env, ctx });
 			return json({ ok: true });
+		} catch (err) {
+			return json({ ok: false, error: errMessage(err) }, 500);
+		}
+	}
+
+	if (url.pathname === '/test/search/rebuild' && request.method === 'GET') {
+		const scope = url.searchParams.get('scope') ?? 'all';
+		if (!['all', 'subject', 'thread', 'session'].includes(scope)) {
+			return json({ error: 'Invalid ?scope= parameter' }, 400);
+		}
+		try {
+			await dispatchWorkerMessage(
+				{
+					topic: 'search.rebuild',
+					payload: { scope: scope as 'all' | 'subject' | 'thread' | 'session' }
+				},
+				{ env, ctx }
+			);
+			return json({ ok: true, scope });
 		} catch (err) {
 			return json({ ok: false, error: errMessage(err) }, 500);
 		}

@@ -4,6 +4,12 @@ import { handleSubjectResolve } from './subject/queue-resolve';
 import { handleNewThreadFanout } from './notifications/queue-new-thread-fanout';
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
 import { runDailyDigest } from './notifications/scheduled-digest';
+import {
+	handleSearchRebuild,
+	handleSearchSessionReindex,
+	handleSearchSubjectReindex,
+	handleSearchThreadReindex
+} from './search/queue-search';
 
 export interface HandlerContext {
 	env: Env;
@@ -23,6 +29,18 @@ export async function dispatchWorkerMessage(
 			return;
 		case 'notifications.new-thread':
 			await handleNewThreadFanout(message.payload, context);
+			return;
+		case 'search.thread.reindex':
+			await handleSearchThreadReindex(message.payload, context);
+			return;
+		case 'search.session.reindex':
+			await handleSearchSessionReindex(message.payload, context);
+			return;
+		case 'search.subject.reindex':
+			await handleSearchSubjectReindex(message.payload, context);
+			return;
+		case 'search.rebuild':
+			await handleSearchRebuild(message.payload, context);
 			return;
 		default: {
 			const _exhaustive: never = message;

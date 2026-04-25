@@ -86,13 +86,38 @@ export interface NewThreadFanoutPayload {
 }
 
 // ────────────────────────────────────────────────
+// search.* — maintain derived FTS projection indexes
+// ────────────────────────────────────────────────
+
+export interface SearchThreadReindexPayload {
+	threadId: string;
+}
+
+export interface SearchSessionReindexPayload {
+	sessionId: string;
+}
+
+export interface SearchSubjectReindexPayload {
+	subjectType: SubjectType;
+	subjectId: string;
+}
+
+export interface SearchRebuildPayload {
+	scope?: 'all' | 'thread' | 'session' | 'subject';
+}
+
+// ────────────────────────────────────────────────
 // Discriminated union
 // ────────────────────────────────────────────────
 
 export type WorkerMessage =
 	| { topic: 'subject.resolve'; payload: SubjectResolvePayload }
 	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload }
-	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload };
+	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload }
+	| { topic: 'search.thread.reindex'; payload: SearchThreadReindexPayload }
+	| { topic: 'search.session.reindex'; payload: SearchSessionReindexPayload }
+	| { topic: 'search.subject.reindex'; payload: SearchSubjectReindexPayload }
+	| { topic: 'search.rebuild'; payload: SearchRebuildPayload };
 
 export type WorkerTopic = WorkerMessage['topic'];
 

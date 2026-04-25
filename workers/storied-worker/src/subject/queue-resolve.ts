@@ -9,6 +9,7 @@ import {
 } from './links';
 import { resolveGoodreadsBook } from './resolve-book';
 import { resolveGoodreadsSeries } from './resolve-series';
+import { reindexSession, reindexSubject, reindexThread } from '$shared/search';
 
 export async function handleSubjectResolve(
 	payload: SubjectResolvePayload,
@@ -47,6 +48,9 @@ export async function handleSubjectResolve(
 		await linkSessionSubject(env.DB, resolvedType, source.subject_id, sessionLink);
 		await linkSeriesBook(env.DB, resolvedType, source.subject_id, seriesBookLink);
 		await linkUserFeaturedSubject(env.DB, resolvedType, source.subject_id, userFeatureLink);
+		await reindexSubject(env.DB, resolvedType, source.subject_id);
+		if (threadId) await reindexThread(env.DB, threadId);
+		if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);
 		return;
 	}
 
