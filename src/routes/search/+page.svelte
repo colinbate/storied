@@ -43,7 +43,7 @@
 </script>
 
 <svelte:head>
-	<title>Search — Storied</title>
+	<title>Search — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

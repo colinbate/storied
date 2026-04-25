@@ -279,7 +279,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.thread.title} — Storied</title>
+	<title>{data.thread.title} — The Archive</title>
 </svelte:head>
 
 <div class="flex flex-col gap-6 lg:flex-row">

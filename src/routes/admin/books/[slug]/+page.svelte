@@ -61,7 +61,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.book.title} — Books Admin — Storied</title>
+	<title>{data.book.title} — Books Admin — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

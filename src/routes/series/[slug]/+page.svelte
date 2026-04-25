@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.series.title} — Storied</title>
+	<title>{data.series.title} — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

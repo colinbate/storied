@@ -1,3 +1,5 @@
+import { APP_NAME, APP_SUBTITLE, NOTIFICATION_FROM_ADDRESS } from '$shared/brand';
+
 interface EmailOptions {
 	to: string;
 	subject: string;
@@ -5,7 +7,7 @@ interface EmailOptions {
 	htmlBody?: string;
 }
 
-const FROM_ADDRESS = 'notify@discuss.bermudatrianglesociety.com';
+const FROM_ADDRESS = NOTIFICATION_FROM_ADDRESS;
 const FROM_NAME = 'Bermuda Triangle Society';
 
 /**
@@ -59,12 +61,13 @@ export async function sendMagicLinkEmail(
 
 	return sendEmail(platform, {
 		to: email,
-		subject: 'Sign in to Bermuda Triangle Society Discussions',
-		textBody: `Click the link below to sign in:\n\n${magicUrl}\n\nOr enter this code on the sign-in page if you're on a different device:\n\n${displayCode}\n\nThe link and code expire in 15 minutes and can only be used once.\n\nIf you didn't request this, you can safely ignore this email.`,
+		subject: `Sign in to ${APP_NAME}`,
+		textBody: `Click the link below to sign in to ${APP_NAME}.\n\n${magicUrl}\n\nOr enter this code on the sign-in page if you're on a different device:\n\n${displayCode}\n\nThe link and code expire in 15 minutes and can only be used once.\n\nIf you didn't request this, you can safely ignore this email.`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-        <h2 style="color: #1a1a2e; margin-bottom: 24px;">Sign in to Bermuda Triangle Society</h2>
-        <p style="color: #444; line-height: 1.6;">Click the button below to sign in to the discussion forum:</p>
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
+        <h2 style="color: #1a1a2e; margin-bottom: 24px;">Sign in to ${APP_NAME}</h2>
+        <p style="color: #444; line-height: 1.6;">Click the button below to sign in:</p>
         <div style="margin: 32px 0; text-align: center;">
           <a href="${magicUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Sign In
@@ -94,12 +97,12 @@ export async function sendInviteEmail(
 ): Promise<{ success: boolean; error?: string }> {
 	return sendEmail(platform, {
 		to: email,
-		subject: 'Invitation to Bermuda Triangle Society Discussions',
-		textBody: `You've been invited to join Bermuda Triangle Society Discussions.\n\nUse this invitation link to sign in:\n\n${inviteUrl}\n\nIf you weren't expecting this, you can safely ignore this email.`,
+		subject: `Invitation to ${APP_NAME}`,
+		textBody: `You've been invited to join ${APP_NAME}, ${APP_SUBTITLE}.\n\nUse this invitation link to sign in:\n\n${inviteUrl}\n\nIf you weren't expecting this, you can safely ignore this email.`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color: #1a1a2e; margin-bottom: 24px;">You're invited</h2>
-        <p style="color: #444; line-height: 1.6;">Use the button below to join Bermuda Triangle Society Discussions:</p>
+        <p style="color: #444; line-height: 1.6;">Use the button below to join ${APP_NAME}, ${APP_SUBTITLE}:</p>
         <div style="margin: 32px 0; text-align: center;">
           <a href="${inviteUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Accept Invitation

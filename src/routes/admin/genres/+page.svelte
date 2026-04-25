@@ -55,7 +55,7 @@
 </script>
 
 <svelte:head>
-	<title>Genres — Admin — Storied</title>
+	<title>Genres — Admin — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

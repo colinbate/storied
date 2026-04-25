@@ -8,7 +8,11 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),
 		csrf: {
-			trustedOrigins: ['https://bermudatrianglesociety.com']
+			trustedOrigins: [
+				'https://bermudatrianglesociety.com',
+				'https://archive.bermudatrianglesociety.com',
+				'https://discuss.bermudatrianglesociety.com'
+			]
 		},
 		alias: {
 			$shared: 'shared'

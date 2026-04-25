@@ -49,7 +49,7 @@
 </script>
 
 <svelte:head>
-	<title>Members — Admin — Storied</title>
+	<title>Members — Admin — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

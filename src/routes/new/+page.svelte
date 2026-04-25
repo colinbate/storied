@@ -21,7 +21,7 @@
 </script>
 
 <svelte:head>
-	<title>New Thread — Storied</title>
+	<title>New Thread — The Archive</title>
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl space-y-6">

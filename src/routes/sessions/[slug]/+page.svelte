@@ -75,7 +75,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.session.title} — Storied</title>
+	<title>{data.session.title} — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

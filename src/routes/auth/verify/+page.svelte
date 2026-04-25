@@ -16,7 +16,7 @@
 </script>
 
 <svelte:head>
-	<title>Signing in… — Storied</title>
+	<title>Signing in… — The Archive</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

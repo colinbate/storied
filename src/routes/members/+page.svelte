@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Members — Storied</title>
+	<title>Members — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

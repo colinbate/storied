@@ -18,7 +18,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin Dashboard — Storied</title>
+	<title>Admin Dashboard — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

@@ -1,3 +1,4 @@
+import { PRIMARY_ORIGIN } from '$shared/brand';
 import type { HandlerContext } from '../dispatch';
 import { generateId } from '../shared/ids';
 import {
@@ -329,8 +330,7 @@ export async function runDailyDigest({ env }: HandlerContext): Promise<void> {
 
 	// Derive a base URL for thread links. Prefer an explicitly configured
 	// value; fall back to the production hostname.
-	const baseUrl =
-		env.DIGEST_BASE_URL?.replace(/\/$/, '') ?? 'https://discuss.bermudatrianglesociety.com';
+	const baseUrl = env.DIGEST_BASE_URL?.replace(/\/$/, '') ?? PRIMARY_ORIGIN;
 
 	for (const user of users) {
 		try {

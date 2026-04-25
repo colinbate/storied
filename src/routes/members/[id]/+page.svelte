@@ -18,7 +18,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.member.displayName} — Storied</title>
+	<title>{data.member.displayName} — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

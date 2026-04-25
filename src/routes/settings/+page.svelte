@@ -145,7 +145,7 @@
 </script>
 
 <svelte:head>
-	<title>Settings — Storied</title>
+	<title>Settings — The Archive</title>
 </svelte:head>
 
 <div class="max-w-2xl space-y-6">

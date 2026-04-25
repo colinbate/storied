@@ -16,6 +16,7 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import UserIcon from '@lucide/svelte/icons/user';
 	import { resolve } from '$app/paths';
+	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME } from '$shared/brand';
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
@@ -32,7 +33,10 @@
 				class="flex items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
 			>
 				<img src="/favicon.svg" class="size-5" alt="logo of two message bubbles containing books" />
-				<span>Bermuda Triangle Society</span>
+				<span>{APP_NAME}</span>
+				<span class="hidden text-sm font-normal text-muted-foreground md:inline"
+					>{APP_SUBTITLE}</span
+				>
 			</a>
 
 			<div class="flex items-center gap-2">
@@ -142,7 +146,7 @@
 
 	<footer class="border-t py-6 text-center text-sm text-muted-foreground">
 		<div class="mx-auto max-w-5xl px-4">
-			<p>Bermuda Triangle Society Discussions &mdash; Powered by Storied</p>
+			<p>{APP_NAME} &mdash; Powered by {PRODUCT_NAME}</p>
 		</div>
 	</footer>
 </div>

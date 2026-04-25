@@ -22,7 +22,7 @@
 </script>
 
 <svelte:head>
-	<title>Moderation — Admin — Storied</title>
+	<title>Moderation — Admin — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

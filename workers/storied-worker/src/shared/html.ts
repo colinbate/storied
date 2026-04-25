@@ -1,9 +1,10 @@
+import { PRIMARY_ORIGIN } from '$shared/brand';
+
 export async function fetchHtml(url: string): Promise<Response | null> {
 	try {
 		const response = await fetch(url, {
 			headers: {
-				'User-Agent':
-					'Mozilla/5.0 (compatible; StoriedBot/1.0; +https://discuss.bermudatrianglesociety.com)',
+				'User-Agent': `Mozilla/5.0 (compatible; StoriedBot/1.0; +${PRIMARY_ORIGIN})`,
 				Accept: 'text/html'
 			},
 			redirect: 'follow'

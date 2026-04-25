@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { pageTitle } from '$shared/brand';
 
 	const status = $derived(page.status);
 	const message = $derived(page.error?.message ?? 'Something went wrong');
@@ -23,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>{status} — Bermuda Triangle Society</title>
+	<title>{pageTitle(String(status))}</title>
 </svelte:head>
 
 {#snippet errorIcon()}

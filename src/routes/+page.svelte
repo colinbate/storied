@@ -12,21 +12,22 @@
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import { resolve } from '$app/paths';
 	import { formatDate } from '$lib/date-format';
+	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
 </script>
 
 <svelte:head>
-	<title>Bermuda Triangle Society Discussions — Storied</title>
+	<title>{pageTitle()}</title>
 </svelte:head>
 
 <div class="space-y-8">
 	<!-- Header section -->
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-bold">Discussions</h1>
-			<p class="text-muted-foreground">Bermuda Triangle Society community forum</p>
+			<h1 class="text-2xl font-bold">{APP_NAME}</h1>
+			<p class="text-muted-foreground">{APP_SUBTITLE}</p>
 		</div>
 		<Button href="/new">
 			<PlusIcon class="h-4 w-4" />

@@ -46,7 +46,7 @@
 </script>
 
 <svelte:head>
-	<title>Books — Admin — Storied</title>
+	<title>Books — Admin — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

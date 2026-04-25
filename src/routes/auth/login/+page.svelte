@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import MailIcon from '@lucide/svelte/icons/mail';
+	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
 
 	let { form, data } = $props();
 	let loading = $state(false);
@@ -21,7 +22,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign In — Storied</title>
+	<title>{pageTitle('Sign In')}</title>
 </svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col items-center justify-center p-4">
@@ -44,9 +45,9 @@
 	{/if}
 	<Card.Root class="w-full max-w-md">
 		<Card.Header class="text-center">
-			<Card.Title class="text-2xl">Welcome</Card.Title>
+			<Card.Title class="text-2xl">Welcome to {APP_NAME}</Card.Title>
 			<Card.Description>
-				Sign in to Bermuda Triangle Society Discussions.
+				Sign in to {APP_SUBTITLE}.
 				<span class="block text-muted-foreground">
 					By using this system, you agree that we may send you email related to the society and its
 					discussions.

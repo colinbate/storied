@@ -1,3 +1,4 @@
+import { APP_NAME, APP_SUBTITLE, NOTIFICATION_FROM_ADDRESS } from '$shared/brand';
 import type { Env } from '../env';
 
 interface EmailOptions {
@@ -7,7 +8,7 @@ interface EmailOptions {
 	htmlBody?: string;
 }
 
-const FROM_ADDRESS = 'notify@discuss.bermudatrianglesociety.com';
+const FROM_ADDRESS = NOTIFICATION_FROM_ADDRESS;
 const FROM_NAME = 'Bermuda Triangle Society';
 
 /**
@@ -58,11 +59,11 @@ export function renderReplyNotificationEmail(args: ReplyNotificationTemplateArgs
 } {
 	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
-		subject: `New reply in "${args.threadTitle}" — BTS Discussions`,
+		subject: `New reply in "${args.threadTitle}" — ${APP_NAME}`,
 		textBody: `${args.replyAuthor} replied in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society Discussions</p>
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
         <h3 style="color: #1a1a2e; margin-top: 0;">${args.replyAuthor} replied in "${args.threadTitle}"</h3>
         <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
           <p style="color: #444; margin: 0; line-height: 1.5;">${args.replyPreview}</p>
@@ -100,11 +101,11 @@ export function renderNewThreadNotificationEmail(args: NewThreadNotificationTemp
 } {
 	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
-		subject: `New thread in ${args.categoryName} — BTS Discussions`,
+		subject: `New thread in ${args.categoryName} — ${APP_NAME}`,
 		textBody: `${args.threadAuthor} started "${args.threadTitle}" in ${args.categoryName}.\n\n${args.threadPreview}\n\nJoin the conversation: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society Discussions</p>
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
         <h3 style="color: #1a1a2e; margin-top: 0;">New thread in ${escapeHtml(args.categoryName)}</h3>
         <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${escapeHtml(args.threadAuthor)}</strong> started <strong>${escapeHtml(args.threadTitle)}</strong>.</p>
         <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
@@ -140,7 +141,7 @@ export function renderAnnouncementBroadcastEmail(args: AnnouncementBroadcastTemp
 		textBody: `${args.threadAuthor} posted a new announcement.\n\n${args.threadTitle}\n\n${args.threadPreview}\n\nRead it here: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">Bermuda Triangle Society</p>
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
         <h3 style="color: #1a1a2e; margin-top: 0;">New announcement</h3>
         <p style="color: #444; line-height: 1.6; margin: 0 0 12px;"><strong>${escapeHtml(args.threadAuthor)}</strong> posted <strong>${escapeHtml(args.threadTitle)}</strong>.</p>
         <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
@@ -223,8 +224,8 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 
 	const subject =
 		totalUpdates > 0
-			? `Your BTS digest — ${totalUpdates} update${totalUpdates === 1 ? '' : 's'}`
-			: 'Your BTS digest';
+			? `Your ${APP_NAME} digest — ${totalUpdates} update${totalUpdates === 1 ? '' : 's'}`
+			: `Your ${APP_NAME} digest`;
 
 	// ─── Text body ──────────────────────────────────────────────────────────
 	const textLines: string[] = [];
@@ -270,9 +271,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 	htmlParts.push(
 		`<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 16px; color: #1a1a2e;">`
 	);
-	htmlParts.push(
-		`<p style="color: #888; font-size: 13px; margin: 0 0 4px;">Bermuda Triangle Society Discussions</p>`
-	);
+	htmlParts.push(`<p style="color: #888; font-size: 13px; margin: 0 0 4px;">${APP_SUBTITLE}</p>`);
 	htmlParts.push(`<h2 style="margin: 0 0 8px;">Hi ${escapeHtml(args.displayName)},</h2>`);
 	htmlParts.push(
 		`<p style="color: #444; line-height: 1.5; margin: 0 0 24px;">Here's what's happened since ${escapeHtml(

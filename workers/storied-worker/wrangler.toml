@@ -11,6 +11,7 @@ enabled = true
 
 [vars]
 SEND_EMAILS = "yes"
+DIGEST_BASE_URL = "https://archive.bermudatrianglesociety.com"
 
 [[d1_databases]]
 binding = "DB"
@@ -24,7 +25,7 @@ max_batch_timeout = 1
 
 [[send_email]]
 name = "EMAIL"
-allowed_sender_addresses = ["notify@discuss.bermudatrianglesociety.com"]
+allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]
 
 # Cron triggers — handlers wired in src/dispatch.ts#dispatchScheduled.
 [triggers]

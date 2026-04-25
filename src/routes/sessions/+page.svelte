@@ -16,7 +16,7 @@
 </script>
 
 <svelte:head>
-	<title>Sessions — Storied</title>
+	<title>Sessions — The Archive</title>
 </svelte:head>
 
 <div class="space-y-8">

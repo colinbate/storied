@@ -42,7 +42,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.category.name} — Storied</title>
+	<title>{data.category.name} — The Archive</title>
 </svelte:head>
 
 <div class="space-y-6">

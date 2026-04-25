@@ -25,6 +25,10 @@ binding = "FILES"
 bucket_name = "storied"
 
 [[routes]]
+pattern = "archive.bermudatrianglesociety.com"
+custom_domain = true
+
+[[routes]]
 pattern = "discuss.bermudatrianglesociety.com"
 custom_domain = true
 
@@ -34,4 +38,4 @@ queue = "storied-worker-tasks"
 
 [[send_email]]
 name = "EMAIL"
-allowed_sender_addresses = ["notify@discuss.bermudatrianglesociety.com"]
+allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]
