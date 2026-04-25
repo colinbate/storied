@@ -20,7 +20,7 @@ database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
 [[queues.consumers]]
 queue = "storied-worker-tasks"
 max_batch_size = 10
-max_batch_timeout = 30
+max_batch_timeout = 1
 
 [[send_email]]
 name = "EMAIL"
