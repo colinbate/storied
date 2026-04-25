@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidate } from '$app/navigation';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
@@ -26,6 +27,7 @@
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
 	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -33,13 +35,22 @@
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import { formatDate } from '$lib/date-format';
 	import { cn } from '$lib/utils.js';
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 
 	let { data, form } = $props();
 	let replyBody = $state('');
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
+	let queuedSubjectLinks = $state<
+		Array<{
+			sourceType: 'goodreads' | 'goodreads-series';
+			sourceKey: string;
+			subjectKind: 'book' | 'series';
+		}>
+	>([]);
+	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
+	let queuedSubjectPollStartedAt = 0;
 
 	/** Post id currently being edited (empty string = editing the thread opener) */
 	let editingId = $state<string | null>(null);
@@ -51,6 +62,7 @@
 	const editWindowMs = $derived(data.postEditWindowMs ?? 24 * 60 * 60 * 1000);
 	const postsById = $derived(new Map(data.posts.map((entry) => [entry.post.id, entry])));
 	const replyingToPost = $derived(replyingTo ? postsById.get(replyingTo) : null);
+	const threadSubjectsDependency = $derived(`app:thread-subjects:${data.thread.id}`);
 
 	function canEdit(authorId: string, createdAt: string): boolean {
 		if (!currentUserId || currentUserId !== authorId) return false;
@@ -90,6 +102,115 @@
 	function getInitial(name: string) {
 		return name.charAt(0).toUpperCase();
 	}
+
+	function addQueuedSubjectLinks(
+		value:
+			| {
+					sourceType: 'goodreads' | 'goodreads-series';
+					sourceKey: string;
+					subjectKind: 'book' | 'series';
+			  }[]
+			| null
+			| undefined
+	) {
+		if (!Array.isArray(value)) return;
+
+		const next = [...queuedSubjectLinks];
+		const seenKeys = next.map((link) => `${link.sourceType}:${link.sourceKey}`);
+
+		for (const link of value) {
+			if (
+				typeof link !== 'object' ||
+				link === null ||
+				(link.sourceType !== 'goodreads' && link.sourceType !== 'goodreads-series') ||
+				(link.subjectKind !== 'book' && link.subjectKind !== 'series') ||
+				typeof link.sourceKey !== 'string'
+			) {
+				continue;
+			}
+
+			const key = `${link.sourceType}:${link.sourceKey}`;
+			if (seenKeys.includes(key)) continue;
+			seenKeys.push(key);
+			next.push({
+				sourceType: link.sourceType,
+				sourceKey: link.sourceKey,
+				subjectKind: link.subjectKind
+			});
+		}
+
+		queuedSubjectLinks = next;
+		startQueuedSubjectPolling();
+	}
+
+	function stopQueuedSubjectPolling() {
+		if (!queuedSubjectPollTimer) return;
+		clearTimeout(queuedSubjectPollTimer);
+		queuedSubjectPollTimer = null;
+	}
+
+	function getQueuedSubjectStatusUrl() {
+		const params = queuedSubjectLinks
+			.map((link) => `source=${encodeURIComponent(`${link.sourceType}:${link.sourceKey}`)}`)
+			.join('&');
+
+		return `${resolve('/thread/[slug]/subject-status', { slug: data.thread.slug })}?${params}`;
+	}
+
+	async function pollQueuedSubjectLinks() {
+		if (queuedSubjectLinks.length === 0) {
+			stopQueuedSubjectPolling();
+			return;
+		}
+
+		if (Date.now() - queuedSubjectPollStartedAt > 60_000) {
+			queuedSubjectLinks = [];
+			stopQueuedSubjectPolling();
+			return;
+		}
+
+		try {
+			const response = await fetch(getQueuedSubjectStatusUrl());
+			if (response.ok) {
+				const payload = (await response.json()) as {
+					sources?: Array<{
+						sourceType?: string;
+						sourceKey?: string;
+						status?: 'pending' | 'resolved' | 'failed' | 'unknown';
+					}>;
+				};
+
+				const finishedKeys = (payload.sources ?? [])
+					.filter((source) => source.status === 'resolved' || source.status === 'failed')
+					.map((source) => `${source.sourceType}:${source.sourceKey}`);
+				const hadResolved = (payload.sources ?? []).some((source) => source.status === 'resolved');
+
+				if (finishedKeys.length > 0) {
+					queuedSubjectLinks = queuedSubjectLinks.filter(
+						(link) => !finishedKeys.includes(`${link.sourceType}:${link.sourceKey}`)
+					);
+				}
+
+				if (hadResolved) {
+					await invalidate(threadSubjectsDependency);
+				}
+			}
+		} finally {
+			if (queuedSubjectLinks.length > 0) {
+				queuedSubjectPollTimer = setTimeout(pollQueuedSubjectLinks, 2_500);
+			} else {
+				stopQueuedSubjectPolling();
+			}
+		}
+	}
+
+	function startQueuedSubjectPolling() {
+		if (queuedSubjectLinks.length === 0 || queuedSubjectPollTimer) return;
+		queuedSubjectPollStartedAt = Date.now();
+		queuedSubjectPollTimer = setTimeout(pollQueuedSubjectLinks, 2_500);
+	}
+
+	onDestroy(stopQueuedSubjectPolling);
 
 	const editEnhance: SubmitFunction = () => {
 		editSaving = true;
@@ -237,10 +358,10 @@
 					<!-- Moderation widget -->
 					{#if data.canModerate}
 						<Popover.Root>
-							<Popover.Trigger class={buttonVariants({ variant: 'outline' })}
+							<Popover.Trigger class={buttonVariants({ variant: 'outline', class: 'h-10' })}
 								><ShieldIcon class="size-4" /></Popover.Trigger
 							>
-							<Popover.Content align="end">
+							<Popover.Content align="end" class="w-min">
 								<div class="flex items-center gap-2 font-medium">
 									<ShieldIcon class="h-4 w-4" />
 									<span class="font-medium">Moderator Tools</span>
@@ -611,9 +732,26 @@
 								loading = false;
 								await update();
 								if (result.type === 'success') {
+									const queued =
+										typeof result.data === 'object' && result.data !== null
+											? (
+													result.data as {
+														queuedSubjectLinks?: Array<{
+															sourceType: 'goodreads' | 'goodreads-series';
+															sourceKey: string;
+															subjectKind: 'book' | 'series';
+														}>;
+													}
+												).queuedSubjectLinks
+											: null;
+									addQueuedSubjectLinks(queued);
 									replyBody = '';
 									replyingTo = null;
-									toast.success('Reply posted!');
+									toast.success(
+										Array.isArray(queued) && queued.length > 0
+											? 'Reply posted. Goodreads links are being processed.'
+											: 'Reply posted!'
+									);
 								}
 							};
 						}}
@@ -630,6 +768,10 @@
 							bind:value={replyBody}
 							required
 						/>
+						<p class="text-xs text-muted-foreground">
+							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Goodreads book
+							and series URLs are linked to the thread after posting.
+						</p>
 						{#if form?.error}
 							<p class="text-sm text-destructive">{form.error}</p>
 						{/if}
@@ -652,9 +794,40 @@
 		{/if}
 	</div>
 
-	{#if data.books.length > 0 || data.series.length > 0}
+	{#if data.books.length > 0 || data.series.length > 0 || queuedSubjectLinks.length > 0}
 		<aside class="w-full shrink-0 lg:w-64">
 			<div class="sticky top-20 space-y-6">
+				{#if queuedSubjectLinks.length > 0}
+					<div>
+						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Processing</h3>
+						<div class="space-y-2">
+							{#each queuedSubjectLinks as link (`${link.sourceType}:${link.sourceKey}`)}
+								<div class="flex items-start gap-3 rounded-lg border border-dashed p-2">
+									<span
+										class="flex h-16 w-11 shrink-0 animate-pulse items-center justify-center rounded bg-muted"
+									>
+										{#if link.subjectKind === 'series'}
+											<LibraryIcon class="h-5 w-5 text-muted-foreground" />
+										{:else}
+											<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
+										{/if}
+									</span>
+									<div class="min-w-0 flex-1 space-y-2 pt-0.5">
+										<div class="flex items-center gap-1.5 text-sm leading-tight font-medium">
+											<LoaderCircleIcon class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+											<span>
+												{link.subjectKind === 'series' ? 'Series' : 'Book'} loading
+											</span>
+										</div>
+										<p class="text-xs text-muted-foreground">
+											Goodreads URL is being processed. It should appear here shortly.
+										</p>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
 				{#if data.series.length > 0}
 					<div>
 						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>

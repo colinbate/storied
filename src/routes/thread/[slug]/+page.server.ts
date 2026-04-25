@@ -15,7 +15,7 @@ import {
 	type SubjectType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
+import { eq, and, isNull, asc, inArray, not } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
@@ -39,7 +39,7 @@ function getSessionSubjectStatus(value: FormDataEntryValue | null): SessionSubje
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, depends }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
@@ -61,6 +61,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!thread) {
 		throw error(404, 'Thread not found');
 	}
+
+	depends(`app:thread-subjects:${thread.thread.id}`);
 
 	const threadPosts = await locals.db
 		.select({
@@ -293,6 +295,11 @@ export const actions: Actions = {
 
 		// Detect and process subject links (books and series)
 		const detectedLinks = detectSubjectLinks(bodySource);
+		const queuedSubjectLinks: Array<{
+			sourceType: 'goodreads' | 'goodreads-series';
+			sourceKey: string;
+			subjectKind: 'book' | 'series';
+		}> = [];
 		for (let i = 0; i < detectedLinks.length; i++) {
 			const link = detectedLinks[i];
 
@@ -326,6 +333,11 @@ export const actions: Actions = {
 						threadId: thread.id,
 						postId
 					});
+					queuedSubjectLinks.push({
+						sourceType: link.sourceType,
+						sourceKey: link.sourceKey,
+						subjectKind: link.subjectKind
+					});
 				}
 			} else {
 				sourceId = newId();
@@ -345,6 +357,11 @@ export const actions: Actions = {
 					sourceKey: link.sourceKey,
 					threadId: thread.id,
 					postId
+				});
+				queuedSubjectLinks.push({
+					sourceType: link.sourceType,
+					sourceKey: link.sourceKey,
+					subjectKind: link.subjectKind
 				});
 			}
 
@@ -373,7 +390,7 @@ export const actions: Actions = {
 			baseUrl: url.origin
 		});
 
-		return { success: true };
+		return { success: true, queuedSubjectLinks };
 	},
 
 	setSubscriptionMode: async ({ locals, params, request }) => {
@@ -424,7 +441,7 @@ export const actions: Actions = {
 		return { subscriptionMode: mode };
 	},
 
-	togglePin: async ({ request, locals, params }) => {
+	togglePin: async ({ request, locals }) => {
 		if (!locals.permissions.has('moderate')) {
 			return fail(403, { error: 'Not allowed.' });
 		}
@@ -433,28 +450,25 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
 
-		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
-		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
-
-		const newPinned = thread.isPinned;
 		const now = new Date().toISOString();
-		await locals.db
+		const thread = await locals.db
 			.update(threads)
-			.set({ isPinned: newPinned, updatedAt: now })
-			.where(eq(threads.id, threadId));
+			.set({ isPinned: not(threads.isPinned), updatedAt: now })
+			.where(eq(threads.id, threadId))
+			.returning();
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
 			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
-			action: newPinned ? 'pin' : 'unpin'
+			action: thread[0].isPinned ? 'pin' : 'unpin'
 		});
 
 		return { success: true };
 	},
 
-	toggleLock: async ({ request, locals, params }) => {
+	toggleLock: async ({ request, locals }) => {
 		if (!locals.permissions.has('moderate')) {
 			return fail(403, { error: 'Not allowed.' });
 		}
@@ -463,28 +477,25 @@ export const actions: Actions = {
 		const threadId = data.get('threadId')?.toString();
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
 
-		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
-		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
-
-		const newLocked = thread.isLocked;
 		const now = new Date().toISOString();
-		await locals.db
+		const thread = await locals.db
 			.update(threads)
-			.set({ isLocked: newLocked, updatedAt: now })
-			.where(eq(threads.id, threadId));
+			.set({ isLocked: not(threads.isLocked), updatedAt: now })
+			.where(eq(threads.id, threadId))
+			.returning();
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),
 			actorUserId: locals.user!.id,
 			targetType: 'thread',
 			targetId: threadId,
-			action: newLocked ? 'lock' : 'unlock'
+			action: thread[0].isLocked ? 'lock' : 'unlock'
 		});
 
 		return { success: true };
 	},
 
-	linkSession: async ({ request, locals, params }) => {
+	linkSession: async ({ request, locals }) => {
 		if (!locals.permissions.has('moderate')) {
 			return fail(403, { error: 'Not allowed.' });
 		}
@@ -495,9 +506,6 @@ export const actions: Actions = {
 		const sessionId = rawSessionId && rawSessionId.length > 0 ? rawSessionId : null;
 		const sessionThreadRole = sessionId ? 'related' : null;
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
-
-		const thread = await locals.db.select().from(threads).where(eq(threads.id, threadId)).get();
-		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Thread not found.' });
 
 		const now = new Date().toISOString();
 		await locals.db
