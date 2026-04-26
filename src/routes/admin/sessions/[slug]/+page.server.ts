@@ -13,7 +13,7 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
-import { slugify } from '$lib/server/slugify';
+import { normalizeSlug } from '$lib/server/slugify';
 
 type SubjectKind = 'book' | 'series';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -180,10 +180,19 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
-		const slug = slugify(getOptionalString(data, 'slug') ?? '');
+		const slug = normalizeSlug(getOptionalString(data, 'slug') ?? '');
 		if (!title || title.length < 2)
 			return fail(400, { error: 'Title must be at least 2 characters.' });
 		if (!slug) return fail(400, { error: 'Slug is required.' });
+
+		const existing = await locals.db
+			.select({ id: sessions.id })
+			.from(sessions)
+			.where(eq(sessions.slug, slug))
+			.get();
+		if (existing && existing.id !== row.id) {
+			return fail(400, { error: `A session with slug "${slug}" already exists.` });
+		}
 
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);

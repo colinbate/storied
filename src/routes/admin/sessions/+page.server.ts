@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { sessions, subscriptions } from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
@@ -83,44 +83,5 @@ export const actions: Actions = {
 		}
 
 		return { created: true };
-	},
-
-	update: async ({ request, locals }) => {
-		requirePermission(locals, 'sessions:edit');
-
-		const data = await request.formData();
-		const id = data.get('id')?.toString();
-		const title = data.get('title')?.toString()?.trim();
-		const slug = slugify(getOptionalString(data, 'slug') ?? title ?? '');
-		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
-		const bodySource = getOptionalString(data, 'bodySource');
-		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
-
-		if (!id || !title) return fail(400, { error: 'Missing required fields.' });
-		if (!slug) return fail(400, { error: 'Slug is required.' });
-
-		await locals.db
-			.update(sessions)
-			.set({
-				title,
-				slug,
-				status: getSessionStatus(data),
-				theme: themeTitle,
-				themeTitle,
-				themeSummary: getOptionalString(data, 'themeSummary'),
-				bodySource,
-				bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
-				startsAt: getOptionalString(data, 'startsAt'),
-				durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
-				locationName: getOptionalString(data, 'locationName'),
-				rsvpSlug: getOptionalString(data, 'rsvpSlug'),
-				isPublic: data.get('isPublic') === 'on',
-				astroPath: getOptionalString(data, 'astroPath'),
-				externalUrl: getOptionalString(data, 'externalUrl'),
-				updatedAt: new Date().toISOString()
-			})
-			.where(eq(sessions.id, id));
-
-		return { updated: true };
 	}
 };
