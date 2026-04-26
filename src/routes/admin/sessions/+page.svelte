@@ -130,7 +130,7 @@
 							/>
 						</div>
 						<label class="flex items-center gap-2 pt-8 text-sm">
-							<input name="isPublic" type="checkbox" class="rounded border-input" />
+							<input name="isPublic" type="checkbox" class="rounded border-input" checked />
 							Public
 						</label>
 					</div>
