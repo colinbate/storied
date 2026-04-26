@@ -20,7 +20,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 			id: sessions.id,
 			slug: sessions.slug,
 			title: sessions.title,
-			startsAt: sessions.startsAt,
+			date: sessions.startsAt,
+			start: sessions.startsAt,
 			status: sessions.status,
 			theme: sessions.theme,
 			themeTitle: sessions.themeTitle,
@@ -40,5 +41,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
-	return json(rows, { headers: publicApiHeaders });
+	return json(
+		rows.map((r) => ({ ...r, date: r.date?.split('T')[0], start: r.start?.split('T')[1] })),
+		{ headers: publicApiHeaders }
+	);
 };
