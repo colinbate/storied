@@ -13,10 +13,10 @@ function redirectToJoin(request: Request, status: 'ok' | 'invalid' = 'ok'): neve
 }
 
 function redirectToLogin(email: string): never {
-	const target = new URL(APP_LOGIN_URL);
-	target.searchParams.set('started', '1');
-	target.searchParams.set('email', email);
-	redirect(303, target.toString());
+	const target = new URLSearchParams();
+	target.set('started', '1');
+	target.set('email', email);
+	redirect(303, `${APP_LOGIN_URL}?${target.toString()}`);
 }
 
 export const POST: RequestHandler = async ({ request, locals, platform, cookies }) => {
