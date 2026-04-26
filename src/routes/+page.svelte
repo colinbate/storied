@@ -161,7 +161,7 @@
 									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
 										<span>{author.displayName}</span>
 										<span>·</span>
-										<span>{formatDate(thread.createdAt, { time: 'never', timeZone })}</span>
+										<span>{formatDate(thread.lastPostAt, { time: 'never', timeZone })}</span>
 										{#if thread.replyCount > 0}
 											<span>·</span>
 											<Badge variant="secondary" class="px-1.5 py-0 text-xs"
