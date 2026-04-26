@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 
 	let { data } = $props();
@@ -15,9 +16,28 @@
 	<div>
 		<h1 class="text-2xl font-bold">Members</h1>
 		<p class="text-muted-foreground">
-			Curated club profiles, recommendations, and shared reading taste.
+			Profiles from members who have chosen to introduce themselves to the archive.
+		</p>
+		<p class="mt-1 text-sm text-muted-foreground">
+			{data.members.length}
+			{data.members.length === 1 ? 'member has' : 'members have'} created public profiles.
+			{#if data.membersWithoutPublicProfiles > 0}
+				{data.membersWithoutPublicProfiles}
+				{data.membersWithoutPublicProfiles === 1 ? 'member has' : 'members have'} not yet.
+			{/if}
 		</p>
 	</div>
+
+	{#if !data.isCurrentUserListed}
+		<Card.Root>
+			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<p class="text-sm text-muted-foreground">
+					You're not listed here yet. Add public profile details when you're ready to be included.
+				</p>
+				<Button href={resolve('/settings')}>Edit Profile</Button>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	{#if data.members.length > 0}
 		<div class="grid gap-3 sm:grid-cols-2">
@@ -59,7 +79,7 @@
 		</div>
 	{:else}
 		<p class="rounded-lg border bg-card px-4 py-6 text-sm text-muted-foreground">
-			No public member profiles yet.
+			No members have created public profiles yet.
 		</p>
 	{/if}
 </div>

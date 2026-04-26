@@ -23,7 +23,8 @@
 	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
-	let loading = $state(false);
+	let accountLoading = $state(false);
+	let profileLoading = $state(false);
 	let avatarLoading = $state(false);
 	let avatarPreview: string | null = $state(null);
 
@@ -162,20 +163,20 @@
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Profile</Card.Title>
-			<Card.Description>Update your display name and profile information.</Card.Description>
+			<Card.Title>Account</Card.Title>
+			<Card.Description>Update the identity attached to your sign-in and posts.</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<form
 				method="POST"
-				action="?/updateProfile"
+				action="?/updateAccount"
 				use:enhance={() => {
-					loading = true;
+					accountLoading = true;
 					return async ({ result, update }) => {
-						loading = false;
+						accountLoading = false;
 						await update({ reset: false });
 						if (result.type === 'success') {
-							toast.success('Profile updated!');
+							toast.success('Account updated!');
 						}
 					};
 				}}
@@ -197,8 +198,45 @@
 						maxlength={50}
 					/>
 				</div>
+				{#if form?.error}
+					<p class="text-sm text-destructive">{form.error}</p>
+				{/if}
+				<Button type="submit" disabled={accountLoading}>
+					{accountLoading ? 'Saving…' : 'Save Account'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Public Profile</Card.Title>
+			<Card.Description>
+				Adding profile details or featured books makes your presence visible in the member list.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/updateProfile"
+				use:enhance={() => {
+					profileLoading = true;
+					return async ({ result, update }) => {
+						profileLoading = false;
+						await update({ reset: false });
+						if (result.type === 'success') {
+							toast.success('Profile updated!');
+						}
+					};
+				}}
+				class="space-y-4"
+			>
+				<div class="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+					These fields are for your archive profile. Adding values here creates a public member
+					profile, unless you turn off profile visibility below.
+				</div>
 				<div class="space-y-2">
-					<Label for="headline">Headline</Label>
+					<Label for="headline">Title or Headline</Label>
 					<Input
 						id="headline"
 						name="headline"
@@ -237,7 +275,7 @@
 							checked={data.profile?.showProfile ?? true}
 							class="rounded border-input"
 						/>
-						Show profile
+						Show in member list
 					</label>
 					<label class="flex items-center gap-2 text-sm">
 						<input
@@ -258,11 +296,8 @@
 						Show read books
 					</label>
 				</div>
-				{#if form?.error}
-					<p class="text-sm text-destructive">{form.error}</p>
-				{/if}
-				<Button type="submit" disabled={loading}>
-					{loading ? 'Saving…' : 'Save Changes'}
+				<Button type="submit" disabled={profileLoading}>
+					{profileLoading ? 'Saving…' : 'Save Profile'}
 				</Button>
 			</form>
 		</Card.Content>
@@ -272,8 +307,8 @@
 		<Card.Header>
 			<Card.Title>Featured On Profile</Card.Title>
 			<Card.Description>
-				Pick up to 5 books or series to lead your profile. These show in the larger featured
-				section.
+				Pick up to 5 books or series to lead your profile. Adding one creates a public profile
+				and includes you in the member list while profile visibility is on.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
@@ -716,7 +751,7 @@
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Account</Card.Title>
+			<Card.Title>Membership</Card.Title>
 		</Card.Header>
 		<Card.Content>
 			<p class="mb-3 text-sm text-muted-foreground">

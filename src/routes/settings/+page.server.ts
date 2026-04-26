@@ -29,6 +29,14 @@ function isNotificationMode(value: unknown): value is NotificationMode {
 	return value === 'off' || value === 'immediate' || value === 'daily_digest';
 }
 
+async function ensureUserProfile(locals: App.Locals) {
+	if (!locals.user) return;
+	await locals.db
+		.insert(userProfiles)
+		.values({ userId: locals.user.id })
+		.onConflictDoNothing({ target: userProfiles.userId });
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
@@ -120,7 +128,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, locals }) => {
+	updateAccount: async ({ request, locals }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
 
 		const data = await request.formData();
@@ -134,6 +142,14 @@ export const actions: Actions = {
 			.update(users)
 			.set({ displayName, updatedAt: new Date().toISOString() })
 			.where(eq(users.id, locals.user.id));
+
+		return { accountSuccess: true };
+	},
+
+	updateProfile: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const data = await request.formData();
 
 		await locals.db
 			.insert(userProfiles)
@@ -200,6 +216,7 @@ export const actions: Actions = {
 			const nextOrder =
 				existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) +
 				1;
+			await ensureUserProfile(locals);
 			const result = await ensureSubjectSource(locals.db, link, platform?.env, {
 				userFeatureLink: {
 					userId: locals.user.id,
@@ -236,6 +253,7 @@ export const actions: Actions = {
 		const nextOrder =
 			existingFeatured.reduce((max, relation) => Math.max(max, relation.featuredOrder ?? 0), 0) + 1;
 
+		await ensureUserProfile(locals);
 		await locals.db
 			.insert(userSubjects)
 			.values({

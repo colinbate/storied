@@ -1,47 +1,52 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { userProfiles, userSubjects, users } from '$lib/server/db/schema';
-import { asc, inArray } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
+
+function hasProfileContent(profile: typeof userProfiles.$inferSelect) {
+	return Boolean(
+		profile.headline?.trim() ||
+		profile.bio?.trim() ||
+		profile.favoriteGenresText?.trim() ||
+		profile.locationText?.trim() ||
+		profile.websiteUrl?.trim()
+	);
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 
-	const members = await locals.db
-		.select({
-			id: users.id,
-			displayName: users.displayName,
-			avatarUrl: users.avatarUrl,
-			status: users.status
-		})
-		.from(users)
-		.orderBy(asc(users.displayName))
-		.all();
+	const [members, countResult, relations] = await locals.db.batch([
+		locals.db
+			.select({
+				id: users.id,
+				displayName: users.displayName,
+				avatarUrl: users.avatarUrl,
+				status: users.status,
+				profile: userProfiles
+			})
+			.from(users)
+			.innerJoin(userProfiles, eq(userProfiles.userId, users.id))
+			.where(and(eq(users.status, 'active'), eq(userProfiles.showProfile, true)))
+			.orderBy(asc(users.displayName)),
 
-	const activeMembers = members.filter((member) => member.status === 'active');
-	const memberIds = activeMembers.map((member) => member.id);
+		locals.db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
 
-	const profiles = memberIds.length
-		? await locals.db
-				.select()
-				.from(userProfiles)
-				.where(inArray(userProfiles.userId, memberIds))
-				.all()
-		: [];
-	const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+		locals.db
+			.select({
+				userId: userSubjects.userId,
+				isRecommended: userSubjects.isRecommended,
+				readingStatus: userSubjects.readingStatus,
+				featuredOnProfile: userSubjects.featuredOnProfile
+			})
+			.from(userSubjects)
+			.innerJoin(users, eq(users.id, userSubjects.userId))
+			.innerJoin(userProfiles, eq(userProfiles.userId, users.id))
+			.where(and(eq(users.status, 'active'), eq(userProfiles.showProfile, true)))
+	]);
 
-	const relations = memberIds.length
-		? await locals.db
-				.select({
-					userId: userSubjects.userId,
-					isRecommended: userSubjects.isRecommended,
-					readingStatus: userSubjects.readingStatus,
-					featuredOnProfile: userSubjects.featuredOnProfile
-				})
-				.from(userSubjects)
-				.where(inArray(userSubjects.userId, memberIds))
-				.all()
-		: [];
+	const activeMemberCount = countResult[0]?.count ?? members.length;
 
 	const statsMap = new Map<string, { recommendations: number; read: number; featured: number }>();
 	for (const relation of relations) {
@@ -52,19 +57,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		statsMap.set(relation.userId, existing);
 	}
 
+	const publicProfileMembers = members
+		.map((member) => ({
+			...member,
+			profileGenres: parseProfileGenres(member.profile.favoriteGenresText),
+			stats: statsMap.get(member.id) ?? { recommendations: 0, read: 0, featured: 0 }
+		}))
+		.filter((member) => hasProfileContent(member.profile) || member.stats.featured > 0);
+
 	return {
-		members: activeMembers
-			.map((member) => {
-				const profile = profileMap.get(member.id) ?? null;
-				const visible = profile?.showProfile !== false || member.id === locals.user?.id;
-				if (!visible) return null;
-				return {
-					...member,
-					profile,
-					profileGenres: parseProfileGenres(profile?.favoriteGenresText),
-					stats: statsMap.get(member.id) ?? { recommendations: 0, read: 0, featured: 0 }
-				};
-			})
-			.filter((member): member is NonNullable<typeof member> => member !== null)
+		members: publicProfileMembers,
+		membersWithoutPublicProfiles: Math.max(0, activeMemberCount - publicProfileMembers.length),
+		isCurrentUserListed: publicProfileMembers.some((member) => member.id === locals.user?.id)
 	};
 };
