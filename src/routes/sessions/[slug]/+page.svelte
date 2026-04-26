@@ -252,7 +252,7 @@
 								/>
 							{/if}
 							<Avatar.Fallback>
-								{data.primaryThread.author.displayName.charAt(0).toUpperCase()}
+								{data.primaryThread.author.displayName?.charAt(0).toUpperCase() ?? '?'}
 							</Avatar.Fallback>
 						</Avatar.Root>
 						<div class="min-w-0 flex-1">

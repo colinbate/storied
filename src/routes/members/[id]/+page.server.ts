@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -20,62 +20,71 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!member || member.status !== 'active') throw error(404, 'Member not found');
 
-	const profile =
-		(await locals.db.select().from(userProfiles).where(eq(userProfiles.userId, member.id)).get()) ??
-		null;
+	const [profileRows, bookSubjectRows, seriesSubjectRows] = await Promise.all([
+		locals.db.select().from(userProfiles).where(eq(userProfiles.userId, member.id)).all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				book: books
+			})
+			.from(userSubjects)
+			.innerJoin(books, eq(userSubjects.subjectId, books.id))
+			.where(
+				and(
+					eq(userSubjects.userId, member.id),
+					eq(userSubjects.subjectType, 'book'),
+					isNull(books.deletedAt)
+				)
+			)
+			.orderBy(
+				desc(userSubjects.featuredOnProfile),
+				asc(userSubjects.featuredOrder),
+				desc(userSubjects.updatedAt)
+			)
+			.all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				series
+			})
+			.from(userSubjects)
+			.innerJoin(series, eq(userSubjects.subjectId, series.id))
+			.where(
+				and(
+					eq(userSubjects.userId, member.id),
+					eq(userSubjects.subjectType, 'series'),
+					isNull(series.deletedAt)
+				)
+			)
+			.orderBy(
+				desc(userSubjects.featuredOnProfile),
+				asc(userSubjects.featuredOrder),
+				desc(userSubjects.updatedAt)
+			)
+			.all()
+	]);
+	const profile = profileRows[0] ?? null;
 
 	if (profile?.showProfile === false && locals.user.id !== member.id) {
 		throw error(404, 'Member not found');
 	}
 
-	const relations = await locals.db
-		.select()
-		.from(userSubjects)
-		.where(eq(userSubjects.userId, member.id))
-		.orderBy(
-			desc(userSubjects.featuredOnProfile),
-			asc(userSubjects.featuredOrder),
-			desc(userSubjects.updatedAt)
-		)
-		.all();
-
-	const bookIds = relations
-		.filter((relation) => relation.subjectType === 'book')
-		.map((relation) => relation.subjectId);
-	const seriesIds = relations
-		.filter((relation) => relation.subjectType === 'series')
-		.map((relation) => relation.subjectId);
-
-	const bookRows = bookIds.length
-		? await locals.db
-				.select()
-				.from(books)
-				.where(and(inArray(books.id, bookIds), isNull(books.deletedAt)))
-				.all()
-		: [];
-	const seriesRows = seriesIds.length
-		? await locals.db
-				.select()
-				.from(series)
-				.where(and(inArray(series.id, seriesIds), isNull(series.deletedAt)))
-				.all()
-		: [];
-
-	const bookMap = new Map(bookRows.map((book) => [book.id, book]));
-	const seriesMap = new Map(seriesRows.map((row) => [row.id, row]));
-	const subjects = relations
-		.map((relation) => {
-			if (relation.subjectType === 'book') {
-				const book = bookMap.get(relation.subjectId);
-				return book ? { kind: 'book' as const, relation, book } : null;
-			}
-			if (relation.subjectType === 'series') {
-				const row = seriesMap.get(relation.subjectId);
-				return row ? { kind: 'series' as const, relation, series: row } : null;
-			}
-			return null;
-		})
-		.filter((item): item is NonNullable<typeof item> => item !== null);
+	const subjects = [
+		...bookSubjectRows.map(({ relation, book }) => ({ kind: 'book' as const, relation, book })),
+		...seriesSubjectRows.map(({ relation, series }) => ({
+			kind: 'series' as const,
+			relation,
+			series
+		}))
+	].sort((a, b) => {
+		if (a.relation.featuredOnProfile !== b.relation.featuredOnProfile) {
+			return a.relation.featuredOnProfile ? -1 : 1;
+		}
+		return (
+			(a.relation.featuredOrder ?? -Infinity) - (b.relation.featuredOrder ?? -Infinity) ||
+			b.relation.updatedAt.localeCompare(a.relation.updatedAt)
+		);
+	});
 
 	return {
 		member,

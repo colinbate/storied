@@ -9,7 +9,7 @@ import {
 	userSubjects,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { parseProfileGenres, serializeProfileGenres } from '$lib/profile-genres';
 import {
 	DEFAULT_TIMEZONE,
@@ -40,80 +40,81 @@ async function ensureUserProfile(locals: App.Locals) {
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
-	const profile =
-		(await locals.db
-			.select()
-			.from(userProfiles)
-			.where(eq(userProfiles.userId, locals.user.id))
-			.get()) ?? null;
-	const featuredRelations = await locals.db
-		.select()
-		.from(userSubjects)
-		.where(and(eq(userSubjects.userId, locals.user.id), eq(userSubjects.featuredOnProfile, true)))
-		.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
-		.all();
-
-	const featuredBookIds = featuredRelations
-		.filter((relation) => relation.subjectType === 'book')
-		.map((relation) => relation.subjectId);
-	const featuredSeriesIds = featuredRelations
-		.filter((relation) => relation.subjectType === 'series')
-		.map((relation) => relation.subjectId);
-
-	const featuredBookRows = featuredBookIds.length
-		? await locals.db
-				.select()
+	const [profileRows, featuredBookRows, featuredSeriesRows, allBooks, allSeries, allGenres] =
+		await Promise.all([
+			locals.db.select().from(userProfiles).where(eq(userProfiles.userId, locals.user.id)).all(),
+			locals.db
+				.select({
+					relation: userSubjects,
+					book: books
+				})
+				.from(userSubjects)
+				.innerJoin(books, eq(userSubjects.subjectId, books.id))
+				.where(
+					and(
+						eq(userSubjects.userId, locals.user.id),
+						eq(userSubjects.featuredOnProfile, true),
+						eq(userSubjects.subjectType, 'book'),
+						isNull(books.deletedAt)
+					)
+				)
+				.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+				.all(),
+			locals.db
+				.select({
+					relation: userSubjects,
+					series
+				})
+				.from(userSubjects)
+				.innerJoin(series, eq(userSubjects.subjectId, series.id))
+				.where(
+					and(
+						eq(userSubjects.userId, locals.user.id),
+						eq(userSubjects.featuredOnProfile, true),
+						eq(userSubjects.subjectType, 'series'),
+						isNull(series.deletedAt)
+					)
+				)
+				.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+				.all(),
+			locals.db
+				.select({
+					id: books.id,
+					title: books.title,
+					authorText: books.authorText,
+					slug: books.slug,
+					deletedAt: books.deletedAt
+				})
 				.from(books)
-				.where(and(inArray(books.id, featuredBookIds), isNull(books.deletedAt)))
-				.all()
-		: [];
-	const featuredSeriesRows = featuredSeriesIds.length
-		? await locals.db
-				.select()
+				.orderBy(asc(books.title))
+				.all(),
+			locals.db
+				.select({
+					id: series.id,
+					title: series.title,
+					authorText: series.authorText,
+					slug: series.slug,
+					deletedAt: series.deletedAt
+				})
 				.from(series)
-				.where(and(inArray(series.id, featuredSeriesIds), isNull(series.deletedAt)))
-				.all()
-		: [];
+				.orderBy(asc(series.title))
+				.all(),
+			locals.db.select().from(genres).orderBy(asc(genres.name)).all()
+		]);
+	const profile = profileRows[0] ?? null;
+	const featuredSubjects = [
+		...featuredBookRows.map(({ relation, book }) => ({ kind: 'book' as const, relation, book })),
+		...featuredSeriesRows.map(({ relation, series }) => ({
+			kind: 'series' as const,
+			relation,
+			series
+		}))
+	].sort(
+		(a, b) =>
+			(a.relation.featuredOrder ?? -Infinity) - (b.relation.featuredOrder ?? -Infinity) ||
+			b.relation.updatedAt.localeCompare(a.relation.updatedAt)
+	);
 
-	const featuredBookMap = new Map(featuredBookRows.map((book) => [book.id, book]));
-	const featuredSeriesMap = new Map(featuredSeriesRows.map((entry) => [entry.id, entry]));
-	const featuredSubjects = featuredRelations
-		.map((relation) => {
-			if (relation.subjectType === 'book') {
-				const book = featuredBookMap.get(relation.subjectId);
-				return book ? { kind: 'book' as const, relation, book } : null;
-			}
-			if (relation.subjectType === 'series') {
-				const seriesEntry = featuredSeriesMap.get(relation.subjectId);
-				return seriesEntry ? { kind: 'series' as const, relation, series: seriesEntry } : null;
-			}
-			return null;
-		})
-		.filter((item): item is NonNullable<typeof item> => item !== null);
-
-	const allBooks = await locals.db
-		.select({
-			id: books.id,
-			title: books.title,
-			authorText: books.authorText,
-			slug: books.slug,
-			deletedAt: books.deletedAt
-		})
-		.from(books)
-		.orderBy(asc(books.title))
-		.all();
-	const allSeries = await locals.db
-		.select({
-			id: series.id,
-			title: series.title,
-			authorText: series.authorText,
-			slug: series.slug,
-			deletedAt: series.deletedAt
-		})
-		.from(series)
-		.orderBy(asc(series.title))
-		.all();
-	const allGenres = await locals.db.select().from(genres).orderBy(asc(genres.name)).all();
 	return {
 		user: locals.user,
 		profile,

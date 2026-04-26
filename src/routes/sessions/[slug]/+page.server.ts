@@ -12,7 +12,7 @@ import {
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
@@ -31,127 +31,125 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!session) throw error(404, 'Session not found');
 
-	const subjectLinks = await locals.db
-		.select()
-		.from(sessionSubjects)
-		.where(eq(sessionSubjects.sessionId, session.id))
-		.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
-		.all();
-
-	const bookIds = subjectLinks
-		.filter((link) => link.subjectType === 'book')
-		.map((link) => link.subjectId);
-	const seriesIds = subjectLinks
-		.filter((link) => link.subjectType === 'series')
-		.map((link) => link.subjectId);
-
-	const bookRows = bookIds.length
-		? await locals.db
-				.select()
-				.from(books)
-				.where(and(inArray(books.id, bookIds), isNull(books.deletedAt)))
-				.all()
-		: [];
-	const seriesRows = seriesIds.length
-		? await locals.db
-				.select()
-				.from(series)
-				.where(and(inArray(series.id, seriesIds), isNull(series.deletedAt)))
-				.all()
-		: [];
-
-	const bookMap = new Map(bookRows.map((book) => [book.id, book]));
-	const seriesMap = new Map(seriesRows.map((row) => [row.id, row]));
-	const subjects = subjectLinks
-		.map((link) => {
-			if (link.subjectType === 'book') {
-				const book = bookMap.get(link.subjectId);
-				return book ? { kind: 'book' as const, link, book } : null;
-			}
-			const row = seriesMap.get(link.subjectId);
-			return row ? { kind: 'series' as const, link, series: row } : null;
-		})
-		.filter((item): item is NonNullable<typeof item> => item !== null);
-
-	const sessionThreads = await locals.db
-		.select({
-			thread: threads,
-			author: {
-				id: users.id,
-				displayName: users.displayName,
-				avatarUrl: users.avatarUrl
-			}
-		})
-		.from(threads)
-		.innerJoin(users, eq(threads.authorUserId, users.id))
-		.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
-		.orderBy(desc(threads.createdAt))
-		.all();
-
-	const primaryThread =
-		sessionThreads.find(({ thread }) => thread.sessionThreadRole === 'primary') ??
-		sessionThreads[0] ??
-		null;
-
-	const primaryPosts = primaryThread
-		? await locals.db
+	const [bookSubjectRows, seriesSubjectRows, sessionThreads, participants, participantSubjectRows] =
+		await Promise.all([
+			locals.db
 				.select({
-					post: posts,
+					link: sessionSubjects,
+					book: books
+				})
+				.from(sessionSubjects)
+				.innerJoin(books, eq(sessionSubjects.subjectId, books.id))
+				.where(
+					and(
+						eq(sessionSubjects.sessionId, session.id),
+						eq(sessionSubjects.subjectType, 'book'),
+						isNull(books.deletedAt)
+					)
+				)
+				.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
+				.all(),
+			locals.db
+				.select({
+					link: sessionSubjects,
+					series
+				})
+				.from(sessionSubjects)
+				.innerJoin(series, eq(sessionSubjects.subjectId, series.id))
+				.where(
+					and(
+						eq(sessionSubjects.sessionId, session.id),
+						eq(sessionSubjects.subjectType, 'series'),
+						isNull(series.deletedAt)
+					)
+				)
+				.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
+				.all(),
+			locals.db
+				.select({
+					thread: threads,
 					author: {
 						id: users.id,
 						displayName: users.displayName,
 						avatarUrl: users.avatarUrl
 					}
 				})
-				.from(posts)
-				.innerJoin(users, eq(posts.authorUserId, users.id))
-				.where(and(eq(posts.threadId, primaryThread.thread.id), isNull(posts.deletedAt)))
-				.orderBy(asc(posts.createdAt))
+				.from(threads)
+				.innerJoin(users, eq(threads.authorUserId, users.id))
+				.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
+				.orderBy(desc(threads.createdAt))
+				.all(),
+			locals.db
+				.select({
+					participant: sessionParticipants,
+					user: {
+						id: users.id,
+						displayName: users.displayName,
+						avatarUrl: users.avatarUrl
+					}
+				})
+				.from(sessionParticipants)
+				.innerJoin(users, eq(sessionParticipants.userId, users.id))
+				.where(eq(sessionParticipants.sessionId, session.id))
+				.orderBy(asc(users.displayName))
+				.all(),
+			locals.db
+				.select({
+					read: sessionParticipantSubjects,
+					user: {
+						id: users.id,
+						displayName: users.displayName,
+						avatarUrl: users.avatarUrl
+					}
+				})
+				.from(sessionParticipantSubjects)
+				.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
+				.where(eq(sessionParticipantSubjects.sessionId, session.id))
+				.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
 				.all()
-		: [];
+		]);
 
-	const primarySubscription = primaryThread
-		? await locals.db
-				.select()
-				.from(subscriptions)
-				.where(
-					and(
-						eq(subscriptions.userId, locals.user.id),
-						eq(subscriptions.threadId, primaryThread.thread.id)
+	const subjects = [
+		...bookSubjectRows.map(({ link, book }) => ({ kind: 'book' as const, link, book })),
+		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series }))
+	].sort(
+		(a, b) =>
+			a.link.status.localeCompare(b.link.status) || a.link.createdAt.localeCompare(b.link.createdAt)
+	);
+
+	const primaryThread =
+		sessionThreads.find(({ thread }) => thread.sessionThreadRole === 'primary') ??
+		sessionThreads[0] ??
+		null;
+
+	const [primaryPosts, primarySubscription] = primaryThread
+		? await Promise.all([
+				locals.db
+					.select({
+						post: posts,
+						author: {
+							id: users.id,
+							displayName: users.displayName,
+							avatarUrl: users.avatarUrl
+						}
+					})
+					.from(posts)
+					.innerJoin(users, eq(posts.authorUserId, users.id))
+					.where(and(eq(posts.threadId, primaryThread.thread.id), isNull(posts.deletedAt)))
+					.orderBy(asc(posts.createdAt))
+					.all(),
+				locals.db
+					.select()
+					.from(subscriptions)
+					.where(
+						and(
+							eq(subscriptions.userId, locals.user.id),
+							eq(subscriptions.threadId, primaryThread.thread.id)
+						)
 					)
-				)
-				.get()
-		: null;
-
-	const participants = await locals.db
-		.select({
-			participant: sessionParticipants,
-			user: {
-				id: users.id,
-				displayName: users.displayName,
-				avatarUrl: users.avatarUrl
-			}
-		})
-		.from(sessionParticipants)
-		.innerJoin(users, eq(sessionParticipants.userId, users.id))
-		.where(eq(sessionParticipants.sessionId, session.id))
-		.orderBy(asc(users.displayName))
-		.all();
-
-	const participantSubjectRows = await locals.db
-		.select({
-			read: sessionParticipantSubjects,
-			user: {
-				id: users.id,
-				displayName: users.displayName,
-				avatarUrl: users.avatarUrl
-			}
-		})
-		.from(sessionParticipantSubjects)
-		.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
-		.where(eq(sessionParticipantSubjects.sessionId, session.id))
-		.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
-		.all();
+					.get()
+			])
+		: [[], null];
 
 	const subjectReaders = participantSubjectRows.reduce((map, row) => {
 		const key = `${row.read.subjectType}:${row.read.subjectId}`;

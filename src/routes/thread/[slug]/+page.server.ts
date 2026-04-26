@@ -15,7 +15,7 @@ import {
 	type SubjectType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc, inArray, not } from 'drizzle-orm';
+import { eq, and, isNull, asc, not } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
@@ -64,77 +64,67 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 
 	depends(`app:thread-subjects:${thread.thread.id}`);
 
-	const threadPosts = await locals.db
-		.select({
-			post: posts,
-			author: {
-				id: users.id,
-				displayName: users.displayName,
-				avatarUrl: users.avatarUrl
-			}
-		})
-		.from(posts)
-		.innerJoin(users, eq(posts.authorUserId, users.id))
-		.where(and(eq(posts.threadId, thread.thread.id), isNull(posts.deletedAt)))
-		.orderBy(asc(posts.createdAt))
-		.all();
-
-	// Check if user is subscribed
-	const subscription = await locals.db
-		.select()
-		.from(subscriptions)
-		.where(
-			and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.thread.id))
-		)
-		.get();
-
-	// Load subjects (books or series) linked to this thread
-	const subjectLinks = await locals.db
-		.select()
-		.from(threadSubjects)
-		.where(eq(threadSubjects.threadId, thread.thread.id))
-		.orderBy(asc(threadSubjects.displayOrder))
-		.all();
-
-	const linkedBookIds = subjectLinks
-		.filter((l) => l.subjectType === 'book')
-		.map((l) => l.subjectId);
-	const linkedSeriesIds = subjectLinks
-		.filter((l) => l.subjectType === 'series')
-		.map((l) => l.subjectId);
-
-	const bookRows = linkedBookIds.length
-		? await locals.db
-				.select()
-				.from(books)
-				.where(and(inArray(books.id, linkedBookIds), isNull(books.deletedAt)))
-				.all()
-		: [];
-	const seriesRows = linkedSeriesIds.length
-		? await locals.db
-				.select()
-				.from(series)
-				.where(and(inArray(series.id, linkedSeriesIds), isNull(series.deletedAt)))
-				.all()
-		: [];
-
-	const bookMap = new Map(bookRows.map((b) => [b.id, b]));
-	const seriesMap = new Map(seriesRows.map((s) => [s.id, s]));
+	const [threadPosts, subscription, bookSubjectRows, seriesSubjectRows] = await Promise.all([
+		locals.db
+			.select({
+				post: posts,
+				author: {
+					id: users.id,
+					displayName: users.displayName,
+					avatarUrl: users.avatarUrl
+				}
+			})
+			.from(posts)
+			.innerJoin(users, eq(posts.authorUserId, users.id))
+			.where(and(eq(posts.threadId, thread.thread.id), isNull(posts.deletedAt)))
+			.orderBy(asc(posts.createdAt))
+			.all(),
+		locals.db
+			.select()
+			.from(subscriptions)
+			.where(
+				and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.thread.id))
+			)
+			.get(),
+		locals.db
+			.select({
+				link: threadSubjects,
+				book: books
+			})
+			.from(threadSubjects)
+			.innerJoin(books, eq(threadSubjects.subjectId, books.id))
+			.where(
+				and(
+					eq(threadSubjects.threadId, thread.thread.id),
+					eq(threadSubjects.subjectType, 'book'),
+					isNull(books.deletedAt)
+				)
+			)
+			.orderBy(asc(threadSubjects.displayOrder))
+			.all(),
+		locals.db
+			.select({
+				link: threadSubjects,
+				series
+			})
+			.from(threadSubjects)
+			.innerJoin(series, eq(threadSubjects.subjectId, series.id))
+			.where(
+				and(
+					eq(threadSubjects.threadId, thread.thread.id),
+					eq(threadSubjects.subjectType, 'series'),
+					isNull(series.deletedAt)
+				)
+			)
+			.orderBy(asc(threadSubjects.displayOrder))
+			.all()
+	]);
 
 	// Preserve display_order across both subject kinds.
-	const linkedSubjects = subjectLinks
-		.map((l) => {
-			if (l.subjectType === 'book') {
-				const book = bookMap.get(l.subjectId);
-				return book ? { kind: 'book' as const, book } : null;
-			}
-			if (l.subjectType === 'series') {
-				const s = seriesMap.get(l.subjectId);
-				return s ? { kind: 'series' as const, series: s } : null;
-			}
-			return null;
-		})
-		.filter((s): s is NonNullable<typeof s> => s !== null);
+	const linkedSubjects = [
+		...bookSubjectRows.map(({ link, book }) => ({ kind: 'book' as const, link, book })),
+		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series }))
+	].sort((a, b) => a.link.displayOrder - b.link.displayOrder);
 
 	const uniqueBooks = linkedSubjects.filter((s) => s.kind === 'book').map((s) => s.book);
 
@@ -166,7 +156,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 	}
 
 	const sessionSubjectRows =
-		thread.thread.sessionId && subjectLinks.length
+		thread.thread.sessionId && linkedSubjects.length
 			? await locals.db
 					.select()
 					.from(sessionSubjects)
