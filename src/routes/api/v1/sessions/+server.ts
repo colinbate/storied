@@ -29,6 +29,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			durationMinutes: sessions.durationMinutes,
 			locationName: sessions.locationName,
 			isPublic: sessions.isPublic,
+			rsvpSlug: sessions.rsvpSlug,
 			astroPath: sessions.astroPath,
 			externalUrl: sessions.externalUrl,
 			createdAt: sessions.createdAt,
