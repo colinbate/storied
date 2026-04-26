@@ -12,7 +12,8 @@ import {
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
 import { ANNOUNCEMENTS_CATEGORY_ID } from './discussions';
-import { sendMagicLinkEmail } from './email';
+import { sendMagicLinkEmail, sendPendingSignupAlertEmail } from './email';
+import { PRIMARY_ORIGIN } from '$shared/brand';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
@@ -224,14 +225,14 @@ export async function findOrCreateUser(
 	db: ORM,
 	email: string,
 	opts?: FindOrCreateUserOptions
-): Promise<{ id: string; isNew: boolean }> {
+): Promise<{ id: string; isNew: boolean; user?: typeof users.$inferSelect }> {
 	const role: UserRole = opts?.role ?? 'member';
 	const signupAllowed = opts?.allowSignup ?? true;
 	const status: UserStatus = opts?.status ?? 'active';
 	const name = opts?.name;
 
 	const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
-	if (existing) return { id: existing.id, isNew: false };
+	if (existing) return { id: existing.id, isNew: false, user: existing };
 	if (!signupAllowed) return { id: '', isNew: false };
 	const id = nanoid();
 	const displayName = name ?? email.split('@')[0];
@@ -243,7 +244,7 @@ export async function findOrCreateUser(
 		status
 	};
 	if (opts?.timezone) insertValues.timezone = opts.timezone;
-	await db.insert(users).values(insertValues);
+	const created = await db.insert(users).values(insertValues).returning();
 
 	// Seed a notification_preferences row for the new user. The migration
 	// backfills existing users; this handles new ones.
@@ -258,7 +259,7 @@ export async function findOrCreateUser(
 		})
 		.onConflictDoNothing();
 
-	return { id, isNew: true };
+	return { id, isNew: true, user: created[0] };
 }
 
 export async function getValidInviteForEmail(db: ORM, code: string, email: string) {
@@ -286,6 +287,33 @@ export async function claimInvite(db: ORM, inviteId: string, userId: string): Pr
 		.update(invites)
 		.set({ claimedByUserId: userId, claimedAt: now })
 		.where(eq(invites.id, inviteId));
+}
+
+async function notifyAdminsOfPendingSignup(
+	db: ORM,
+	platform: App.Platform | undefined,
+	member: typeof users.$inferSelect
+): Promise<void> {
+	if (!platform) return;
+	if (!member) return;
+
+	const admins = await db
+		.select({ email: users.email })
+		.from(users)
+		.where(and(eq(users.role, 'admin'), eq(users.status, 'active')))
+		.all();
+
+	const adminUrl = `${PRIMARY_ORIGIN}/admin/members`;
+	const uniqueEmails = [...new Set(admins.map((admin) => admin.email).filter(Boolean))];
+
+	await Promise.all(
+		uniqueEmails.map(async (email) => {
+			const sent = await sendPendingSignupAlertEmail(platform, email, member, adminUrl);
+			if (!sent.success) {
+				console.error('[PENDING SIGNUP ALERT ERROR]', sent.error ?? `Failed for ${email}`);
+			}
+		})
+	);
 }
 
 export async function startMagicLinkLogin(
@@ -443,7 +471,11 @@ export async function completeMagicLinkLogin(
 	const invite = inviteCode ? await getValidInviteForEmail(db, inviteCode, result.email) : null;
 	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
 
-	const { id: userId } = await findOrCreateUser(db, result.email, {
+	const {
+		id: userId,
+		isNew,
+		user
+	} = await findOrCreateUser(db, result.email, {
 		role: 'member',
 		allowSignup: !!invite || signupMode !== 'closed',
 		status: invite || signupMode === 'open' ? 'active' : 'pending',
@@ -460,13 +492,10 @@ export async function completeMagicLinkLogin(
 		await db.update(users).set({ status: 'active' }).where(eq(users.id, userId));
 	}
 
-	const user = await db
-		.select({ status: users.status })
-		.from(users)
-		.where(eq(users.id, userId))
-		.get();
-
 	if (user?.status === 'pending') {
+		if (isNew) {
+			await notifyAdminsOfPendingSignup(db, platform, user);
+		}
 		redirect(302, '/auth/login?error=pending_approval');
 	}
 	if (user?.status === 'suspended') {

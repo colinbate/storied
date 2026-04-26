@@ -146,3 +146,35 @@ export async function sendAccountApprovedEmail(
     `.trim()
 	});
 }
+
+/** Notify an admin that a new signup is pending approval. */
+export async function sendPendingSignupAlertEmail(
+	platform: App.Platform,
+	email: string,
+	member: { email: string; displayName: string },
+	adminUrl: string
+): Promise<{ success: boolean; error?: string }> {
+	return sendEmail(platform, {
+		to: email,
+		subject: `New signup pending approval for ${APP_NAME}`,
+		textBody: `${member.displayName} <${member.email}> has confirmed their email and is waiting for approval.\n\nReview pending members here:\n\n${adminUrl}`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
+        <h2 style="color: #1a1a2e; margin-bottom: 24px;">New signup pending approval</h2>
+        <p style="color: #444; line-height: 1.6;">
+          <strong>${member.displayName}</strong> &lt;${member.email}&gt; has confirmed their email and is waiting for approval.
+        </p>
+        <div style="margin: 32px 0; text-align: center;">
+          <a href="${adminUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Review Pending Members
+          </a>
+        </div>
+        <p style="color: #888; font-size: 14px; line-height: 1.5;">
+          Or copy and paste this URL into your browser:<br>
+          <a href="${adminUrl}" style="color: #6d28d9; word-break: break-all;">${adminUrl}</a>
+        </p>
+      </div>
+    `.trim()
+	});
+}
