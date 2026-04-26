@@ -92,9 +92,6 @@
 			<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
 				{data.session.status}
 			</Badge>
-			{#if data.session.isPublic}
-				<Badge variant="outline">public</Badge>
-			{/if}
 		</div>
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">{data.session.title}</h1>

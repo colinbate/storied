@@ -11,6 +11,8 @@
 	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import AlertTriangleIcon from '@lucide/svelte/icons/alert-triangle';
+	import CheckCircle2Icon from '@lucide/svelte/icons/check-circle-2';
+	import CircleDashedIcon from '@lucide/svelte/icons/circle-dashed';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -362,7 +364,17 @@
 									{s.bookCount} book{s.bookCount === 1 ? '' : 's'}
 								</span>
 							{/if}
-							<span class="font-mono text-xs text-muted-foreground/60">{s.slug}</span>
+							{#if s.isComplete != null}
+								<span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
+									{#if s.isComplete}
+										<CheckCircle2Icon class="h-3 w-3" />
+										Complete
+									{:else}
+										<CircleDashedIcon class="h-3 w-3" />
+										Ongoing
+									{/if}
+								</span>
+							{/if}
 						</div>
 					</a>
 				{:else}

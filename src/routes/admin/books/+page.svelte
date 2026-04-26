@@ -374,9 +374,11 @@
 									{book.isbn13}
 								</span>
 							{/if}
-							<span class="font-mono text-xs text-muted-foreground/60">
-								{book.slug}
-							</span>
+							{#if book.firstPublishYear}
+								<span class="font-mono text-xs text-muted-foreground/60">
+									{book.firstPublishYear}
+								</span>
+							{/if}
 						</div>
 					</a>
 				{:else}

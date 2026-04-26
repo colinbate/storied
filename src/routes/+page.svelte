@@ -45,9 +45,6 @@
 								<Badge variant={data.currentSession.status === 'current' ? 'default' : 'secondary'}>
 									{data.currentSession.status === 'current' ? 'Current session' : 'Next session'}
 								</Badge>
-								{#if data.currentSession.isPublic}
-									<Badge variant="outline">public</Badge>
-								{/if}
 							</div>
 							<h2 class="text-xl font-semibold">{data.currentSession.title}</h2>
 							{#if data.currentSession.themeTitle ?? data.currentSession.theme}

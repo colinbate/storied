@@ -180,19 +180,8 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
-		const slug = normalizeSlug(getOptionalString(data, 'slug') ?? '');
 		if (!title || title.length < 2)
 			return fail(400, { error: 'Title must be at least 2 characters.' });
-		if (!slug) return fail(400, { error: 'Slug is required.' });
-
-		const existing = await locals.db
-			.select({ id: sessions.id })
-			.from(sessions)
-			.where(eq(sessions.slug, slug))
-			.get();
-		if (existing && existing.id !== row.id) {
-			return fail(400, { error: `A session with slug "${slug}" already exists.` });
-		}
 
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
@@ -202,7 +191,6 @@ export const actions: Actions = {
 			.update(sessions)
 			.set({
 				title,
-				slug,
 				status: getSessionStatus(data),
 				theme: themeTitle,
 				themeTitle,
@@ -219,10 +207,6 @@ export const actions: Actions = {
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(sessions.id, row.id));
-
-		if (slug !== row.slug) {
-			throw redirect(303, `/admin/sessions/${slug}`);
-		}
 
 		return { updated: true };
 	},

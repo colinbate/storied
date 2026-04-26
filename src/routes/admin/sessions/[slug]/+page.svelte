@@ -133,7 +133,7 @@
 					</div>
 					<div class="space-y-2">
 						<Label for="slug">Slug</Label>
-						<Input id="slug" name="slug" value={data.session.slug} required />
+						<Input id="slug" disabled name="slug" value={data.session.slug} required />
 					</div>
 					<div class="space-y-2">
 						<Label for="status">Status</Label>
