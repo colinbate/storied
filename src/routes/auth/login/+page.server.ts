@@ -1,19 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
-	createMagicLink,
 	verifyMagicLinkCode,
 	completeMagicLinkLogin,
 	REDIR_COOKIE_NAME,
-	TIMEZONE_COOKIE_NAME,
-	TIMEZONE_COOKIE_MAX_AGE_S,
-	INVITE_COOKIE_NAME,
-	SIGNUP_NAME_COOKIE_NAME,
 	getSignupMode,
-	getValidInviteForEmail
+	startMagicLinkLogin
 } from '$lib/server/auth';
-import { isValidTimezone } from '$lib/server/notification-preferences';
-import { sendMagicLinkEmail } from '$lib/server/email';
 import { getDisplayNameFromForm, normalizeEmail } from '$lib/server/form-values';
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
@@ -23,11 +16,14 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	const error = url.searchParams.get('error');
 	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
 	const invite = url.searchParams.get('invite')?.trim() ?? '';
+	const startedEmail =
+		url.searchParams.get('started') === '1' ? normalizeEmail(url.searchParams.get('email')) : null;
 	return {
 		error,
 		signupMode,
 		canSignup: signupMode !== 'closed',
-		invite
+		invite,
+		startedEmail
 	};
 };
 
@@ -38,6 +34,7 @@ export const actions: Actions = {
 		const email = normalizeEmail(rawEmail);
 		const inviteCode = data.get('invite')?.toString()?.trim() ?? '';
 		const displayName = getDisplayNameFromForm(data);
+		const phone = data.get('phone')?.toString()?.trim() ?? '';
 
 		if (!email) {
 			return fail(400, {
@@ -53,64 +50,29 @@ export const actions: Actions = {
 			cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
 		}
 
-		if (inviteCode) {
-			const invite = await getValidInviteForEmail(locals.db, inviteCode, email);
-			if (!invite) {
-				return fail(400, {
-					error: 'That invitation is invalid, expired, or for a different email address.',
-					email
-				});
-			}
-			cookies.set(INVITE_COOKIE_NAME, inviteCode, {
-				path: '/',
-				httpOnly: true,
-				secure: true,
-				sameSite: 'lax',
-				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+		if (phone) {
+			return { success: true, email };
+		}
+
+		const result = await startMagicLinkLogin({
+			db: locals.db,
+			platform,
+			cookies,
+			origin: url.origin,
+			email,
+			inviteCode,
+			displayName,
+			browserTimezone: data.get('browserTimezone')?.toString()?.trim()
+		});
+
+		if (!result.ok) {
+			return fail(400, {
+				error: result.error,
+				email: result.email
 			});
-		} else {
-			cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
 		}
 
-		// Stash the browser-detected timezone in a short-lived cookie so the
-		// magic-link verify handler can apply it when creating a brand-new user.
-		// Safe to skip if missing or invalid — the users.timezone default kicks in.
-		const browserTimezone = data.get('browserTimezone')?.toString()?.trim();
-		if (browserTimezone && isValidTimezone(browserTimezone)) {
-			cookies.set(TIMEZONE_COOKIE_NAME, browserTimezone, {
-				path: '/',
-				httpOnly: true,
-				secure: true,
-				sameSite: 'lax',
-				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
-			});
-		} else {
-			cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
-		}
-
-		if (displayName) {
-			cookies.set(SIGNUP_NAME_COOKIE_NAME, displayName, {
-				path: '/',
-				httpOnly: true,
-				secure: true,
-				sameSite: 'lax',
-				maxAge: TIMEZONE_COOKIE_MAX_AGE_S
-			});
-		} else {
-			cookies.delete(SIGNUP_NAME_COOKIE_NAME, { path: '/' });
-		}
-
-		try {
-			const { token, code } = await createMagicLink(locals.db, email);
-			if (platform) {
-				await sendMagicLinkEmail(platform, email, token, code, url.origin);
-			}
-		} catch (err) {
-			console.error('Magic link error:', err);
-			// Don't reveal errors to the user for security
-		}
-
-		return { success: true, email };
+		return { success: true, email: result.email };
 	},
 
 	code: async ({ request, locals, platform, cookies }) => {

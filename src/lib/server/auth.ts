@@ -12,6 +12,7 @@ import {
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
 import { ANNOUNCEMENTS_CATEGORY_ID } from './discussions';
+import { sendMagicLinkEmail } from './email';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
 const SESSION_COOKIE_NAME = 'storied_session';
@@ -208,6 +209,17 @@ export interface FindOrCreateUserOptions {
 	name?: string;
 }
 
+export interface StartMagicLinkLoginOptions {
+	db: ORM;
+	platform: App.Platform | undefined;
+	cookies: Cookies;
+	origin: string;
+	email: string;
+	inviteCode?: string;
+	displayName?: string | null;
+	browserTimezone?: string | null;
+}
+
 export async function findOrCreateUser(
 	db: ORM,
 	email: string,
@@ -274,6 +286,71 @@ export async function claimInvite(db: ORM, inviteId: string, userId: string): Pr
 		.update(invites)
 		.set({ claimedByUserId: userId, claimedAt: now })
 		.where(eq(invites.id, inviteId));
+}
+
+export async function startMagicLinkLogin(
+	opts: StartMagicLinkLoginOptions
+): Promise<{ ok: true; email: string } | { ok: false; error: string; email: string }> {
+	const { db, platform, cookies, origin, email, inviteCode, displayName, browserTimezone } = opts;
+
+	if (inviteCode) {
+		const invite = await getValidInviteForEmail(db, inviteCode, email);
+		if (!invite) {
+			return {
+				ok: false,
+				error: 'That invitation is invalid, expired, or for a different email address.',
+				email
+			};
+		}
+		cookies.set(INVITE_COOKIE_NAME, inviteCode, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+		});
+	} else {
+		cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
+	}
+
+	// Stash the browser-detected timezone in a short-lived cookie so the
+	// magic-link verify handler can apply it when creating a brand-new user.
+	// Safe to skip if missing or invalid — the users.timezone default kicks in.
+	if (browserTimezone && isValidTimezone(browserTimezone)) {
+		cookies.set(TIMEZONE_COOKIE_NAME, browserTimezone, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+		});
+	} else {
+		cookies.delete(TIMEZONE_COOKIE_NAME, { path: '/' });
+	}
+
+	if (displayName) {
+		cookies.set(SIGNUP_NAME_COOKIE_NAME, displayName, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+		});
+	} else {
+		cookies.delete(SIGNUP_NAME_COOKIE_NAME, { path: '/' });
+	}
+
+	try {
+		const { token, code } = await createMagicLink(db, email);
+		if (platform) {
+			await sendMagicLinkEmail(platform, email, token, code, origin);
+		}
+	} catch (err) {
+		console.error('Magic link error:', err);
+		// Don't reveal errors to the user for security.
+	}
+
+	return { ok: true, email };
 }
 
 /** Create an auth session and return the raw token (for the cookie). */

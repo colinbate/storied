@@ -225,7 +225,11 @@
 											await update();
 											moderatingUserId = null;
 											if (result.type === 'success' && result.data?.signupApproved) {
-												toast.success(`${member.email} approved.`);
+												toast.success(
+													result.data.approvalEmailSent
+														? `${member.email} approved and notified.`
+														: `${member.email} approved.`
+												);
 											} else if (result.type === 'failure' && result.data?.error) {
 												toast.error(String(result.data.error));
 											}
@@ -369,7 +373,11 @@
 										await update();
 										updatingStatusUserId = null;
 										if (result.type === 'success' && result.data?.statusUpdated) {
-											toast.success(`Status updated to ${result.data.updatedStatus}.`);
+											toast.success(
+												result.data.approvalEmailSent
+													? `Status updated to ${result.data.updatedStatus}; approval email sent.`
+													: `Status updated to ${result.data.updatedStatus}.`
+											);
 										} else if (result.type === 'failure' && result.data?.error) {
 											toast.error(String(result.data.error));
 											member.status = originalStatus;

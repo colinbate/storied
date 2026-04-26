@@ -5,12 +5,14 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import MailIcon from '@lucide/svelte/icons/mail';
+	import Clock3Icon from '@lucide/svelte/icons/clock-3';
 	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
 
 	let { form, data } = $props();
 	let loading = $state(false);
 	let verifying = $state(false);
 	let browserTimezone = $state('');
+	const successEmail = $derived(form?.email ?? data.startedEmail ?? '');
 
 	if (typeof window !== 'undefined') {
 		try {
@@ -26,7 +28,7 @@
 </svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col items-center justify-center p-4">
-	{#if data.error}
+	{#if data.error && data.error !== 'pending_approval'}
 		<div class="mb-4 w-full max-w-md rounded border border-destructive p-3">
 			<strong>Error:</strong>
 			{#if data.error?.includes('token')}
@@ -68,7 +70,28 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			{#if form?.success}
+			{#if data.error === 'pending_approval'}
+				<div class="space-y-5">
+					<div class="rounded-lg border border-primary/20 bg-primary/5 p-5 text-center">
+						<div
+							class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+						>
+							<Clock3Icon class="h-6 w-6 text-primary" />
+						</div>
+						<p class="font-medium">Approval pending</p>
+						<p class="mt-2 text-sm text-muted-foreground">
+							Your email has been confirmed and your membership request is waiting for an
+							administrator to approve it.
+						</p>
+						<p class="mt-3 text-sm text-muted-foreground">
+							We’ll email you as soon as your account is active.
+						</p>
+					</div>
+					<div class="text-center text-sm text-muted-foreground">
+						You can close this page for now. When you come back, just sign in with the same email.
+					</div>
+				</div>
+			{:else if form?.success || data.startedEmail}
 				<div class="space-y-5">
 					<div class="space-y-3 text-center">
 						<div
@@ -79,7 +102,7 @@
 						<div>
 							<p class="font-medium">Check your inbox</p>
 							<p class="mt-1 text-sm text-muted-foreground">
-								We sent a sign-in link to <strong>{form.email}</strong>
+								We sent a sign-in link to <strong>{successEmail}</strong>
 							</p>
 						</div>
 						<p class="text-xs text-muted-foreground">
@@ -99,7 +122,7 @@
 						}}
 						class="space-y-4"
 					>
-						<input type="hidden" name="email" value={form.email} />
+						<input type="hidden" name="email" value={successEmail} />
 						<div class="space-y-2">
 							<Label for="code">Sign-in code</Label>
 							<Input
@@ -141,6 +164,10 @@
 				>
 					<input type="hidden" name="browserTimezone" bind:value={browserTimezone} />
 					<input type="hidden" name="invite" value={data.invite} />
+					<div class="absolute top-auto -left-2500 h-px w-px overflow-hidden" aria-hidden="true">
+						<Label for="phone">Phone</Label>
+						<Input id="phone" name="phone" type="text" autocomplete="off" />
+					</div>
 					<div class="space-y-2">
 						<Label for="email">Email address</Label>
 						<Input

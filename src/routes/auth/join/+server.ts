@@ -1,10 +1,9 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { findOrCreateUser, getSignupMode } from '$lib/server/auth';
-import { users } from '$lib/server/db/schema';
+import { getSignupMode, startMagicLinkLogin } from '$lib/server/auth';
 import { getDisplayNameFromForm, normalizeEmail } from '$lib/server/form-values';
 
 const PUBLIC_JOIN_URL = 'https://bermudatrianglesociety.com/join/';
+const APP_LOGIN_URL = '/auth/login';
 
 function redirectToJoin(request: Request, status: 'ok' | 'invalid' = 'ok'): never {
 	const referer = request.headers.get('referer');
@@ -13,7 +12,14 @@ function redirectToJoin(request: Request, status: 'ok' | 'invalid' = 'ok'): neve
 	redirect(303, target.toString());
 }
 
-export const POST: RequestHandler = async ({ request, locals, platform }) => {
+function redirectToLogin(email: string): never {
+	const target = new URL(APP_LOGIN_URL);
+	target.searchParams.set('started', '1');
+	target.searchParams.set('email', email);
+	redirect(303, target.toString());
+}
+
+export const POST: RequestHandler = async ({ request, locals, platform, cookies }) => {
 	const data = await request.formData();
 
 	// Honeypot used by the public site. Treat filled submissions as successful
@@ -33,28 +39,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	const displayName = getDisplayNameFromForm(data);
-
-	const existing = await locals.db.select().from(users).where(eq(users.email, email)).get();
-	if (existing) {
-		if (
-			existing.status === 'pending' &&
-			displayName &&
-			existing.displayName === email.split('@')[0]
-		) {
-			await locals.db
-				.update(users)
-				.set({ displayName, updatedAt: new Date().toISOString() })
-				.where(eq(users.id, existing.id));
-		}
-		redirectToJoin(request);
-	}
-
-	await findOrCreateUser(locals.db, email, {
-		role: 'member',
-		allowSignup: true,
-		status: 'pending',
-		name: displayName ?? undefined
+	await startMagicLinkLogin({
+		db: locals.db,
+		platform,
+		cookies,
+		origin: new URL(request.url).origin,
+		email,
+		displayName,
+		browserTimezone: data.get('browserTimezone')?.toString()?.trim()
 	});
 
-	redirectToJoin(request);
+	redirectToLogin(email);
 };

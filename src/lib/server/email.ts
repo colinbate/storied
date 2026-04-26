@@ -117,3 +117,32 @@ export async function sendInviteEmail(
     `.trim()
 	});
 }
+
+/** Notify a pending member that their account has been approved. */
+export async function sendAccountApprovedEmail(
+	platform: App.Platform,
+	email: string,
+	loginUrl: string
+): Promise<{ success: boolean; error?: string }> {
+	return sendEmail(platform, {
+		to: email,
+		subject: `Your account for ${APP_NAME} is ready`,
+		textBody: `Your account for ${APP_NAME}, ${APP_SUBTITLE}, has been approved.\n\nYou can sign in here:\n\n${loginUrl}\n\nIf you no longer want to join, you can ignore this email.`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
+        <h2 style="color: #1a1a2e; margin-bottom: 24px;">Your account is ready</h2>
+        <p style="color: #444; line-height: 1.6;">Your membership request has been approved. You can sign in below:</p>
+        <div style="margin: 32px 0; text-align: center;">
+          <a href="${loginUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Sign In
+          </a>
+        </div>
+        <p style="color: #888; font-size: 14px; line-height: 1.5;">
+          Or copy and paste this URL into your browser:<br>
+          <a href="${loginUrl}" style="color: #6d28d9; word-break: break-all;">${loginUrl}</a>
+        </p>
+      </div>
+    `.trim()
+	});
+}

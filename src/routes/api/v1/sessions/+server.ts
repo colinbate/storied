@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			theme: sessions.theme,
 			themeTitle: sessions.themeTitle,
 			themeSummary: sessions.themeSummary,
-			bodyHtml: sessions.bodyHtml,
+			body: sessions.bodySource,
 			durationMinutes: sessions.durationMinutes,
 			locationName: sessions.locationName,
 			isPublic: sessions.isPublic,

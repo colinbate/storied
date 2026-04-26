@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { invites, moderationEvents, users } from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import {
 	findOrCreateUser,
@@ -10,8 +10,32 @@ import {
 	isUserStatus,
 	requirePermission
 } from '$lib/server/auth';
-import { sendInviteEmail } from '$lib/server/email';
+import { sendAccountApprovedEmail, sendInviteEmail } from '$lib/server/email';
 import { normalizeEmail } from '$lib/server/form-values';
+
+async function notifyIfActivatedFromPending({
+	userId,
+	locals,
+	platform,
+	url
+}: {
+	userId: string;
+	locals: App.Locals;
+	platform: App.Platform | undefined;
+	url: URL;
+}): Promise<boolean> {
+	const user = await locals.db
+		.update(users)
+		.set({ status: 'active' })
+		.where(and(eq(users.id, userId), eq(users.status, 'pending')))
+		.returning({ email: users.email });
+
+	if (!user.length) return false;
+	if (!platform) return false;
+
+	const sent = await sendAccountApprovedEmail(platform, user[0].email, `${url.origin}/auth/login`);
+	return sent.success;
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'members:edit');
@@ -125,7 +149,7 @@ export const actions: Actions = {
 		return { roleUpdated: true, updatedUserId: userId, updatedRole: roleValue };
 	},
 
-	updateStatus: async ({ request, locals }) => {
+	updateStatus: async ({ request, locals, platform, url }) => {
 		requirePermission(locals, 'members:edit');
 
 		const data = await request.formData();
@@ -144,12 +168,22 @@ export const actions: Actions = {
 			return fail(400, { error: "You can't suspend your own account.", status: 'active' });
 		}
 
-		await locals.db.update(users).set({ status: statusValue }).where(eq(users.id, userId));
+		let approvalEmailSent = false;
+		if (statusValue === 'active') {
+			approvalEmailSent = await notifyIfActivatedFromPending({ userId, locals, platform, url });
+		} else {
+			await locals.db.update(users).set({ status: statusValue }).where(eq(users.id, userId));
+		}
 
-		return { statusUpdated: true, updatedUserId: userId, updatedStatus: statusValue };
+		return {
+			statusUpdated: true,
+			updatedUserId: userId,
+			updatedStatus: statusValue,
+			approvalEmailSent
+		};
 	},
 
-	approveSignup: async ({ request, locals }) => {
+	approveSignup: async ({ request, locals, platform, url }) => {
 		requirePermission(locals, 'members:edit');
 
 		if (!locals.user) {
@@ -162,7 +196,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Missing user id.' });
 		}
 
-		await locals.db.update(users).set({ status: 'active' }).where(eq(users.id, userId));
+		const approvalEmailSent = await notifyIfActivatedFromPending({ userId, locals, platform, url });
 		await locals.db.insert(moderationEvents).values({
 			id: nanoid(),
 			actorUserId: locals.user.id,
@@ -171,7 +205,7 @@ export const actions: Actions = {
 			action: 'approve_signup'
 		});
 
-		return { signupApproved: true, updatedUserId: userId };
+		return { signupApproved: true, updatedUserId: userId, approvalEmailSent };
 	},
 
 	rejectSignup: async ({ request, locals }) => {
