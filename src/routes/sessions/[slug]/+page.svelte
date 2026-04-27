@@ -225,7 +225,7 @@
 
 	{#if data.participants.length > 0}
 		<section class="space-y-3">
-			<h2 class="text-lg font-semibold">Participant Reads</h2>
+			<h2 class="text-lg font-semibold">Participants</h2>
 			<div class="flex flex-wrap gap-2">
 				{#each data.participants as { participant, user } (user.id)}
 					<div class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
