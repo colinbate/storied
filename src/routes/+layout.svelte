@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -12,6 +13,9 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import LibraryIcon from '@lucide/svelte/icons/library';
+	import MenuIcon from '@lucide/svelte/icons/menu';
+	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import UserIcon from '@lucide/svelte/icons/user';
@@ -20,6 +24,17 @@
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
+
+	const secondaryLinks = $derived([
+		{ label: 'Sessions', href: resolve('/sessions'), icon: CalendarIcon },
+		{ label: 'Library', href: resolve('/library'), icon: LibraryIcon },
+		{ label: 'Members', href: resolve('/members'), icon: UsersIcon },
+		...data.navCategories.map((category) => ({
+			label: category.name,
+			href: resolve('/category/[slug]', { slug: category.slug }),
+			icon: MessageSquareIcon
+		}))
+	]);
 </script>
 
 <ModeWatcher />
@@ -30,11 +45,11 @@
 		<div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
 			<a
 				href={resolve('/')}
-				class="flex items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
+				class="flex min-w-0 items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
 			>
 				<img src="/favicon.svg" class="size-5" alt="logo of two message bubbles containing books" />
-				<span>{APP_NAME}</span>
-				<span class="hidden text-sm font-normal text-muted-foreground md:inline"
+				<span class="shrink-0">{APP_NAME}</span>
+				<span class="hidden truncate text-sm font-normal text-muted-foreground md:inline"
 					>{APP_SUBTITLE}</span
 				>
 			</a>
@@ -53,24 +68,27 @@
 							class="h-9 w-36 rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:w-48"
 						/>
 					</form>
-					<Button
-						href={resolve('/sessions')}
-						variant="ghost"
-						size="sm"
-						class="hidden sm:inline-flex"
-					>
-						<CalendarIcon class="h-4 w-4" />
-						Sessions
-					</Button>
-					<Button
-						href={resolve('/members')}
-						variant="ghost"
-						size="sm"
-						class="hidden sm:inline-flex"
-					>
-						<UsersIcon class="h-4 w-4" />
-						Members
-					</Button>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button variant="ghost" size="icon" class="h-9 w-9 md:hidden" {...props}>
+									<MenuIcon class="h-4 w-4" />
+									<span class="sr-only">Open navigation</span>
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-56 md:hidden">
+							<DropdownMenu.Label>Navigate</DropdownMenu.Label>
+							<DropdownMenu.Separator />
+							{#each secondaryLinks as link (link.href)}
+								{@const Icon = link.icon}
+								<DropdownMenu.Item onSelect={() => goto(link.href)}>
+									<Icon class="h-4 w-4" />
+									{link.label}
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
 				{/if}
 
 				<Button onclick={toggleMode} variant="ghost" size="icon" class="h-9 w-9">
@@ -138,6 +156,25 @@
 				{/if}
 			</div>
 		</div>
+		{#if user}
+			<nav class="hidden border-t md:block">
+				<div class="mx-auto max-w-5xl overflow-x-auto px-4">
+					<div class="flex h-11 w-max items-center gap-1">
+						{#each secondaryLinks as link (link.href)}
+							{@const Icon = link.icon}
+							<a
+								href={link.href}
+								aria-current={page.url.pathname === link.href ? 'page' : undefined}
+								class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
+							>
+								<Icon class="h-4 w-4" />
+								{link.label}
+							</a>
+						{/each}
+					</div>
+				</div>
+			</nav>
+		{/if}
 	</header>
 
 	<main class="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 py-6">
