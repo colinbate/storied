@@ -4,6 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import ThreadParticipants from '$lib/components/thread-participants.svelte';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
@@ -90,7 +91,7 @@
 		<section class="space-y-3">
 			<h2 class="text-lg font-semibold">Threads</h2>
 			<div class="space-y-3">
-				{#each data.threads as { thread, author, category } (thread.id)}
+				{#each data.threads as { thread, author, participants, category } (thread.id)}
 					<a href={resolve('/thread/[slug]', { slug: thread.slug })} class="block">
 						<Card.Root class="transition-colors hover:border-primary/40">
 							<Card.Content class="space-y-2">
@@ -103,10 +104,18 @@
 								</div>
 								<div>
 									<h3 class="text-base font-semibold">{thread.title}</h3>
-									<p class="text-sm text-muted-foreground">
-										{author.displayName} · {thread.replyCount}
-										{thread.replyCount === 1 ? 'reply' : 'replies'}
-									</p>
+									<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+										<span>{author.displayName}</span>
+										{#if participants.length > 0}
+											<span>·</span>
+											<ThreadParticipants participants={participants} class="min-w-0" />
+										{/if}
+										<span>·</span>
+										<span>
+											{thread.replyCount}
+											{thread.replyCount === 1 ? 'reply' : 'replies'}
+										</span>
+									</div>
 								</div>
 								{#if summaryText(thread.bodySource)}
 									<p class="line-clamp-2 text-sm leading-6 text-muted-foreground">

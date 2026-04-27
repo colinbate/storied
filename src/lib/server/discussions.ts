@@ -94,3 +94,75 @@ export async function getPrimaryThreadForSession(db: ORM, sessionId: string) {
 		)
 		.get();
 }
+
+export type ThreadParticipant = {
+	id: string;
+	displayName: string;
+	avatarUrl: string | null;
+	lastActivityAt: string;
+};
+
+export type ThreadListSqlRow = {
+	threadId: string;
+	threadCategoryId: string;
+	threadAuthorUserId: string;
+	threadSessionId: string | null;
+	threadSessionThreadRole: string | null;
+	threadTitle: string;
+	threadSlug: string;
+	threadBodySource: string;
+	threadBodyHtml: string;
+	threadVisibility: string;
+	threadIsLocked: number;
+	threadIsPinned: number;
+	threadReplyCount: number;
+	threadLastPostAt: string | null;
+	threadDeletedAt: string | null;
+	threadCreatedAt: string;
+	threadUpdatedAt: string;
+	authorId: string;
+	authorDisplayName: string;
+	authorAvatarUrl: string | null;
+	participantsJson: string | null;
+};
+
+export function mapThreadListSqlRow(row: ThreadListSqlRow) {
+	return {
+		thread: {
+			id: row.threadId,
+			categoryId: row.threadCategoryId,
+			authorUserId: row.threadAuthorUserId,
+			sessionId: row.threadSessionId,
+			sessionThreadRole: row.threadSessionThreadRole,
+			title: row.threadTitle,
+			slug: row.threadSlug,
+			bodySource: row.threadBodySource,
+			bodyHtml: row.threadBodyHtml,
+			visibility: row.threadVisibility,
+			isLocked: Boolean(row.threadIsLocked),
+			isPinned: Boolean(row.threadIsPinned),
+			replyCount: row.threadReplyCount,
+			lastPostAt: row.threadLastPostAt,
+			deletedAt: row.threadDeletedAt,
+			createdAt: row.threadCreatedAt,
+			updatedAt: row.threadUpdatedAt
+		},
+		author: {
+			id: row.authorId,
+			displayName: row.authorDisplayName,
+			avatarUrl: row.authorAvatarUrl
+		},
+		participants: parseThreadParticipants(row.participantsJson)
+	};
+}
+
+export function parseThreadParticipants(value: string | null | undefined): ThreadParticipant[] {
+	if (!value) return [];
+
+	try {
+		const parsed = JSON.parse(value) as ThreadParticipant[];
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+}

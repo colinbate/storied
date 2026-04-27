@@ -5,6 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
+	import ThreadParticipants from '$lib/components/thread-participants.svelte';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
@@ -164,6 +165,10 @@
 							{data.featuredDiscussion.thread.replyCount}
 							{data.featuredDiscussion.thread.replyCount === 1 ? 'reply' : 'replies'}
 						</span>
+						{#if data.featuredDiscussion.participants.length > 0}
+							<span>·</span>
+							<ThreadParticipants participants={data.featuredDiscussion.participants} />
+						{/if}
 						<span>·</span>
 						<span
 							>{formatDate(
@@ -196,7 +201,7 @@
 			</Card.Root>
 		{:else}
 			<div class="space-y-3">
-				{#each data.recentThreads as { thread, author } (thread.id)}
+				{#each data.recentThreads as { thread, author, participants } (thread.id)}
 					<a href={resolve(`/thread/${thread.slug}`)} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
 							<Card.Content class="flex items-center gap-3">
@@ -204,9 +209,9 @@
 									{#if author.avatarUrl}
 										<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
 									{/if}
-									<Avatar.Fallback class="text-xs"
-										>{author.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
-									>
+									<Avatar.Fallback class="text-xs">
+										{author.displayName.charAt(0).toUpperCase()}
+									</Avatar.Fallback>
 								</Avatar.Root>
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
@@ -221,7 +226,12 @@
 									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
 										<span>{author.displayName}</span>
 										<span>·</span>
-										<span>{formatDate(thread.lastPostAt, { time: 'never', timeZone })}</span>
+										<span
+											>{formatDate(thread.lastPostAt ?? thread.createdAt, {
+												time: 'never',
+												timeZone
+											})}</span
+										>
 										{#if thread.replyCount > 0}
 											<span>·</span>
 											<Badge variant="secondary" class="px-1.5 py-0 text-xs"
@@ -231,6 +241,9 @@
 										{/if}
 									</div>
 								</div>
+								{#if participants.length > 0}
+									<ThreadParticipants participants={participants} class="max-w-52 shrink-0" />
+								{/if}
 							</Card.Content>
 						</Card.Root>
 					</a>

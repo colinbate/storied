@@ -4,6 +4,7 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import ThreadParticipants from '$lib/components/thread-participants.svelte';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as NativeSelect from '$lib/components/ui/native-select';
 	import PlusIcon from '@lucide/svelte/icons/plus';
@@ -110,7 +111,7 @@
 		</Card.Root>
 	{:else}
 		<div class="space-y-2">
-			{#each data.threads as { thread, author } (thread.id)}
+			{#each data.threads as { thread, author, participants } (thread.id)}
 				<a href={resolve(`/thread/${thread.slug}`)} class="block">
 					<Card.Root class="transition-colors hover:border-primary/30">
 						<Card.Content class="flex items-start gap-3 py-3">
@@ -118,9 +119,9 @@
 								{#if author.avatarUrl}
 									<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
 								{/if}
-								<Avatar.Fallback class="text-xs"
-									>{author.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
-								>
+								<Avatar.Fallback class="text-xs">
+									{author.displayName.charAt(0).toUpperCase()}
+								</Avatar.Fallback>
 							</Avatar.Root>
 							<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2">
@@ -135,7 +136,12 @@
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									<span>{author.displayName}</span>
 									<span>·</span>
-									<span>{formatDate(thread.createdAt, { time: 'never', timeZone })}</span>
+									<span
+										>{formatDate(thread.lastPostAt ?? thread.createdAt, {
+											time: 'never',
+											timeZone
+										})}</span
+									>
 									{#if thread.replyCount > 0}
 										<span>·</span>
 										<Badge variant="secondary" class="px-1.5 py-0 text-xs"
@@ -145,6 +151,9 @@
 									{/if}
 								</div>
 							</div>
+							{#if participants.length > 0}
+								<ThreadParticipants participants={participants} class="max-w-48 shrink-0 pt-1" />
+							{/if}
 						</Card.Content>
 					</Card.Root>
 				</a>

@@ -1,17 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { searchSessions, searchSubjects, searchThreads } from '$shared/search';
-import {
-	authors,
-	books,
-	categories,
-	sessions,
-	series,
-	threads,
-	users
-} from '$lib/server/db/schema';
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { authors, books, sessions, series } from '$lib/server/db/schema';
+import { and, inArray, isNull } from 'drizzle-orm';
 import type { SubjectType } from '$shared/worker-messages';
+import { mapThreadListSqlRow, type ThreadListSqlRow } from '$lib/server/discussions';
 
 const RESULT_LIMIT = 8;
 
@@ -57,45 +50,86 @@ async function loadThreadResults(
 ) {
 	if (candidates.length === 0) return [];
 
-	const rankById = new Map(candidates.map((candidate, index) => [candidate.id, index]));
-	const ids = candidates.map((candidate) => candidate.id);
-	const rows = await db
-		.select({
-			thread: {
-				id: threads.id,
-				title: threads.title,
-				slug: threads.slug,
-				bodySource: threads.bodySource,
-				replyCount: threads.replyCount,
-				visibility: threads.visibility,
-				createdAt: threads.createdAt,
-				lastPostAt: threads.lastPostAt
-			},
-			author: {
-				id: users.id,
-				displayName: users.displayName,
-				avatarUrl: users.avatarUrl
-			},
-			category: {
-				name: categories.name,
-				slug: categories.slug
-			}
-		})
-		.from(threads)
-		.innerJoin(users, eq(users.id, threads.authorUserId))
-		.innerJoin(categories, eq(categories.id, threads.categoryId))
-		.where(
-			and(
-				inArray(threads.id, ids),
-				isNull(threads.deletedAt),
-				isAdmin ? undefined : ne(threads.visibility, 'admins')
-			)
-		)
-		.all();
+	type SearchThreadSqlRow = ThreadListSqlRow & {
+		categoryName: string;
+		categorySlug: string;
+		position: number;
+	};
 
-	return rows.sort(
-		(a, b) => (rankById.get(a.thread.id) ?? Infinity) - (rankById.get(b.thread.id) ?? Infinity)
+	const candidateJson = JSON.stringify(
+		candidates.map((candidate, position) => ({ id: candidate.id, position }))
 	);
+
+	const { results: rows = [] } = await db.$client
+		.prepare(
+			`WITH candidate_threads AS (
+				SELECT
+					json_extract(value, '$.id') AS id,
+					json_extract(value, '$.position') AS position
+				FROM json_each(?)
+			),
+			listed_threads AS (
+				SELECT t.*, candidate_threads.position
+				FROM candidate_threads
+				INNER JOIN threads t ON t.id = candidate_threads.id
+				WHERE t.deleted_at IS NULL
+					AND (? = 1 OR t.visibility <> 'admins')
+			)
+			SELECT
+				t.id AS threadId,
+				t.category_id AS threadCategoryId,
+				t.author_user_id AS threadAuthorUserId,
+				t.session_id AS threadSessionId,
+				t.session_thread_role AS threadSessionThreadRole,
+				t.title AS threadTitle,
+				t.slug AS threadSlug,
+				t.body_source AS threadBodySource,
+				t.body_html AS threadBodyHtml,
+				t.visibility AS threadVisibility,
+				t.is_locked AS threadIsLocked,
+				t.is_pinned AS threadIsPinned,
+				t.reply_count AS threadReplyCount,
+				t.last_post_at AS threadLastPostAt,
+				t.deleted_at AS threadDeletedAt,
+				t.created_at AS threadCreatedAt,
+				t.updated_at AS threadUpdatedAt,
+				author.id AS authorId,
+				author.display_name AS authorDisplayName,
+				author.avatar_url AS authorAvatarUrl,
+				category.name AS categoryName,
+				category.slug AS categorySlug,
+				t.position AS position,
+				COALESCE((
+					SELECT json_group_array(json_object(
+						'id', participant.id,
+						'displayName', participant.displayName,
+						'avatarUrl', participant.avatarUrl,
+						'lastActivityAt', participant.lastActivityAt
+					))
+					FROM (
+						SELECT u.id, u.display_name AS displayName, u.avatar_url AS avatarUrl, max(p.created_at) AS lastActivityAt
+						FROM posts p
+						INNER JOIN users u ON u.id = p.author_user_id
+						WHERE p.thread_id = t.id AND p.deleted_at IS NULL
+						GROUP BY u.id, u.display_name, u.avatar_url
+						ORDER BY lastActivityAt DESC
+					) participant
+				), '[]') AS participantsJson
+			FROM listed_threads t
+			INNER JOIN users author ON author.id = t.author_user_id
+			INNER JOIN categories category ON category.id = t.category_id
+			ORDER BY t.position`
+		)
+		.bind(candidateJson, isAdmin ? 1 : 0)
+		.all<SearchThreadSqlRow>();
+
+	return rows.map((row) => ({
+		...mapThreadListSqlRow(row),
+		category: {
+			name: row.categoryName,
+			slug: row.categorySlug
+		}
+	}));
 }
 
 async function loadSessionResults(
