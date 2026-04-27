@@ -134,7 +134,7 @@
 					action="?/updateStatus"
 					use:enhance={() => {
 						return async ({ result, update }) => {
-							await update();
+							await update({ reset: false });
 							if (result.type === 'success') toast.success('Reading status updated!');
 						};
 					}}

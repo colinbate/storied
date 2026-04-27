@@ -216,7 +216,7 @@
 		editSaving = true;
 		return async ({ result, update }) => {
 			editSaving = false;
-			await update();
+			await update({ reset: false });
 			if (result.type === 'success' && result.data?.edited) {
 				toast.success('Updated.');
 				editingId = null;

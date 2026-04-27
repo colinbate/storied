@@ -15,6 +15,11 @@ database_name = "storied-db"
 database_id = "546b0f58-ca90-415a-9968-f05d52925e1a"
 migrations_dir = "migrations"
 
+[[d1_databases]]
+binding = "RSVP_DB"
+database_name = "rsvp-db"
+database_id = "ec6143a3-a7e6-46fb-9735-d49f00fe425a"
+
 [vars]
 SEND_EMAILS = "yes"
 FILE_BASE_URL = "https://assets.bermudatrianglesociety.com"

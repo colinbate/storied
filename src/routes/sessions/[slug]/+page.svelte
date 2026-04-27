@@ -14,8 +14,10 @@
 	import BellIcon from '@lucide/svelte/icons/bell';
 	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import CheckIcon from '@lucide/svelte/icons/check';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { formatDate } from '$lib/date-format';
 	import { toast } from 'svelte-sonner';
 
@@ -23,6 +25,7 @@
 	const timeZone = $derived(data.user?.timezone);
 	let replyBody = $state('');
 	let replying = $state(false);
+	let rsvping = $state(false);
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 title' : `${items.length} titles`;
@@ -67,6 +70,20 @@
 				const mode = result.data?.subscriptionMode;
 				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
 				toast.success(label ? `Discussion ${label}.` : 'Notification preference updated.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
+
+	const rsvpEnhance: SubmitFunction = () => {
+		rsvping = true;
+		return async ({ result, update }) => {
+			rsvping = false;
+			await update();
+			if (result.type === 'success') {
+				const status = result.data?.status;
+				toast.success(status === 'declined' ? 'RSVP saved as declined.' : 'RSVP saved.');
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
@@ -125,6 +142,38 @@
 		</div>
 		{#if data.session.themeSummary}
 			<p class="max-w-3xl text-base leading-7">{data.session.themeSummary}</p>
+		{/if}
+		{#if data.canRsvp}
+			<form
+				method="POST"
+				action="?/setRsvp"
+				use:enhance={rsvpEnhance}
+				class="flex flex-wrap items-center gap-2 rounded-lg border border-primary/50 px-3 py-2"
+			>
+				<span>RSVP:</span>
+				<Button
+					type="submit"
+					name="status"
+					value="registered"
+					variant={data.currentUserRsvp?.attendanceStatus === 'attending' ? 'default' : 'outline'}
+					disabled={rsvping}
+				>
+					<CheckIcon class="h-4 w-4" />
+					I'll be there!
+				</Button>
+				<Button
+					type="submit"
+					name="status"
+					value="declined"
+					variant={data.currentUserRsvp?.attendanceStatus === 'not_attending'
+						? 'default'
+						: 'outline'}
+					disabled={rsvping}
+				>
+					<XIcon class="h-4 w-4" />
+					I can't make it
+				</Button>
+			</form>
 		{/if}
 	</section>
 

@@ -21,7 +21,7 @@
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	let saving = $state(false);
 
 	type LinkKind = 'book' | 'series';
@@ -103,6 +103,12 @@
 		{/if}
 	</div>
 
+	{#if form?.error}
+		<div class="rounded border border-destructive p-3 text-destructive">
+			{form.error}
+		</div>
+	{/if}
+
 	<!-- Session metadata -->
 	<Card.Root>
 		<Card.Header>
@@ -117,7 +123,7 @@
 					saving = true;
 					return async ({ result, update }) => {
 						saving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
 							if (result.data?.updated) toast.success('Session updated.');
 							if (result.data?.error) toast.error(String(result.data.error));
@@ -200,15 +206,6 @@
 						<Label for="astroPath">Astro Path</Label>
 						<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
 					</div>
-					<div class="space-y-2">
-						<Label for="externalUrl">External URL</Label>
-						<Input
-							id="externalUrl"
-							name="externalUrl"
-							type="url"
-							value={data.session.externalUrl ?? ''}
-						/>
-					</div>
 					<label class="flex items-center gap-2 pt-8 text-sm">
 						<input
 							name="isPublic"
@@ -238,42 +235,44 @@
 			{#if data.participants.length > 0}
 				<div class="divide-y rounded-md border">
 					{#each data.participants as { participant, user } (user.id)}
-						<form
-							method="POST"
-							action="?/upsertParticipant"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.participantSaved) toast.success('Participant saved.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
-							class="flex flex-wrap items-center gap-3 px-4 py-3"
-						>
-							<input type="hidden" name="userId" value={user.id} />
-							<div class="min-w-40 flex-1">
-								<p class="font-medium">{user.displayName}</p>
-								<p class="text-xs text-muted-foreground">{user.email}</p>
-							</div>
-							<div class="flex items-center gap-2">
-								<Label for="attendance-{user.id}" class="text-xs">Attendance</Label>
-								<NativeSelect
-									id="attendance-{user.id}"
-									name="attendanceStatus"
-									value={participant.attendanceStatus}
-								>
-									<NativeSelectOption value="attending">attending</NativeSelectOption>
-									<NativeSelectOption value="not_attending">not attending</NativeSelectOption>
-									<NativeSelectOption value="maybe">maybe</NativeSelectOption>
-									<NativeSelectOption value="attended">attended</NativeSelectOption>
-								</NativeSelect>
-							</div>
-							<Input name="note" class="w-48" placeholder="note" value={participant.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+						<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+							<form
+								method="POST"
+								action="?/upsertParticipant"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.participantSaved) toast.success('Participant saved.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
+							>
+								<input type="hidden" name="userId" value={user.id} />
+								<div class="min-w-40 flex-1">
+									<p class="font-medium">{user.displayName}</p>
+									<p class="text-xs text-muted-foreground">{user.email}</p>
+								</div>
+								<div class="flex items-center gap-2">
+									<Label for="attendance-{user.id}" class="text-xs">Attendance</Label>
+									<NativeSelect
+										id="attendance-{user.id}"
+										name="attendanceStatus"
+										value={participant.attendanceStatus}
+									>
+										<NativeSelectOption value="attending">attending</NativeSelectOption>
+										<NativeSelectOption value="not_attending">not attending</NativeSelectOption>
+										<NativeSelectOption value="maybe">maybe</NativeSelectOption>
+										<NativeSelectOption value="attended">attended</NativeSelectOption>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-48" placeholder="note" value={participant.note ?? ''} />
+								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this participant?"
 								formAction="?/removeParticipant"
@@ -283,7 +282,7 @@
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
@@ -357,54 +356,57 @@
 			{#if data.participantReads.length > 0}
 				<div class="divide-y rounded-md border">
 					{#each data.participantReads as { read, user } (user.id + read.subjectType + read.subjectId)}
-						<form
-							method="POST"
-							action="?/upsertParticipantSubject"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.participantSubjectSaved) toast.success('Session read saved.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
-							class="flex flex-wrap items-center gap-3 px-4 py-3"
-						>
-							<input type="hidden" name="userId" value={user.id} />
-							<input type="hidden" name="kind" value={read.subjectType} />
-							<input type="hidden" name="subjectId" value={read.subjectId} />
-							<div class="min-w-52 flex-1">
-								<p class="font-medium">{user.displayName}</p>
-								<p class="text-sm text-muted-foreground">{readSubjectTitle(read)}</p>
-							</div>
-							<NativeSelect name="relationType" value={read.relationType}>
-								<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
-								<NativeSelectOption value="considered">considered</NativeSelectOption>
-								<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
-							</NativeSelect>
-							<label class="flex items-center gap-2 text-sm">
-								<input
-									name="isPrimaryPick"
-									type="checkbox"
-									checked={read.isPrimaryPick}
-									class="rounded border-input"
-								/>
-								Primary
-							</label>
-							<label class="flex items-center gap-2 text-sm">
-								<input
-									name="isThemeRelated"
-									type="checkbox"
-									checked={read.isThemeRelated}
-									class="rounded border-input"
-								/>
-								Theme
-							</label>
-							<Input name="note" class="w-44" placeholder="note" value={read.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+						<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+							<form
+								method="POST"
+								action="?/upsertParticipantSubject"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.participantSubjectSaved)
+												toast.success('Session read saved.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
+							>
+								<input type="hidden" name="userId" value={user.id} />
+								<input type="hidden" name="kind" value={read.subjectType} />
+								<input type="hidden" name="subjectId" value={read.subjectId} />
+								<div class="min-w-52 flex-1">
+									<p class="font-medium">{user.displayName}</p>
+									<p class="text-sm text-muted-foreground">{readSubjectTitle(read)}</p>
+								</div>
+								<NativeSelect name="relationType" value={read.relationType}>
+									<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
+									<NativeSelectOption value="considered">considered</NativeSelectOption>
+									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+								</NativeSelect>
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										name="isPrimaryPick"
+										type="checkbox"
+										checked={read.isPrimaryPick}
+										class="rounded border-input"
+									/>
+									Primary
+								</label>
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										name="isThemeRelated"
+										type="checkbox"
+										checked={read.isThemeRelated}
+										class="rounded border-input"
+									/>
+									Theme
+								</label>
+								<Input name="note" class="w-44" placeholder="note" value={read.note ?? ''} />
+								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this session read?"
 								formAction="?/removeParticipantSubject"
@@ -414,7 +416,7 @@
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
@@ -547,61 +549,71 @@
 			{#if books.length > 0}
 				<div class="divide-y">
 					{#each books as entry (entry.book.id)}
-						<form
-							method="POST"
-							action="?/updateLink"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.linkUpdated) toast.success('Updated.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
+						<div
 							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.book.deletedAt
 								? 'opacity-60'
 								: ''}"
 						>
-							<input type="hidden" name="kind" value="book" />
-							<input type="hidden" name="subjectId" value={entry.book.id} />
-							{#if entry.book.coverUrl}
-								<img
-									src={entry.book.coverUrl}
-									alt=""
-									class="h-10 w-7 shrink-0 rounded object-cover"
-								/>
-							{:else}
-								<div class="flex h-10 w-7 shrink-0 items-center justify-center rounded bg-muted">
-									<BookOpenIcon class="h-3 w-3 text-muted-foreground" />
-								</div>
-							{/if}
-							<a
-								class="min-w-40 flex-1 truncate font-medium hover:underline {entry.book.deletedAt
-									? 'line-through'
-									: ''}"
-								href={resolve('/admin/books/[slug]', { slug: entry.book.slug })}
+							<form
+								method="POST"
+								action="?/updateLink"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.linkUpdated) toast.success('Updated.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
 							>
-								{entry.book.title}
-								{#if entry.book.authorText}
-									<span class="font-normal text-muted-foreground"> — {entry.book.authorText}</span>
+								<input type="hidden" name="kind" value="book" />
+								<input type="hidden" name="subjectId" value={entry.book.id} />
+								{#if entry.book.coverUrl}
+									<img
+										src={entry.book.coverUrl}
+										alt=""
+										class="h-10 w-7 shrink-0 rounded object-cover"
+									/>
+								{:else}
+									<div class="flex h-10 w-7 shrink-0 items-center justify-center rounded bg-muted">
+										<BookOpenIcon class="h-3 w-3 text-muted-foreground" />
+									</div>
 								{/if}
-							</a>
-							<div class="flex items-center gap-2">
-								<Label for="status-b-{entry.book.id}" class="text-xs">Status</Label>
-								<NativeSelect id="status-b-{entry.book.id}" name="status" value={entry.link.status}>
-									<NativeSelectOption value="starter">starter</NativeSelectOption>
-									<NativeSelectOption value="featured">featured</NativeSelectOption>
-									<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-									<NativeSelectOption value="mentioned_off_theme"
-										>mentioned off theme</NativeSelectOption
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline {entry.book.deletedAt
+										? 'line-through'
+										: ''}"
+									href={resolve('/admin/books/[slug]', { slug: entry.book.slug })}
+								>
+									{entry.book.title}
+									{#if entry.book.authorText}
+										<span class="font-normal text-muted-foreground">
+											— {entry.book.authorText}</span
+										>
+									{/if}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="status-b-{entry.book.id}" class="text-xs">Status</Label>
+									<NativeSelect
+										id="status-b-{entry.book.id}"
+										name="status"
+										value={entry.link.status}
 									>
-								</NativeSelect>
-							</div>
-							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+										<NativeSelectOption value="starter">starter</NativeSelectOption>
+										<NativeSelectOption value="featured">featured</NativeSelectOption>
+										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="mentioned_off_theme"
+											>mentioned off theme</NativeSelectOption
+										>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
+								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this book from session?"
 								formAction="?/removeLink"
@@ -611,7 +623,7 @@
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
@@ -632,67 +644,72 @@
 			{#if seriesLinks.length > 0}
 				<div class="divide-y">
 					{#each seriesLinks as entry (entry.series.id)}
-						<form
-							method="POST"
-							action="?/updateLink"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.linkUpdated) toast.success('Updated.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
+						<div
 							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.series.deletedAt
 								? 'opacity-60'
 								: ''}"
 						>
-							<input type="hidden" name="kind" value="series" />
-							<input type="hidden" name="subjectId" value={entry.series.id} />
-							{#if entry.series.coverUrl}
-								<img
-									src={entry.series.coverUrl}
-									alt=""
-									class="h-10 w-7 shrink-0 rounded object-cover"
-								/>
-							{:else}
-								<div class="flex h-10 w-7 shrink-0 items-center justify-center rounded bg-muted">
-									<LibraryIcon class="h-3 w-3 text-muted-foreground" />
-								</div>
-							{/if}
-							<a
-								class="min-w-40 flex-1 truncate font-medium hover:underline {entry.series.deletedAt
-									? 'line-through'
-									: ''}"
-								href={resolve('/admin/series/[slug]', { slug: entry.series.slug })}
+							<form
+								method="POST"
+								action="?/updateLink"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.linkUpdated) toast.success('Updated.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
 							>
-								{entry.series.title}
-								{#if entry.series.authorText}
-									<span class="font-normal text-muted-foreground">
-										— {entry.series.authorText}</span
-									>
+								<input type="hidden" name="kind" value="series" />
+								<input type="hidden" name="subjectId" value={entry.series.id} />
+								{#if entry.series.coverUrl}
+									<img
+										src={entry.series.coverUrl}
+										alt=""
+										class="h-10 w-7 shrink-0 rounded object-cover"
+									/>
+								{:else}
+									<div class="flex h-10 w-7 shrink-0 items-center justify-center rounded bg-muted">
+										<LibraryIcon class="h-3 w-3 text-muted-foreground" />
+									</div>
 								{/if}
-							</a>
-							<div class="flex items-center gap-2">
-								<Label for="status-s-{entry.series.id}" class="text-xs">Status</Label>
-								<NativeSelect
-									id="status-s-{entry.series.id}"
-									name="status"
-									value={entry.link.status}
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline {entry.series
+										.deletedAt
+										? 'line-through'
+										: ''}"
+									href={resolve('/admin/series/[slug]', { slug: entry.series.slug })}
 								>
-									<NativeSelectOption value="starter">starter</NativeSelectOption>
-									<NativeSelectOption value="featured">featured</NativeSelectOption>
-									<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-									<NativeSelectOption value="mentioned_off_theme"
-										>mentioned off theme</NativeSelectOption
+									{entry.series.title}
+									{#if entry.series.authorText}
+										<span class="font-normal text-muted-foreground">
+											— {entry.series.authorText}</span
+										>
+									{/if}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="status-s-{entry.series.id}" class="text-xs">Status</Label>
+									<NativeSelect
+										id="status-s-{entry.series.id}"
+										name="status"
+										value={entry.link.status}
 									>
-								</NativeSelect>
-							</div>
-							<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+										<NativeSelectOption value="starter">starter</NativeSelectOption>
+										<NativeSelectOption value="featured">featured</NativeSelectOption>
+										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="mentioned_off_theme"
+											>mentioned off theme</NativeSelectOption
+										>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
+								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this series from session?"
 								formAction="?/removeLink"
@@ -702,7 +719,7 @@
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}

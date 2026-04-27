@@ -174,7 +174,7 @@
 								loading = true;
 								return async ({ result, update }) => {
 									loading = false;
-									await update();
+									await update({ reset: false });
 									if (result.type === 'success') {
 										if (result.data?.updated) {
 											toast.success('Genre updated.');

@@ -307,8 +307,8 @@
 		<Card.Header>
 			<Card.Title>Featured On Profile</Card.Title>
 			<Card.Description>
-				Pick up to 5 books or series to lead your profile. Adding one creates a public profile
-				and includes you in the member list while profile visibility is on.
+				Pick up to 5 books or series to lead your profile. Adding one creates a public profile and
+				includes you in the member list while profile visibility is on.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
@@ -578,7 +578,7 @@
 					timezoneSaving = true;
 					return async ({ result, update }) => {
 						timezoneSaving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') toast.success('Timezone updated.');
 					};
 				}}
@@ -629,7 +629,7 @@
 					prefsSaving = true;
 					return async ({ result, update }) => {
 						prefsSaving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') toast.success('Preferences updated.');
 					};
 				}}
@@ -732,7 +732,7 @@
 					dyslexicSaving = true;
 					return async ({ result, update }) => {
 						dyslexicSaving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') toast.success('Preference updated.');
 					};
 				}}

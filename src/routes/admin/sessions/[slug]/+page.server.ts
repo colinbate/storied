@@ -1,4 +1,4 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
@@ -13,7 +13,7 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
-import { normalizeSlug } from '$lib/server/slugify';
+import { getSessionRsvpSlug, upsertRsvpEvent } from '$lib/server/rsvp';
 
 type SubjectKind = 'book' | 'series';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -172,7 +172,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	updateSession: async ({ request, params, locals }) => {
+	updateSession: async ({ request, params, locals, platform }) => {
 		requirePermission(locals, 'sessions:edit');
 
 		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
@@ -186,25 +186,58 @@ export const actions: Actions = {
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
+		const startsAt = getOptionalString(data, 'startsAt');
+		if (!startsAt) {
+			return fail(400, { error: 'Starts At is required to sync an RSVP event.' });
+		}
+		const rsvpDb = platform?.env.RSVP_DB;
+		if (!rsvpDb) {
+			return fail(500, { error: 'RSVP database binding is not configured.' });
+		}
+		const updatedSession = {
+			...row,
+			title,
+			status: getSessionStatus(data),
+			theme: themeTitle,
+			themeTitle,
+			themeSummary: getOptionalString(data, 'themeSummary'),
+			bodySource,
+			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
+			startsAt,
+			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
+			locationName: getOptionalString(data, 'locationName'),
+			rsvpSlug: getOptionalString(data, 'rsvpSlug') ?? getSessionRsvpSlug(row),
+			isPublic: data.get('isPublic') === 'on',
+			astroPath: getOptionalString(data, 'astroPath'),
+			externalUrl: getOptionalString(data, 'externalUrl'),
+			updatedAt: new Date().toISOString()
+		};
+
+		const rsvpEvent = await upsertRsvpEvent({
+			db: rsvpDb,
+			session: updatedSession
+		});
+		if (!rsvpEvent) {
+			return fail(400, { error: 'Starts At must be a valid date for the RSVP event.' });
+		}
 
 		await locals.db
 			.update(sessions)
 			.set({
-				title,
-				status: getSessionStatus(data),
-				theme: themeTitle,
-				themeTitle,
-				themeSummary: getOptionalString(data, 'themeSummary'),
-				bodySource,
-				bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
-				startsAt: getOptionalString(data, 'startsAt'),
-				durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
-				locationName: getOptionalString(data, 'locationName'),
-				rsvpSlug: getOptionalString(data, 'rsvpSlug'),
-				isPublic: data.get('isPublic') === 'on',
-				astroPath: getOptionalString(data, 'astroPath'),
-				externalUrl: getOptionalString(data, 'externalUrl'),
-				updatedAt: new Date().toISOString()
+				title: updatedSession.title,
+				status: updatedSession.status,
+				theme: updatedSession.theme,
+				themeTitle: updatedSession.themeTitle,
+				themeSummary: updatedSession.themeSummary,
+				bodySource: updatedSession.bodySource,
+				bodyHtml: updatedSession.bodyHtml,
+				startsAt: updatedSession.startsAt,
+				durationMinutes: updatedSession.durationMinutes,
+				locationName: updatedSession.locationName,
+				rsvpSlug: rsvpEvent.slug,
+				isPublic: updatedSession.isPublic,
+				astroPath: updatedSession.astroPath,
+				updatedAt: updatedSession.updatedAt
 			})
 			.where(eq(sessions.id, row.id));
 

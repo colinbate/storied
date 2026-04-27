@@ -13,7 +13,7 @@
 	import { toast } from 'svelte-sonner';
 	import { formatDate } from '$lib/date-format';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
 	let loading = $state(false);
 	let showCreateForm = $state(false);
@@ -36,6 +36,12 @@
 			New Session
 		</Button>
 	</div>
+
+	{#if form?.error}
+		<div class="rounded border border-destructive p-3 text-destructive">
+			{form.error}
+		</div>
+	{/if}
 
 	{#if showCreateForm}
 		<Card.Root>
@@ -116,16 +122,7 @@
 							<Label for="create-astroPath">Astro Path</Label>
 							<Input id="create-astroPath" name="astroPath" placeholder="/sessions/jan-2025" />
 						</div>
-						<div class="space-y-2">
-							<Label for="create-externalUrl">External URL</Label>
-							<Input
-								id="create-externalUrl"
-								name="externalUrl"
-								type="url"
-								placeholder="https://..."
-							/>
-						</div>
-						<label class="flex items-center gap-2 pt-8 text-sm">
+						<label class="flex items-center gap-2 text-sm">
 							<input name="isPublic" type="checkbox" class="rounded border-input" checked />
 							Public
 						</label>

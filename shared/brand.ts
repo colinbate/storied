@@ -3,6 +3,7 @@ export const APP_SUBTITLE = 'Bermuda Triangle Society Discussions';
 export const PRODUCT_NAME = 'Storied';
 export const PRIMARY_HOST = 'archive.bermudatrianglesociety.com';
 export const PRIMARY_ORIGIN = `https://${PRIMARY_HOST}`;
+export const PUBLIC_ORIGIN = 'https://bermudatrianglesociety.com';
 export const NOTIFICATION_FROM_ADDRESS = `notify@${PRIMARY_HOST}`;
 
 export function pageTitle(title?: string): string {

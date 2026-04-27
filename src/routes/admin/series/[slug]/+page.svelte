@@ -189,7 +189,7 @@
 					saving = true;
 					return async ({ result, update }) => {
 						saving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
 							if (result.data?.genresUpdated) toast.success('Genres updated.');
 							if (result.data?.error) toast.error(String(result.data.error));
@@ -221,7 +221,7 @@
 								saving = true;
 								return async ({ result, update }) => {
 									saving = false;
-									await update();
+									await update({ reset: false });
 									if (result.type === 'success') {
 										if (result.data?.membershipUpdated) toast.success('Updated.');
 										if (result.data?.error) toast.error(String(result.data.error));
@@ -412,7 +412,7 @@
 								saving = true;
 								return async ({ result, update }) => {
 									saving = false;
-									await update();
+									await update({ reset: false });
 									if (result.type === 'success') {
 										if (result.data?.sessionLinkUpdated) toast.success('Updated.');
 										if (result.data?.error) toast.error(String(result.data.error));

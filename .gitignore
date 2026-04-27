@@ -26,3 +26,4 @@ vite.config.ts.timestamp-*
 
 private
 .claude/worktrees
+src/routes/admin/debug

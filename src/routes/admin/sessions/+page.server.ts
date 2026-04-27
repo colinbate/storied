@@ -8,6 +8,7 @@ import { requirePermission } from '$lib/server/auth';
 import { renderMarkdown } from '$lib/server/markdown';
 import { createPrimarySessionThread } from '$lib/server/discussions';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
+import { upsertRsvpEvent } from '$lib/server/rsvp';
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 
@@ -32,7 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
+	create: async ({ request, locals, platform }) => {
 		requirePermission(locals, 'sessions:edit');
 
 		const data = await request.formData();
@@ -46,24 +47,47 @@ export const actions: Actions = {
 		}
 
 		const slug = slugify(getOptionalString(data, 'slug') ?? title);
+		const rsvpSlug = getOptionalString(data, 'rsvpSlug') ?? slug;
+		const status = getSessionStatus(data);
+		const startsAt = getOptionalString(data, 'startsAt');
+		if (!startsAt) {
+			return fail(400, { error: 'Starts At is required to create an RSVP event.' });
+		}
+		const rsvpDb = platform?.env.RSVP_DB;
+		if (!rsvpDb) {
+			return fail(500, { error: 'RSVP database binding is not configured.' });
+		}
 		const sessionId = newId();
-		await locals.db.insert(sessions).values({
+		const newSession = {
 			id: sessionId,
 			slug,
 			title,
-			status: getSessionStatus(data),
+			status,
 			theme: themeTitle,
 			themeTitle,
 			themeSummary: getOptionalString(data, 'themeSummary'),
 			bodySource,
 			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
-			startsAt: getOptionalString(data, 'startsAt'),
+			startsAt,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
 			locationName: getOptionalString(data, 'locationName'),
-			rsvpSlug: getOptionalString(data, 'rsvpSlug'),
+			rsvpSlug,
 			isPublic: data.get('isPublic') === 'on',
 			astroPath: getOptionalString(data, 'astroPath'),
 			externalUrl: getOptionalString(data, 'externalUrl')
+		};
+
+		const rsvpEvent = await upsertRsvpEvent({
+			db: rsvpDb,
+			session: newSession
+		});
+		if (!rsvpEvent) {
+			return fail(400, { error: 'Starts At must be a valid date for the RSVP event.' });
+		}
+
+		await locals.db.insert(sessions).values({
+			...newSession,
+			rsvpSlug: rsvpEvent.slug
 		});
 
 		const primaryThread = await createPrimarySessionThread({

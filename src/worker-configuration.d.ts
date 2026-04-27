@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 	interface Env {
 		FILES: R2Bucket;
 		DB: D1Database;
+		RSVP_DB: D1Database;
 		EMAIL: SendEmail;
 		WORKER_QUEUE: Queue;
 		ASSETS: Fetcher;

@@ -17,6 +17,7 @@ import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
+import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -170,6 +171,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			| 'none',
 		relatedThreads: sessionThreads.filter(({ thread }) => thread.id !== primaryThread?.thread.id),
 		participants,
+		canRsvp: isFutureSession(session),
+		currentUserRsvp: await getCurrentUserSessionRsvp(locals.db, session.id, locals.user.id),
 		subjectReaders: Object.fromEntries(subjectReaders),
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
 		featuredSubjects: subjects.filter(({ link }) => link.status === 'featured'),
@@ -320,5 +323,32 @@ export const actions: Actions = {
 			});
 
 		return { subscriptionMode: mode };
+	},
+
+	setRsvp: async ({ locals, params, request, platform }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const data = await request.formData();
+		const status = data.get('status')?.toString();
+		if (status !== 'registered' && status !== 'declined') {
+			return fail(400, { error: 'Invalid RSVP response.' });
+		}
+
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.slug, params.slug))
+			.get();
+		if (!session) throw error(404, 'Session not found');
+
+		return setMemberRsvp({
+			db: locals.db,
+			platform,
+			user: locals.user,
+			session,
+			status
+		});
 	}
 };

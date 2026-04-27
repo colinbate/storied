@@ -1,7 +1,9 @@
-import type { PageServerLoad } from './$types';
+import { error, fail, redirect } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
 import { categories, sessions, threads, users } from '$lib/server/db/schema';
 import { eq, isNull, desc, asc, and, count } from 'drizzle-orm';
 import { SESSION_DISCUSSIONS_CATEGORY_ID } from '$lib/server/discussions';
+import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Load categories
@@ -75,10 +77,48 @@ export const load: PageServerLoad = async ({ locals }) => {
 		categories: allCategories,
 		recentThreads,
 		currentSession: featuredSession,
+		canRsvpToCurrentSession: featuredSession ? isFutureSession(featuredSession) : false,
+		currentSessionRsvp:
+			featuredSession && locals.user
+				? await getCurrentUserSessionRsvp(locals.db, featuredSession.id, locals.user.id)
+				: null,
 		featuredDiscussion,
 		pastSessions: currentSessions
 			.filter((session) => session.status === 'past')
 			.reverse()
 			.slice(0, 2)
 	};
+};
+
+export const actions: Actions = {
+	setSessionRsvp: async ({ locals, request, platform }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const data = await request.formData();
+		const sessionSlug = data.get('sessionSlug')?.toString();
+		const status = data.get('status')?.toString();
+		if (!sessionSlug) {
+			return fail(400, { error: 'Missing session.' });
+		}
+		if (status !== 'registered' && status !== 'declined') {
+			return fail(400, { error: 'Invalid RSVP response.' });
+		}
+
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.slug, sessionSlug))
+			.get();
+		if (!session) throw error(404, 'Session not found');
+
+		return setMemberRsvp({
+			db: locals.db,
+			platform,
+			user: locals.user,
+			session,
+			status
+		});
+	}
 };

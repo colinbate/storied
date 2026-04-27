@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -9,13 +11,31 @@
 	import PinIcon from '@lucide/svelte/icons/pin';
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import CheckIcon from '@lucide/svelte/icons/check';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { resolve } from '$app/paths';
 	import { formatDate } from '$lib/date-format';
 	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
+	let rsvping = $state(false);
+
+	const rsvpEnhance: SubmitFunction = () => {
+		rsvping = true;
+		return async ({ result, update }) => {
+			rsvping = false;
+			await update();
+			if (result.type === 'success') {
+				const status = result.data?.status;
+				toast.success(status === 'declined' ? 'RSVP saved as declined.' : 'RSVP saved.');
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -37,48 +57,88 @@
 
 	{#if data.currentSession}
 		<section>
-			<a href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })} class="block">
-				<Card.Root class="border-primary/40 bg-primary/5 transition-colors hover:border-primary">
-					<Card.Content class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-						<div class="min-w-0">
-							<div class="mb-2 flex flex-wrap items-center gap-2">
-								<Badge variant={data.currentSession.status === 'current' ? 'default' : 'secondary'}>
-									{data.currentSession.status === 'current' ? 'Current session' : 'Next session'}
-								</Badge>
-							</div>
-							<h2 class="text-xl font-semibold">{data.currentSession.title}</h2>
-							{#if data.currentSession.themeTitle ?? data.currentSession.theme}
-								<p class="mt-1 text-muted-foreground">
-									{data.currentSession.themeTitle ?? data.currentSession.theme}
-								</p>
-							{/if}
-							<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-								{#if data.currentSession.startsAt}
-									<span class="inline-flex items-center gap-1">
-										<CalendarIcon class="h-4 w-4" />
-										{formatDate(data.currentSession.startsAt, {
-											time: 'always',
-											timeZone,
-											dateStyle: 'medium'
-										})}
-									</span>
-								{/if}
-								{#if data.currentSession.locationName}
-									<span class="inline-flex items-center gap-1">
-										<MapPinIcon class="h-4 w-4" />
-										{data.currentSession.locationName}
-									</span>
-								{/if}
-							</div>
+			<Card.Root class="border-primary/40 bg-primary/5 transition-colors hover:border-primary">
+				<Card.Content class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div class="min-w-0">
+						<div class="mb-2 flex flex-wrap items-center gap-2">
+							<Badge variant={data.currentSession.status === 'current' ? 'default' : 'secondary'}>
+								{data.currentSession.status === 'current' ? 'Current session' : 'Next session'}
+							</Badge>
 						</div>
-						<span
-							class="inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium"
+						<a
+							href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })}
+							class="hover:underline"
+						>
+							<h2 class="text-xl font-semibold">{data.currentSession.title}</h2>
+						</a>
+						{#if data.currentSession.themeTitle ?? data.currentSession.theme}
+							<p class="mt-1 text-muted-foreground">
+								{data.currentSession.themeTitle ?? data.currentSession.theme}
+							</p>
+						{/if}
+						<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+							{#if data.currentSession.startsAt}
+								<span class="inline-flex items-center gap-1">
+									<CalendarIcon class="h-4 w-4" />
+									{formatDate(data.currentSession.startsAt, {
+										time: 'always',
+										timeZone,
+										dateStyle: 'medium'
+									})}
+								</span>
+							{/if}
+							{#if data.currentSession.locationName}
+								<span class="inline-flex items-center gap-1">
+									<MapPinIcon class="h-4 w-4" />
+									{data.currentSession.locationName}
+								</span>
+							{/if}
+						</div>
+					</div>
+					<div class="flex flex-col items-end gap-2">
+						{#if data.user && data.canRsvpToCurrentSession}
+							<form
+								method="POST"
+								action="?/setSessionRsvp"
+								use:enhance={rsvpEnhance}
+								class="flex flex-col gap-2"
+							>
+								<input type="hidden" name="sessionSlug" value={data.currentSession.slug} />
+								<Button
+									type="submit"
+									name="status"
+									value="registered"
+									variant={data.currentSessionRsvp?.attendanceStatus === 'attending'
+										? 'default'
+										: 'outline'}
+									disabled={rsvping}
+								>
+									<CheckIcon class="h-4 w-4" />
+									I'll be there!
+								</Button>
+								<Button
+									type="submit"
+									name="status"
+									value="declined"
+									variant={data.currentSessionRsvp?.attendanceStatus === 'not_attending'
+										? 'default'
+										: 'outline'}
+									disabled={rsvping}
+								>
+									<XIcon class="h-4 w-4" />
+									I can't make it
+								</Button>
+							</form>
+						{/if}
+						<Button
+							variant="outline"
+							href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })}
 						>
 							View Session
-						</span>
-					</Card.Content>
-				</Card.Root>
-			</a>
+						</Button>
+					</div>
+				</Card.Content>
+			</Card.Root>
 		</section>
 	{/if}
 

@@ -1,8 +1,9 @@
 import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { getSignupMode, startMagicLinkLogin } from '$lib/server/auth';
 import { getDisplayNameFromForm, normalizeEmail } from '$lib/server/form-values';
+import { PUBLIC_ORIGIN } from '$shared/brand';
 
-const PUBLIC_JOIN_URL = 'https://bermudatrianglesociety.com/join/';
+const PUBLIC_JOIN_URL = `${PUBLIC_ORIGIN}/join/`;
 const APP_LOGIN_URL = '/auth/login';
 
 function redirectToJoin(request: Request, status: 'ok' | 'invalid' = 'ok'): never {

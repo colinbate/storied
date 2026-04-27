@@ -335,7 +335,7 @@
 									updatingUserId = member.id;
 									const orole = member.role;
 									return async ({ result, update }) => {
-										await update();
+										await update({ reset: false });
 										updatingUserId = null;
 										if (result.type === 'success' && result.data?.roleUpdated) {
 											toast.success(`Role updated to ${result.data.updatedRole}.`);
@@ -370,7 +370,7 @@
 									updatingStatusUserId = member.id;
 									const originalStatus = member.status;
 									return async ({ result, update }) => {
-										await update();
+										await update({ reset: false });
 										updatingStatusUserId = null;
 										if (result.type === 'success' && result.data?.statusUpdated) {
 											toast.success(
