@@ -63,25 +63,29 @@ export async function handlePushoverNotification(
 	const response = await sendPushover(env, payload);
 	const now = new Date().toISOString();
 
-	await env.DB.prepare(
-		`INSERT INTO notification_events
-		 (id, user_id, event_type, thread_id, post_id, payload_json, status, sent_at, failure_reason, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	)
-		.bind(
-			generateId(),
-			payload.userId,
-			payload.eventType ?? 'pushover_test',
-			payload.threadId ?? null,
-			payload.postId ?? null,
-			JSON.stringify({ channel: 'pushover', title: payload.title }),
-			response.success ? 'sent' : 'failed',
-			response.success ? now : null,
-			response.success ? null : response.error,
-			now,
-			now
+	try {
+		await env.DB.prepare(
+			`INSERT INTO notification_events
+			 (id, user_id, event_type, thread_id, post_id, payload_json, status, sent_at, failure_reason, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
-		.run();
+			.bind(
+				generateId(),
+				payload.userId,
+				payload.eventType ?? 'pushover_test',
+				payload.threadId ?? null,
+				payload.postId ?? null,
+				JSON.stringify({ channel: 'pushover', title: payload.title }),
+				response.success ? 'sent' : 'failed',
+				response.success ? now : null,
+				response.success ? null : response.error,
+				now,
+				now
+			)
+			.run();
+	} catch (err) {
+		console.error('[PUSHOVER EVENT LOG ERROR]', err);
+	}
 
 	if (!response.success && response.retryable) {
 		throw new RetryablePushoverError(response.error);
