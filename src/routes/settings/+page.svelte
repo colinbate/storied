@@ -30,6 +30,7 @@
 
 	let timezoneSaving = $state(false);
 	let prefsSaving = $state(false);
+	let pushoverSaving = $state(false);
 	let dyslexicSaving = $state(false);
 	let featureSaving = $state(false);
 	let featureKind = $state<'book' | 'series' | 'url'>('book');
@@ -711,6 +712,74 @@
 			</form>
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.user.role === 'admin'}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Pushover</Card.Title>
+				<Card.Description>
+					Send admin alerts for new threads, replies, and members awaiting approval.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<form
+					method="POST"
+					action="?/updatePushover"
+					use:enhance={() => {
+						pushoverSaving = true;
+						return async ({ result, update }) => {
+							pushoverSaving = false;
+							await update({ reset: false });
+							if (result.type === 'success') toast.success('Pushover settings updated.');
+						};
+					}}
+					class="space-y-4"
+				>
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							type="checkbox"
+							name="pushoverEnabled"
+							checked={data.preferences.pushoverEnabled}
+						/>
+						Enable Pushover notifications
+					</label>
+
+					<div class="space-y-2">
+						<Label for="pushoverUserKey">User key</Label>
+						<Input
+							id="pushoverUserKey"
+							name="pushoverUserKey"
+							value={data.preferences.pushoverUserKey ?? ''}
+							autocomplete="off"
+							inputmode="text"
+							maxlength={30}
+						/>
+					</div>
+
+					<div class="space-y-2">
+						<Label for="pushoverDevice">Device name</Label>
+						<Input
+							id="pushoverDevice"
+							name="pushoverDevice"
+							value={data.preferences.pushoverDevice ?? ''}
+							autocomplete="off"
+							inputmode="text"
+							maxlength={25}
+							placeholder="All devices"
+						/>
+					</div>
+
+					{#if form?.pushoverError}
+						<p class="text-sm text-destructive">{form.pushoverError}</p>
+					{/if}
+
+					<Button type="submit" disabled={pushoverSaving}>
+						{pushoverSaving ? 'Saving…' : 'Save Pushover'}
+					</Button>
+				</form>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<Card.Root>
 		<Card.Header>

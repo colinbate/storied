@@ -1,6 +1,7 @@
 import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { dispatchWorkerMessage, dispatchScheduled } from './dispatch';
+import { RetryablePushoverError } from './notifications/pushover';
 import { handleFetchTestRoute } from './test/routes';
 
 export default {
@@ -13,7 +14,11 @@ export default {
 			} catch (err) {
 				const topic = (message.body as { topic?: string } | null)?.topic ?? '<unknown>';
 				console.error(`[WORKER] Handler error for topic=${topic}:`, err);
-				message.retry();
+				if (err instanceof RetryablePushoverError) {
+					message.retry({ delaySeconds: err.retryAfterSeconds });
+				} else {
+					message.retry();
+				}
 			}
 		}
 	},

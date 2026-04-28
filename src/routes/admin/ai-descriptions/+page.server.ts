@@ -4,7 +4,7 @@ import { books, series } from '$lib/server/db/schema';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 
-const MIN_DESCRIPTION_LENGTH = 60;
+const MIN_DESCRIPTION_LENGTH = 65;
 const MAX_DESCRIPTION_LENGTH = 1200;
 
 type AugmentationType = 'book' | 'series';

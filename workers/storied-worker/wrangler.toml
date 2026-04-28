@@ -23,6 +23,17 @@ queue = "storied-worker-tasks"
 max_batch_size = 10
 max_batch_timeout = 1
 
+[[queues.producers]]
+binding = "PUSHOVER_QUEUE"
+queue = "storied-pushover-notifications"
+
+[[queues.consumers]]
+queue = "storied-pushover-notifications"
+max_batch_size = 1
+max_batch_timeout = 1
+max_concurrency = 1
+retry_delay = 5
+
 [[send_email]]
 name = "EMAIL"
 allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]

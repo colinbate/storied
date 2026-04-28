@@ -2,7 +2,9 @@ import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { handleSubjectResolve } from './subject/queue-resolve';
 import { handleNewThreadFanout } from './notifications/queue-new-thread-fanout';
+import { handlePendingSignupNotification } from './notifications/queue-pending-signup';
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
+import { handlePushoverNotification } from './notifications/pushover';
 import { runDailyDigest } from './notifications/scheduled-digest';
 import {
 	handleSearchRebuild,
@@ -29,6 +31,12 @@ export async function dispatchWorkerMessage(
 			return;
 		case 'notifications.new-thread':
 			await handleNewThreadFanout(message.payload, context);
+			return;
+		case 'notifications.pending-signup':
+			await handlePendingSignupNotification(message.payload, context);
+			return;
+		case 'notifications.pushover':
+			await handlePushoverNotification(message.payload, context);
 			return;
 		case 'search.thread.reindex':
 			await handleSearchThreadReindex(message.payload, context);

@@ -12,7 +12,8 @@ import {
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
 import { ANNOUNCEMENTS_CATEGORY_ID } from './discussions';
-import { sendMagicLinkEmail, sendPendingSignupAlertEmail } from './email';
+import { sendMagicLinkEmail } from './email';
+import { publishWorkerMessage } from './worker-queue';
 import { PRIMARY_ORIGIN } from '$shared/brand';
 
 const REDIR_COOKIE_NAME = 'storied-redirect';
@@ -290,30 +291,16 @@ export async function claimInvite(db: ORM, inviteId: string, userId: string): Pr
 }
 
 async function notifyAdminsOfPendingSignup(
-	db: ORM,
 	platform: App.Platform | undefined,
 	member: typeof users.$inferSelect
 ): Promise<void> {
 	if (!platform) return;
 	if (!member) return;
 
-	const admins = await db
-		.select({ email: users.email })
-		.from(users)
-		.where(and(eq(users.role, 'admin'), eq(users.status, 'active')))
-		.all();
-
-	const adminUrl = `${PRIMARY_ORIGIN}/admin/members`;
-	const uniqueEmails = [...new Set(admins.map((admin) => admin.email).filter(Boolean))];
-
-	await Promise.all(
-		uniqueEmails.map(async (email) => {
-			const sent = await sendPendingSignupAlertEmail(platform, email, member, adminUrl);
-			if (!sent.success) {
-				console.error('[PENDING SIGNUP ALERT ERROR]', sent.error ?? `Failed for ${email}`);
-			}
-		})
-	);
+	await publishWorkerMessage(platform.env.WORKER_QUEUE, 'notifications.pending-signup', {
+		userId: member.id,
+		baseUrl: PRIMARY_ORIGIN
+	});
 }
 
 export async function startMagicLinkLogin(
@@ -494,7 +481,7 @@ export async function completeMagicLinkLogin(
 
 	if (user?.status === 'pending') {
 		if (isNew) {
-			await notifyAdminsOfPendingSignup(db, platform, user);
+			await notifyAdminsOfPendingSignup(platform, user);
 		}
 		redirect(302, '/auth/login?error=pending_approval');
 	}

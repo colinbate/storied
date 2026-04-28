@@ -158,6 +158,34 @@ export function renderAnnouncementBroadcastEmail(args: AnnouncementBroadcastTemp
 	};
 }
 
+export interface PendingSignupAlertTemplateArgs {
+	memberEmail: string;
+	memberDisplayName: string;
+	adminUrl: string;
+}
+
+export function renderPendingSignupAlertEmail(args: PendingSignupAlertTemplateArgs): {
+	subject: string;
+	textBody: string;
+	htmlBody: string;
+} {
+	const subject = `New signup pending approval for ${APP_NAME}`;
+	const textBody = `${args.memberDisplayName} <${args.memberEmail}> has confirmed their email and is waiting for approval.\n\nReview pending members here:\n\n${args.adminUrl}`;
+	const htmlBody = `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1a1a2e; margin-bottom: 24px;">New signup pending approval</h2>
+        <p style="color: #444; line-height: 1.6;">
+          <strong>${escapeHtml(args.memberDisplayName)}</strong> &lt;${escapeHtml(args.memberEmail)}&gt; has confirmed their email and is waiting for approval.
+        </p>
+        <p style="margin-top: 24px;">
+          <a href="${escapeHtml(args.adminUrl)}" style="display: inline-block; background: #6d28d9; color: white; padding: 12px 20px; border-radius: 6px; text-decoration: none;">Review pending members</a>
+        </p>
+      </div>
+    `.trim();
+
+	return { subject, textBody, htmlBody };
+}
+
 export interface DigestFollowedThread {
 	threadId: string;
 	threadSlug: string;

@@ -213,6 +213,12 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 	emailEnabled: integer('email_enabled', { mode: 'boolean' }).notNull().default(true),
 	/** 0 = disabled, 1 = enabled */
 	marketingEnabled: integer('marketing_enabled', { mode: 'boolean' }).notNull().default(false),
+	/** 0 = disabled, 1 = enabled. Initially used for admin notifications. */
+	pushoverEnabled: integer('pushover_enabled', { mode: 'boolean' }).notNull().default(false),
+	/** Pushover user/group key. */
+	pushoverUserKey: text('pushover_user_key'),
+	/** Optional Pushover device name. */
+	pushoverDevice: text('pushover_device'),
 	/** Hour 0–23 in the user's local timezone for digest delivery. NULL = digest disabled. */
 	digestHourLocal: integer('digest_hour_local'),
 	/** Allowed values: 'immediate' | 'daily_digest'. Applied when auto-subscribing. */
@@ -235,7 +241,7 @@ export const notificationEvents = sqliteTable(
 		userId: text('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' */
+		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' */
 		eventType: text('event_type').notNull(),
 		threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
 		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),

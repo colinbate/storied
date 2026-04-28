@@ -2,6 +2,7 @@ import type { ThreadReplyFanoutPayload } from '$shared/worker-messages';
 import type { HandlerContext } from '../dispatch';
 import { generateId } from '../shared/ids';
 import { sendEmail, renderReplyNotificationEmail } from './email';
+import { queuePushoverForRecipients } from './pushover';
 
 /**
  * Fan out reply notification emails to all immediate subscribers of a thread,
@@ -50,7 +51,6 @@ export async function handleThreadReplyFanout(
 		.all<{ user_id: string; email: string }>();
 
 	const subs = subsResult.results ?? [];
-	if (subs.length === 0) return;
 
 	const template = renderReplyNotificationEmail({
 		threadTitle: thread.title,
@@ -59,6 +59,36 @@ export async function handleThreadReplyFanout(
 		replyPreview: post.body_source.substring(0, 200),
 		baseUrl
 	});
+
+	const pushoverRecipientsResult = await env.DB.prepare(
+		`SELECT s.user_id AS user_id, np.pushover_user_key AS pushover_user_key, np.pushover_device AS pushover_device
+		 FROM subscriptions s
+		 INNER JOIN users u ON u.id = s.user_id
+		 INNER JOIN notification_preferences np ON np.user_id = s.user_id
+		 WHERE s.thread_id = ?
+		   AND s.mode = 'immediate'
+		   AND s.user_id != ?
+		   AND u.role = 'admin'
+		   AND u.status = 'active'
+		   AND np.pushover_enabled = 1
+		   AND np.pushover_user_key IS NOT NULL
+		   AND np.pushover_user_key != ''`
+	)
+		.bind(threadId, replyAuthorUserId)
+		.all<{ user_id: string; pushover_user_key: string; pushover_device: string | null }>();
+
+	await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
+		title: `New reply: ${thread.title}`,
+		message: `${author.display_name} replied: ${post.body_source.substring(0, 400)}`,
+		url: `${baseUrl}/thread/${thread.slug}`,
+		urlTitle: 'Open thread',
+		priority: 0,
+		eventType: 'reply',
+		threadId,
+		postId
+	});
+
+	if (subs.length === 0) return;
 
 	for (const sub of subs) {
 		const now = new Date().toISOString();

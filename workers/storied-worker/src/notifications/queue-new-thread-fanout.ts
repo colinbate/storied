@@ -7,6 +7,7 @@ import {
 	renderAnnouncementBroadcastEmail,
 	renderNewThreadNotificationEmail
 } from './email';
+import { queuePushoverForRecipients } from './pushover';
 
 export async function handleNewThreadFanout(
 	payload: NewThreadFanoutPayload,
@@ -49,8 +50,6 @@ export async function handleNewThreadFanout(
 			.all<{ user_id: string; email: string }>();
 
 		const recipients = recipientsResult.results ?? [];
-		if (recipients.length === 0) return;
-
 		const template = renderAnnouncementBroadcastEmail({
 			threadTitle: thread.title,
 			threadSlug: thread.slug,
@@ -58,6 +57,32 @@ export async function handleNewThreadFanout(
 			threadPreview: thread.body_source.substring(0, 200),
 			baseUrl
 		});
+
+		const pushoverRecipientsResult = await env.DB.prepare(
+			`SELECT u.id AS user_id, np.pushover_user_key AS pushover_user_key, np.pushover_device AS pushover_device
+			 FROM users u
+			 INNER JOIN notification_preferences np ON np.user_id = u.id
+			 WHERE u.status = 'active'
+			   AND u.role = 'admin'
+			   AND u.id != ?
+			   AND np.pushover_enabled = 1
+			   AND np.pushover_user_key IS NOT NULL
+			   AND np.pushover_user_key != ''`
+		)
+			.bind(threadAuthorUserId)
+			.all<{ user_id: string; pushover_user_key: string; pushover_device: string | null }>();
+
+		await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
+			title: `New announcement: ${thread.title}`,
+			message: `${author.display_name}: ${thread.body_source.substring(0, 400)}`,
+			url: `${baseUrl}/thread/${thread.slug}`,
+			urlTitle: 'Open thread',
+			priority: 0,
+			eventType: 'announcement',
+			threadId: thread.id
+		});
+
+		if (recipients.length === 0) return;
 
 		for (const recipient of recipients) {
 			const now = new Date().toISOString();
@@ -93,8 +118,6 @@ export async function handleNewThreadFanout(
 		.all<{ user_id: string; email: string }>();
 
 	const recipients = recipientsResult.results ?? [];
-	if (recipients.length === 0) return;
-
 	const template = renderNewThreadNotificationEmail({
 		threadTitle: thread.title,
 		threadSlug: thread.slug,
@@ -103,6 +126,35 @@ export async function handleNewThreadFanout(
 		threadPreview: thread.body_source.substring(0, 200),
 		baseUrl
 	});
+
+	const pushoverRecipientsResult = await env.DB.prepare(
+		`SELECT s.user_id AS user_id, np.pushover_user_key AS pushover_user_key, np.pushover_device AS pushover_device
+		 FROM subscriptions s
+		 INNER JOIN users u ON u.id = s.user_id
+		 INNER JOIN notification_preferences np ON np.user_id = s.user_id
+		 WHERE s.category_id = ?
+		   AND s.mode = 'immediate'
+		   AND s.user_id != ?
+		   AND u.role = 'admin'
+		   AND u.status = 'active'
+		   AND np.pushover_enabled = 1
+		   AND np.pushover_user_key IS NOT NULL
+		   AND np.pushover_user_key != ''`
+	)
+		.bind(thread.category_id, threadAuthorUserId)
+		.all<{ user_id: string; pushover_user_key: string; pushover_device: string | null }>();
+
+	await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
+		title: `New thread: ${thread.title}`,
+		message: `${author.display_name} in ${thread.category_name}: ${thread.body_source.substring(0, 400)}`,
+		url: `${baseUrl}/thread/${thread.slug}`,
+		urlTitle: 'Open thread',
+		priority: 0,
+		eventType: 'new_thread',
+		threadId: thread.id
+	});
+
+	if (recipients.length === 0) return;
 
 	for (const recipient of recipients) {
 		const now = new Date().toISOString();

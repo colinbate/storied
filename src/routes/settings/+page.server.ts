@@ -29,6 +29,18 @@ function isNotificationMode(value: unknown): value is NotificationMode {
 	return value === 'off' || value === 'immediate' || value === 'daily_digest';
 }
 
+function normalizePushoverUserKey(value: FormDataEntryValue | null): string | null {
+	const key = value?.toString().trim() ?? '';
+	if (!key) return null;
+	return /^[A-Za-z0-9]{30}$/.test(key) ? key : '';
+}
+
+function normalizePushoverDevice(value: FormDataEntryValue | null): string | null {
+	const device = value?.toString().trim() ?? '';
+	if (!device) return null;
+	return /^[A-Za-z0-9_-]{1,25}$/.test(device) ? device : '';
+}
+
 async function ensureUserProfile(locals: App.Locals) {
 	if (!locals.user) return;
 	await locals.db
@@ -445,5 +457,42 @@ export const actions: Actions = {
 		void isDefaultSubMode;
 
 		return { prefsSuccess: true };
+	},
+
+	updatePushover: async ({ request, locals }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		if (locals.user.role !== 'admin') {
+			return fail(403, { pushoverError: 'Pushover notifications are only available to admins.' });
+		}
+
+		const data = await request.formData();
+		const enabled = data.get('pushoverEnabled')?.toString() === 'on';
+		const userKey = normalizePushoverUserKey(data.get('pushoverUserKey'));
+		const device = normalizePushoverDevice(data.get('pushoverDevice'));
+
+		if (userKey === '') {
+			return fail(400, { pushoverError: 'Enter a valid 30-character Pushover user key.' });
+		}
+		if (device === '') {
+			return fail(400, {
+				pushoverError: 'Device names can only use letters, numbers, underscores, and hyphens.'
+			});
+		}
+		if (enabled && !userKey) {
+			return fail(400, { pushoverError: 'Enter your Pushover user key before enabling.' });
+		}
+
+		await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+		await locals.db
+			.update(notificationPreferences)
+			.set({
+				pushoverEnabled: enabled,
+				pushoverUserKey: userKey,
+				pushoverDevice: device,
+				updatedAt: new Date().toISOString()
+			})
+			.where(eq(notificationPreferences.userId, locals.user.id));
+
+		return { pushoverSuccess: true };
 	}
 };

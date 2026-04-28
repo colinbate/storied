@@ -86,6 +86,33 @@ export interface NewThreadFanoutPayload {
 }
 
 // ────────────────────────────────────────────────
+// notifications.pending-signup — alert admins about a member awaiting approval
+// ────────────────────────────────────────────────
+
+export interface PendingSignupNotificationPayload {
+	userId: string;
+	baseUrl: string;
+}
+
+// ────────────────────────────────────────────────
+// notifications.pushover — send one Pushover notification
+// ────────────────────────────────────────────────
+
+export interface PushoverNotificationPayload {
+	userId: string;
+	userKey: string;
+	device?: string | null;
+	title: string;
+	message: string;
+	url?: string | null;
+	urlTitle?: string | null;
+	priority?: -2 | -1 | 0 | 1;
+	eventType?: 'reply' | 'new_thread' | 'announcement' | 'pending_signup';
+	threadId?: string | null;
+	postId?: string | null;
+}
+
+// ────────────────────────────────────────────────
 // search.* — maintain derived FTS projection indexes
 // ────────────────────────────────────────────────
 
@@ -114,6 +141,8 @@ export type WorkerMessage =
 	| { topic: 'subject.resolve'; payload: SubjectResolvePayload }
 	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload }
 	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload }
+	| { topic: 'notifications.pending-signup'; payload: PendingSignupNotificationPayload }
+	| { topic: 'notifications.pushover'; payload: PushoverNotificationPayload }
 	| { topic: 'search.thread.reindex'; payload: SearchThreadReindexPayload }
 	| { topic: 'search.session.reindex'; payload: SearchSessionReindexPayload }
 	| { topic: 'search.subject.reindex'; payload: SearchSubjectReindexPayload }
