@@ -71,7 +71,7 @@ export async function handlePushoverNotification(
 		.bind(
 			generateId(),
 			payload.userId,
-			payload.eventType ?? 'reply',
+			payload.eventType ?? 'pushover_test',
 			payload.threadId ?? null,
 			payload.postId ?? null,
 			JSON.stringify({ channel: 'pushover', title: payload.title }),

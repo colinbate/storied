@@ -241,7 +241,7 @@ export const notificationEvents = sqliteTable(
 		userId: text('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' */
+		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' | 'pushover_test' */
 		eventType: text('event_type').notNull(),
 		threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
 		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),

@@ -41,6 +41,10 @@ custom_domain = true
 binding = "WORKER_QUEUE"
 queue = "storied-worker-tasks"
 
+[[queues.producers]]
+binding = "PUSHOVER_QUEUE"
+queue = "storied-pushover-notifications"
+
 [[send_email]]
 name = "EMAIL"
 allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]

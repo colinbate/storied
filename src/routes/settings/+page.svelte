@@ -31,6 +31,7 @@
 	let timezoneSaving = $state(false);
 	let prefsSaving = $state(false);
 	let pushoverSaving = $state(false);
+	let pushoverTesting = $state(false);
 	let dyslexicSaving = $state(false);
 	let featureSaving = $state(false);
 	let featureKind = $state<'book' | 'series' | 'url'>('book');
@@ -777,6 +778,26 @@
 						{pushoverSaving ? 'Saving…' : 'Save Pushover'}
 					</Button>
 				</form>
+
+				{#if data.preferences.pushoverUserKey}
+					<form
+						method="POST"
+						action="?/testPushover"
+						use:enhance={() => {
+							pushoverTesting = true;
+							return async ({ result, update }) => {
+								pushoverTesting = false;
+								await update({ reset: false });
+								if (result.type === 'success') toast.success('Test notification queued.');
+							};
+						}}
+						class="mt-4 border-t pt-4"
+					>
+						<Button type="submit" variant="outline" disabled={pushoverTesting}>
+							{pushoverTesting ? 'Sending…' : 'Send Test Message'}
+						</Button>
+					</form>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}

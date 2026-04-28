@@ -17,6 +17,8 @@ import {
 	isValidTimezone
 } from '$lib/server/notification-preferences';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
+import { publishWorkerMessage, type WorkerQueueBinding } from '$lib/server/worker-queue';
+import { PRIMARY_ORIGIN } from '$shared/brand';
 
 type NotificationMode = 'off' | 'immediate' | 'daily_digest';
 type DefaultSubMode = 'immediate' | 'daily_digest';
@@ -39,6 +41,10 @@ function normalizePushoverDevice(value: FormDataEntryValue | null): string | nul
 	const device = value?.toString().trim() ?? '';
 	if (!device) return null;
 	return /^[A-Za-z0-9_-]{1,25}$/.test(device) ? device : '';
+}
+
+function getPushoverQueue(platform: App.Platform | undefined): WorkerQueueBinding | undefined {
+	return (platform?.env as { PUSHOVER_QUEUE?: WorkerQueueBinding } | undefined)?.PUSHOVER_QUEUE;
 }
 
 async function ensureUserProfile(locals: App.Locals) {
@@ -494,5 +500,31 @@ export const actions: Actions = {
 			.where(eq(notificationPreferences.userId, locals.user.id));
 
 		return { pushoverSuccess: true };
+	},
+
+	testPushover: async ({ locals, platform }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		if (locals.user.role !== 'admin') {
+			return fail(403, { pushoverError: 'Pushover notifications are only available to admins.' });
+		}
+
+		const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+		if (!preferences.pushoverUserKey) {
+			return fail(400, { pushoverError: 'Save your Pushover user key before sending a test.' });
+		}
+
+		await publishWorkerMessage(getPushoverQueue(platform), 'notifications.pushover', {
+			userId: locals.user.id,
+			userKey: preferences.pushoverUserKey,
+			device: preferences.pushoverDevice,
+			title: 'Welcome to the Archive',
+			message: `Hello ${locals.user.displayName}. Pushover notifications are connected.`,
+			url: PRIMARY_ORIGIN,
+			urlTitle: 'Open the Archive',
+			priority: 0,
+			eventType: 'pushover_test'
+		});
+
+		return { pushoverTestSuccess: true };
 	}
 };
