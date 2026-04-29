@@ -41,7 +41,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 		'series:edit',
 		'members:edit',
 		'sessions:edit',
-		'search:rebuild'
+		'search:rebuild',
+		'static-site:deploy'
 	]
 };
 

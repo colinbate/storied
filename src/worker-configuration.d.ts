@@ -15,6 +15,7 @@ declare namespace Cloudflare {
 		SEND_EMAILS: '';
 		FILE_BASE_URL: 'https://assets.bermudatrianglesociety.com';
 		ALLOW_SIGNUP: string;
+		DEPLOY_HOOK_URL?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}
