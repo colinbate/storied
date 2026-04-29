@@ -96,7 +96,7 @@
 							{/if}
 						</div>
 					</div>
-					<div class="flex flex-col items-end gap-2">
+					<div class="mt-3 flex flex-col items-start gap-2 sm:mt-0 sm:items-end">
 						{#if data.user && data.canRsvpToCurrentSession}
 							<form
 								method="POST"
@@ -242,7 +242,7 @@
 									</div>
 								</div>
 								{#if participants.length > 0}
-									<ThreadParticipants participants={participants} class="max-w-52 shrink-0" />
+									<ThreadParticipants {participants} class="max-w-52 shrink-0" />
 								{/if}
 							</Card.Content>
 						</Card.Root>

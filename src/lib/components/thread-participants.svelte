@@ -27,7 +27,7 @@
 </script>
 
 <div
-	class={cn('inline-flex min-w-0 items-center gap-2 text-muted-foreground', className)}
+	class={cn('hidden min-w-0 items-center gap-2 text-muted-foreground md:inline-flex', className)}
 	title={participants.map((participant) => participant.displayName).join(', ')}
 	aria-label={`${label} replied`}
 >
