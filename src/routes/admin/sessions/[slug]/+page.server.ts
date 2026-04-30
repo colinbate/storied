@@ -14,6 +14,7 @@ import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
 import { getSessionRsvpSlug, upsertRsvpEvent } from '$lib/server/rsvp';
+import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
 type SubjectKind = 'book' | 'series';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -95,21 +96,24 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})
 		.filter((x): x is NonNullable<typeof x> => x !== null);
 
-	const participants = await locals.db
-		.select({
-			participant: sessionParticipants,
-			user: {
-				id: users.id,
-				displayName: users.displayName,
-				email: users.email,
-				avatarUrl: users.avatarUrl
-			}
-		})
-		.from(sessionParticipants)
-		.innerJoin(users, eq(sessionParticipants.userId, users.id))
-		.where(eq(sessionParticipants.sessionId, session.id))
-		.orderBy(asc(users.displayName))
-		.all();
+	const [allThemes, participants] = await Promise.all([
+		listThemes(locals.db),
+		locals.db
+			.select({
+				participant: sessionParticipants,
+				user: {
+					id: users.id,
+					displayName: users.displayName,
+					email: users.email,
+					avatarUrl: users.avatarUrl
+				}
+			})
+			.from(sessionParticipants)
+			.innerJoin(users, eq(sessionParticipants.userId, users.id))
+			.where(eq(sessionParticipants.sessionId, session.id))
+			.orderBy(asc(users.displayName))
+			.all()
+	]);
 
 	const participantReads = await locals.db
 		.select({
@@ -162,6 +166,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		session,
+		themes: allThemes,
 		linkedSubjects,
 		participants,
 		participantReads,
@@ -185,7 +190,6 @@ export const actions: Actions = {
 
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
-		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
 		const startsAt = getOptionalString(data, 'startsAt');
 		if (!startsAt) {
 			return fail(400, { error: 'Starts At is required to sync an RSVP event.' });
@@ -194,10 +198,18 @@ export const actions: Actions = {
 		if (!rsvpDb) {
 			return fail(500, { error: 'RSVP database binding is not configured.' });
 		}
+		const sessionTheme = await resolveSessionTheme(locals.db, {
+			themeId: getOptionalString(data, 'themeId')
+		});
+		if (!sessionTheme.themeId || !sessionTheme.themeName) {
+			return fail(400, { error: 'Choose a theme from the library before saving the session.' });
+		}
+		const themeTitle = sessionTheme.themeName;
 		const updatedSession = {
 			...row,
 			title,
 			status: getSessionStatus(data),
+			themeId: sessionTheme.themeId,
 			theme: themeTitle,
 			themeTitle,
 			themeSummary: getOptionalString(data, 'themeSummary'),
@@ -226,6 +238,7 @@ export const actions: Actions = {
 			.set({
 				title: updatedSession.title,
 				status: updatedSession.status,
+				themeId: updatedSession.themeId,
 				theme: updatedSession.theme,
 				themeTitle: updatedSession.themeTitle,
 				themeSummary: updatedSession.themeSummary,
@@ -242,6 +255,24 @@ export const actions: Actions = {
 			.where(eq(sessions.id, row.id));
 
 		return { updated: true };
+	},
+
+	createTheme: async ({ request, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+
+		const data = await request.formData();
+		const name = getOptionalString(data, 'name');
+		if (!name || name.length < 2) {
+			return fail(400, { error: 'Theme name must be at least 2 characters.' });
+		}
+
+		const theme = await createTheme(locals.db, {
+			name,
+			status: 'idea',
+			submittedByUserId: locals.user?.id ?? null
+		});
+
+		return { themeCreated: true, theme };
 	},
 
 	addLink: async ({ request, params, locals }) => {

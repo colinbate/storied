@@ -20,6 +20,7 @@ export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'menti
 export type SessionAttendanceStatus = 'attending' | 'not_attending' | 'maybe' | 'attended';
 export type SessionParticipantSource = 'member' | 'public_form' | 'admin';
 export type SessionParticipantSubjectRelation = 'read_for_session' | 'considered' | 'mentioned';
+export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 
 // ──────────────────────────────────────────────
 // users
@@ -61,6 +62,33 @@ export const userProfiles = sqliteTable('user_profiles', {
 });
 
 // ──────────────────────────────────────────────
+// themes  (book-club theme library)
+// ──────────────────────────────────────────────
+export const themes = sqliteTable(
+	'themes',
+	{
+		id: text('id').primaryKey(),
+		slug: text('slug').notNull().unique(),
+		name: text('name').notNull(),
+		description: text('description'),
+		exampleText: text('example_text'),
+		status: text('status').notNull().default('idea').$type<ThemeStatus>(),
+		submittedByUserId: text('submitted_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		selectedAt: text('selected_at'),
+		archivedAt: text('archived_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_themes_status_name').on(table.status, table.name),
+		index('idx_themes_submitted_by').on(table.submittedByUserId, table.createdAt),
+		index('idx_themes_selected_at').on(table.selectedAt)
+	]
+);
+
+// ──────────────────────────────────────────────
 // sessions  (book-club sessions, NOT auth sessions)
 // ──────────────────────────────────────────────
 export const sessions = sqliteTable(
@@ -71,6 +99,7 @@ export const sessions = sqliteTable(
 		title: text('title').notNull(),
 		startsAt: text('starts_at'),
 		status: text('status').notNull().default('draft').$type<SessionStatus>(),
+		themeId: text('theme_id').references(() => themes.id, { onDelete: 'set null' }),
 		theme: text('theme'),
 		themeTitle: text('theme_title'),
 		themeSummary: text('theme_summary'),
@@ -88,7 +117,8 @@ export const sessions = sqliteTable(
 	(table) => [
 		index('idx_sessions_slug').on(table.slug),
 		index('idx_sessions_status_starts_at').on(table.status, table.startsAt),
-		index('idx_sessions_is_public_starts_at').on(table.isPublic, table.startsAt)
+		index('idx_sessions_is_public_starts_at').on(table.isPublic, table.startsAt),
+		index('idx_sessions_theme_id').on(table.themeId)
 	]
 );
 

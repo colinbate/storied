@@ -10,6 +10,7 @@
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
 	import MemberPicker from '$lib/components/admin/member-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
+	import SessionThemePicker from '$lib/components/admin/session-theme-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import PlusIcon from '@lucide/svelte/icons/plus';
@@ -23,6 +24,7 @@
 
 	let { data, form } = $props();
 	let saving = $state(false);
+	let selectedThemeId = $state('');
 
 	type LinkKind = 'book' | 'series';
 	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -53,6 +55,17 @@
 			)
 			.map((s) => ({ id: s.id, title: s.title, authorText: s.authorText }))
 	);
+	const availableThemes = $derived(
+		data.themes
+			.filter((theme) => theme.status !== 'archived' || theme.id === data.session.themeId)
+			.map((theme) => ({ id: theme.id, name: theme.name, status: theme.status }))
+	);
+
+	$effect(() => {
+		if (!selectedThemeId && data.session.themeId) {
+			selectedThemeId = data.session.themeId;
+		}
+	});
 
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
@@ -172,12 +185,11 @@
 						<Label for="locationName">Location</Label>
 						<Input id="locationName" name="locationName" value={data.session.locationName ?? ''} />
 					</div>
-					<div class="space-y-2">
-						<Label for="themeTitle">Theme Title</Label>
-						<Input
-							id="themeTitle"
-							name="themeTitle"
-							value={data.session.themeTitle ?? data.session.theme ?? ''}
+					<div class="sm:col-span-2">
+						<SessionThemePicker
+							themes={availableThemes}
+							bind:selectedId={selectedThemeId}
+							label="Theme"
 						/>
 					</div>
 					<div class="space-y-2 sm:col-span-2">
@@ -206,7 +218,7 @@
 						<Label for="astroPath">Astro Path</Label>
 						<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
 					</div>
-					<label class="flex items-center gap-2 pt-8 text-sm">
+					<label class="flex items-center gap-2 text-sm">
 						<input
 							name="isPublic"
 							type="checkbox"

@@ -4,6 +4,7 @@
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
@@ -30,6 +31,12 @@
 			href: '/admin/sessions',
 			label: 'Sessions',
 			icon: CalendarIcon,
+			show: data.permissions.has('sessions:edit')
+		},
+		{
+			href: '/admin/themes',
+			label: 'Themes',
+			icon: LightbulbIcon,
 			show: data.permissions.has('sessions:edit')
 		},
 		{

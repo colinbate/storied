@@ -9,6 +9,7 @@ import { renderMarkdown } from '$lib/server/markdown';
 import { createPrimarySessionThread } from '$lib/server/discussions';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import { upsertRsvpEvent } from '$lib/server/rsvp';
+import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 
@@ -23,13 +24,12 @@ function getSessionStatus(data: FormData) {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'sessions:edit');
-	const allSessions = await locals.db
-		.select()
-		.from(sessions)
-		.orderBy(desc(sessions.createdAt))
-		.all();
+	const [allSessions, allThemes] = await Promise.all([
+		locals.db.select().from(sessions).orderBy(desc(sessions.createdAt)).all(),
+		listThemes(locals.db)
+	]);
 
-	return { sessions: allSessions };
+	return { sessions: allSessions, themes: allThemes };
 };
 
 export const actions: Actions = {
@@ -38,7 +38,6 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
-		const themeTitle = getOptionalString(data, 'themeTitle') ?? getOptionalString(data, 'theme');
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 
@@ -57,12 +56,20 @@ export const actions: Actions = {
 		if (!rsvpDb) {
 			return fail(500, { error: 'RSVP database binding is not configured.' });
 		}
+		const sessionTheme = await resolveSessionTheme(locals.db, {
+			themeId: getOptionalString(data, 'themeId')
+		});
+		if (!sessionTheme.themeId || !sessionTheme.themeName) {
+			return fail(400, { error: 'Choose a theme from the library before creating the session.' });
+		}
+		const themeTitle = sessionTheme.themeName;
 		const sessionId = newId();
 		const newSession = {
 			id: sessionId,
 			slug,
 			title,
 			status,
+			themeId: sessionTheme.themeId,
 			theme: themeTitle,
 			themeTitle,
 			themeSummary: getOptionalString(data, 'themeSummary'),
@@ -107,5 +114,23 @@ export const actions: Actions = {
 		}
 
 		return { created: true };
+	},
+
+	createTheme: async ({ request, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+
+		const data = await request.formData();
+		const name = getOptionalString(data, 'name');
+		if (!name || name.length < 2) {
+			return fail(400, { error: 'Theme name must be at least 2 characters.' });
+		}
+
+		const theme = await createTheme(locals.db, {
+			name,
+			status: 'idea',
+			submittedByUserId: locals.user?.id ?? null
+		});
+
+		return { themeCreated: true, theme };
 	}
 };

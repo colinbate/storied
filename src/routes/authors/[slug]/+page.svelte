@@ -41,7 +41,11 @@
 
 			<div class="flex flex-wrap gap-2">
 				{#if data.author.websiteUrl}
-					<a href={data.author.websiteUrl} class={buttonVariants({ variant: 'outline', size: 'sm' })}>
+					<a
+						href={data.author.websiteUrl}
+						rel="external"
+						class={buttonVariants({ variant: 'outline', size: 'sm' })}
+					>
 						<GlobeIcon class="h-4 w-4" />
 						Website
 					</a>
@@ -49,6 +53,7 @@
 				{#if data.author.goodreadsUrl}
 					<a
 						href={data.author.goodreadsUrl}
+						rel="external"
 						class={buttonVariants({ variant: 'outline', size: 'sm' })}
 					>
 						<ExternalLinkIcon class="h-4 w-4" />
@@ -136,7 +141,8 @@
 									<div class="flex flex-wrap gap-2">
 										{#if item.bookCount}
 											<Badge variant="outline">
-												{item.bookCount} {item.bookCount === 1 ? 'book' : 'books'}
+												{item.bookCount}
+												{item.bookCount === 1 ? 'book' : 'books'}
 											</Badge>
 										{/if}
 										<Badge variant={item.isComplete ? 'secondary' : 'outline'}>

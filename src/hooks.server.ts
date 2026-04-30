@@ -15,6 +15,7 @@ const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?:
 	{ route: '/search', isPrefix: true, perms: 'access:general' },
 	{ route: '/series', isPrefix: true, perms: 'access:general' },
 	{ route: '/settings', isPrefix: true, perms: 'access:general' },
+	{ route: '/themes', isPrefix: true, perms: 'access:general' },
 	{ route: '/thread', isPrefix: true, perms: 'access:general' },
 	{ route: '/', isPrefix: false, perms: 'access:general' },
 	{ route: '/', isPrefix: true, perms: undefined }

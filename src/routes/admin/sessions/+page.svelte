@@ -8,6 +8,7 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import SessionThemePicker from '$lib/components/admin/session-theme-picker.svelte';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import { toast } from 'svelte-sonner';
@@ -17,6 +18,13 @@
 	const timeZone = $derived(data.user?.timezone);
 	let loading = $state(false);
 	let showCreateForm = $state(false);
+	let createThemeId = $state('');
+
+	const availableThemes = $derived(
+		data.themes
+			.filter((theme) => theme.status !== 'archived')
+			.map((theme) => ({ id: theme.id, name: theme.name, status: theme.status }))
+	);
 </script>
 
 <svelte:head>
@@ -64,6 +72,7 @@
 								if (result.data?.created) {
 									toast.success('Session created!');
 									showCreateForm = false;
+									createThemeId = '';
 								}
 								if (result.data?.error) {
 									toast.error(String(result.data.error));
@@ -102,9 +111,13 @@
 							<Label for="create-locationName">Location</Label>
 							<Input id="create-locationName" name="locationName" />
 						</div>
-						<div class="space-y-2">
-							<Label for="create-themeTitle">Theme Title</Label>
-							<Input id="create-themeTitle" name="themeTitle" placeholder="e.g. Haunted Futures" />
+						<div class="sm:col-span-2">
+							<SessionThemePicker
+								id="create-themeId"
+								themes={availableThemes}
+								bind:selectedId={createThemeId}
+								label="Theme"
+							/>
 						</div>
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="create-themeSummary">Theme Summary</Label>
