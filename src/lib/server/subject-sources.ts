@@ -32,7 +32,7 @@ export interface WorkerQueueEnv {
 
 export interface ResolveOrEnqueueResult {
 	sourceId: string;
-	resolvedSubjectType: 'book' | 'series' | null;
+	resolvedSubjectType: 'book' | 'series' | 'author' | null;
 	resolvedSubjectId: string | null;
 	alreadyExisted: boolean;
 }
@@ -66,14 +66,14 @@ export async function ensureSubjectSource(
 		.get();
 
 	let sourceId: string;
-	let resolvedSubjectType: 'book' | 'series' | null = null;
+	let resolvedSubjectType: 'book' | 'series' | 'author' | null = null;
 	let resolvedSubjectId: string | null = null;
 	let alreadyExisted = false;
 
 	if (existing) {
 		alreadyExisted = true;
 		sourceId = existing.id;
-		resolvedSubjectType = (existing.subjectType as 'book' | 'series' | null) ?? null;
+		resolvedSubjectType = (existing.subjectType as 'book' | 'series' | 'author' | null) ?? null;
 		resolvedSubjectId = existing.subjectId;
 	} else {
 		sourceId = newId();
@@ -213,11 +213,11 @@ export function detectFirstSubjectLink(text: string): DetectedSubjectLink | null
 }
 
 /**
- * Detect a link, requiring it to be of a specific kind ('book' or 'series').
+ * Detect a link, requiring it to be of a specific kind.
  */
 export function detectFirstSubjectLinkOfKind(
 	text: string,
-	kind: 'book' | 'series'
+	kind: 'book' | 'series' | 'author'
 ): DetectedSubjectLink | null {
 	const links = detectSubjectLinks(text);
 	return links.find((l) => l.subjectKind === kind) ?? null;

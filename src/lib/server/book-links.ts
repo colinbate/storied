@@ -1,5 +1,5 @@
-export type SubjectSourceType = 'goodreads' | 'goodreads-series';
-export type SubjectKind = 'book' | 'series';
+export type SubjectSourceType = 'goodreads' | 'goodreads-series' | 'goodreads-author';
+export type SubjectKind = 'book' | 'series' | 'author';
 
 export interface DetectedSubjectLink {
 	url: string;
@@ -12,7 +12,7 @@ export interface DetectedSubjectLink {
 export type DetectedBookLink = DetectedSubjectLink;
 
 /**
- * Scan text (markdown source) for supported book or series links.
+ * Scan text (markdown source) for supported subject links.
  * Returns deduplicated list of detected links.
  */
 export function detectSubjectLinks(text: string): DetectedSubjectLink[] {
@@ -46,6 +46,17 @@ export function detectSubjectLinks(text: string): DetectedSubjectLink[] {
 			sourceType: 'goodreads-series',
 			sourceKey: match[1],
 			subjectKind: 'series'
+		});
+	}
+
+	// Goodreads author URLs: https://(www.)goodreads.com/author/show/<id>.<slug>
+	const authorRegex = /https?:\/\/(?:www\.)?goodreads\.com\/author\/show\/(\d+)[\w.-]*/gi;
+	while ((match = authorRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'goodreads-author',
+			sourceKey: match[1],
+			subjectKind: 'author'
 		});
 	}
 

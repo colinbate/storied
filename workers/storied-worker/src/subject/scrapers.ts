@@ -19,6 +19,22 @@ export interface GoodreadsSeriesMetadata {
 	goodreadsUrl: string;
 }
 
+export interface GoodreadsAuthorMetadata {
+	name: string;
+	bio?: string;
+	photoUrl?: string;
+	websiteUrl?: string;
+	goodreadsUrl: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+function stringValue(value: unknown): string | undefined {
+	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 export async function scrapeGoodreadsBook(url: string): Promise<GoodreadsBookMetadata | null> {
 	const response = await fetchHtml(url);
 	if (!response) return null;
@@ -159,5 +175,96 @@ export async function scrapeGoodreadsSeries(url: string): Promise<GoodreadsSerie
 		coverUrl,
 		bookCount,
 		goodreadsUrl: url
+	};
+}
+
+export async function scrapeGoodreadsAuthor(url: string): Promise<GoodreadsAuthorMetadata | null> {
+	const response = await fetchHtml(url);
+	if (!response) return null;
+
+	const ogData: Record<string, string> = {};
+	let ldJsonRaw = '';
+	let capturingLdJson = false;
+	let profileName = '';
+	let profileBio = '';
+	let capturingName = false;
+	let capturingBio = false;
+	const bioTextHandler = {
+		element() {
+			capturingBio = true;
+		},
+		text(text: Text) {
+			if (capturingBio) {
+				profileBio += text.text;
+				if (text.lastInTextNode) capturingBio = false;
+			}
+		}
+	};
+
+	const rewriter = new HTMLRewriter()
+		.on('meta[property^="og:"]', {
+			element(el) {
+				const property = el.getAttribute('property');
+				const content = el.getAttribute('content');
+				if (property && content) ogData[property] = content;
+			}
+		})
+		.on('script[type="application/ld+json"]', {
+			element() {
+				capturingLdJson = true;
+				ldJsonRaw = '';
+			},
+			text(text) {
+				if (capturingLdJson) {
+					ldJsonRaw += text.text;
+					if (text.lastInTextNode) capturingLdJson = false;
+				}
+			}
+		})
+		.on('h1.authorName', {
+			element() {
+				capturingName = true;
+			},
+			text(text) {
+				if (capturingName) {
+					profileName += text.text;
+					if (text.lastInTextNode) capturingName = false;
+				}
+			}
+		})
+		.on('#freeTextContainer', bioTextHandler)
+		.on('.aboutAuthorInfo span', bioTextHandler);
+
+	await rewriter.transform(response).text();
+
+	let ldJson: unknown;
+	if (ldJsonRaw) {
+		try {
+			ldJson = JSON.parse(ldJsonRaw);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	const ldRecord = isRecord(ldJson) ? ldJson : {};
+	const name =
+		stringValue(ldRecord.name) ||
+		profileName.replace(/\s+/g, ' ').trim() ||
+		(ogData['og:title'] ?? '').replace(/\s+\|\s+Goodreads$/i, '').trim();
+	if (!name) return null;
+
+	const bio =
+		stringValue(ldRecord.description) ||
+		(ogData['og:description'] ?? '').trim() ||
+		profileBio.replace(/\s+/g, ' ').trim();
+	const image = ldRecord.image;
+	const websiteUrl = stringValue(ldRecord.url);
+
+	return {
+		name,
+		bio: bio ? bio.substring(0, 3000) : undefined,
+		photoUrl: stringValue(image) || ogData['og:image'] || undefined,
+		websiteUrl: websiteUrl && !websiteUrl.includes('goodreads.com') ? websiteUrl : undefined,
+		goodreadsUrl: ogData['og:url'] || url
 	};
 }

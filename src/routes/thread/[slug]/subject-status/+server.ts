@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { subjectSources, threadSubjects, threads, type SubjectType } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 
-type SupportedSourceType = 'goodreads' | 'goodreads-series';
+type SupportedSourceType = 'goodreads' | 'goodreads-series' | 'goodreads-author';
 type SubjectStatus = 'pending' | 'resolved' | 'failed' | 'unknown';
 
 interface RequestedSource {
@@ -18,7 +18,9 @@ function parseSourceParam(value: string): RequestedSource | null {
 	const sourceType = value.slice(0, separator);
 	const sourceKey = value.slice(separator + 1);
 	if (
-		(sourceType !== 'goodreads' && sourceType !== 'goodreads-series') ||
+		(sourceType !== 'goodreads' &&
+			sourceType !== 'goodreads-series' &&
+			sourceType !== 'goodreads-author') ||
 		sourceKey.trim().length === 0
 	) {
 		return null;

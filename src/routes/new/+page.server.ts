@@ -150,7 +150,7 @@ export const actions: Actions = {
 			});
 		}
 
-		// Detect and process subject links (books and series)
+		// Detect and process subject links.
 		const detectedLinks = detectSubjectLinks(bodySource);
 		for (let i = 0; i < detectedLinks.length; i++) {
 			const link = detectedLinks[i];

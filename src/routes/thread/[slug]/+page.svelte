@@ -8,6 +8,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
+	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -28,6 +29,7 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
+	import UserIcon from '@lucide/svelte/icons/user';
 	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -44,9 +46,9 @@
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
 	let queuedSubjectLinks = $state<
 		Array<{
-			sourceType: 'goodreads' | 'goodreads-series';
+			sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
 			sourceKey: string;
-			subjectKind: 'book' | 'series';
+			subjectKind: 'book' | 'series' | 'author';
 		}>
 	>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -106,9 +108,9 @@
 	function addQueuedSubjectLinks(
 		value:
 			| {
-					sourceType: 'goodreads' | 'goodreads-series';
+					sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
 					sourceKey: string;
-					subjectKind: 'book' | 'series';
+					subjectKind: 'book' | 'series' | 'author';
 			  }[]
 			| null
 			| undefined
@@ -122,8 +124,12 @@
 			if (
 				typeof link !== 'object' ||
 				link === null ||
-				(link.sourceType !== 'goodreads' && link.sourceType !== 'goodreads-series') ||
-				(link.subjectKind !== 'book' && link.subjectKind !== 'series') ||
+				(link.sourceType !== 'goodreads' &&
+					link.sourceType !== 'goodreads-series' &&
+					link.sourceType !== 'goodreads-author') ||
+				(link.subjectKind !== 'book' &&
+					link.subjectKind !== 'series' &&
+					link.subjectKind !== 'author') ||
 				typeof link.sourceKey !== 'string'
 			) {
 				continue;
@@ -737,9 +743,9 @@
 											? (
 													result.data as {
 														queuedSubjectLinks?: Array<{
-															sourceType: 'goodreads' | 'goodreads-series';
+															sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
 															sourceKey: string;
-															subjectKind: 'book' | 'series';
+															subjectKind: 'book' | 'series' | 'author';
 														}>;
 													}
 												).queuedSubjectLinks
@@ -769,8 +775,8 @@
 							required
 						/>
 						<p class="text-xs text-muted-foreground">
-							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Goodreads book
-							and series URLs are linked to the thread after posting.
+							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Goodreads book,
+							series, and author URLs are linked to the thread after posting.
 						</p>
 						{#if form?.error}
 							<p class="text-sm text-destructive">{form.error}</p>
@@ -794,7 +800,7 @@
 		{/if}
 	</div>
 
-	{#if data.books.length > 0 || data.series.length > 0 || queuedSubjectLinks.length > 0}
+	{#if data.books.length > 0 || data.series.length > 0 || data.authors.length > 0 || queuedSubjectLinks.length > 0}
 		<aside class="w-full shrink-0 lg:w-64">
 			<div class="sticky top-20 space-y-6">
 				{#if queuedSubjectLinks.length > 0}
@@ -808,6 +814,8 @@
 									>
 										{#if link.subjectKind === 'series'}
 											<LibraryIcon class="h-5 w-5 text-muted-foreground" />
+										{:else if link.subjectKind === 'author'}
+											<UserIcon class="h-5 w-5 text-muted-foreground" />
 										{:else}
 											<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
 										{/if}
@@ -816,7 +824,11 @@
 										<div class="flex items-center gap-1.5 text-sm leading-tight font-medium">
 											<LoaderCircleIcon class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 											<span>
-												{link.subjectKind === 'series' ? 'Series' : 'Book'} loading
+												{link.subjectKind === 'series'
+													? 'Series'
+													: link.subjectKind === 'author'
+														? 'Author'
+														: 'Book'} loading
 											</span>
 										</div>
 										<p class="text-xs text-muted-foreground">
@@ -824,6 +836,112 @@
 										</p>
 									</div>
 								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+				{#if data.authors.length > 0}
+					<div>
+						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Authors Mentioned</h3>
+						<div class="space-y-2">
+							{#each data.authorsWithSessionLinks as entry (entry.author.id)}
+								{#if data.session && data.canPromoteBooks}
+									<Popover.Root>
+										<Popover.Trigger
+											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+										>
+											<span class="flex items-start gap-3 p-2">
+												{#if entry.author.photoUrl}
+													<img
+														src={entry.author.photoUrl}
+														alt={entry.author.name}
+														class="h-16 w-16 shrink-0 rounded object-cover shadow-sm"
+													/>
+												{:else}
+													<span
+														class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted"
+													>
+														<UserIcon class="h-5 w-5 text-muted-foreground" />
+													</span>
+												{/if}
+												<span class="min-w-0 flex-1">
+													<span class="block text-sm leading-tight font-medium"
+														>{entry.author.name}</span
+													>
+													{#if entry.sessionSubject}
+														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+															{entry.sessionSubject.status.replaceAll('_', ' ')}
+														</Badge>
+													{/if}
+												</span>
+											</span>
+										</Popover.Trigger>
+										<Popover.Content align="start" class="w-72 space-y-3">
+											<div>
+												<p class="font-medium">{entry.author.name}</p>
+												<p class="text-sm text-muted-foreground">
+													{entry.sessionSubject
+														? 'Linked to this session.'
+														: 'Promote this mention to the session.'}
+												</p>
+											</div>
+											<form
+												method="POST"
+												action="?/promoteSessionSubject"
+												use:enhance={promoteEnhance('Session link updated.')}
+												class="space-y-2"
+											>
+												<input type="hidden" name="subjectType" value="author" />
+												<input type="hidden" name="subjectId" value={entry.author.id} />
+												<label for="author-status-{entry.author.id}" class="text-xs font-medium"
+													>Session status</label
+												>
+												<NativeSelect.Root
+													id="author-status-{entry.author.id}"
+													name="status"
+													value={entry.sessionSubject?.status ?? 'starter'}
+												>
+													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+													<NativeSelect.Option value="mentioned_off_theme"
+														>mentioned off theme</NativeSelect.Option
+													>
+												</NativeSelect.Root>
+												<Button type="submit" size="sm" class="w-full">
+													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+												</Button>
+											</form>
+											<div class="flex gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													href={resolve('/authors/[slug]', { slug: entry.author.slug })}
+													class="flex-1"
+												>
+													<ExternalLinkIcon class="h-4 w-4" />
+													Open
+												</Button>
+												{#if entry.sessionSubject}
+													<form
+														method="POST"
+														action="?/unlinkSessionSubject"
+														use:enhance={promoteEnhance('Removed from session.')}
+														class="flex-1"
+													>
+														<input type="hidden" name="subjectType" value="author" />
+														<input type="hidden" name="subjectId" value={entry.author.id} />
+														<Button type="submit" variant="outline" size="sm" class="w-full">
+															Unlink
+														</Button>
+													</form>
+												{/if}
+											</div>
+										</Popover.Content>
+									</Popover.Root>
+								{:else}
+									<AuthorCard author={entry.author} compact />
+								{/if}
 							{/each}
 						</div>
 					</div>

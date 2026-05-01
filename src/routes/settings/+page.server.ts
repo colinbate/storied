@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	authors,
 	genres,
 	notificationPreferences,
 	series,
@@ -58,67 +59,102 @@ async function ensureUserProfile(locals: App.Locals) {
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
-	const [profileRows, featuredBookRows, featuredSeriesRows, allBooks, allSeries, allGenres] =
-		await Promise.all([
-			locals.db.select().from(userProfiles).where(eq(userProfiles.userId, locals.user.id)).all(),
-			locals.db
-				.select({
-					relation: userSubjects,
-					book: books
-				})
-				.from(userSubjects)
-				.innerJoin(books, eq(userSubjects.subjectId, books.id))
-				.where(
-					and(
-						eq(userSubjects.userId, locals.user.id),
-						eq(userSubjects.featuredOnProfile, true),
-						eq(userSubjects.subjectType, 'book'),
-						isNull(books.deletedAt)
-					)
+	const [
+		profileRows,
+		featuredBookRows,
+		featuredSeriesRows,
+		featuredAuthorRows,
+		allBooks,
+		allSeries,
+		allAuthors,
+		allGenres
+	] = await Promise.all([
+		locals.db.select().from(userProfiles).where(eq(userProfiles.userId, locals.user.id)).all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				book: books
+			})
+			.from(userSubjects)
+			.innerJoin(books, eq(userSubjects.subjectId, books.id))
+			.where(
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.featuredOnProfile, true),
+					eq(userSubjects.subjectType, 'book'),
+					isNull(books.deletedAt)
 				)
-				.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
-				.all(),
-			locals.db
-				.select({
-					relation: userSubjects,
-					series
-				})
-				.from(userSubjects)
-				.innerJoin(series, eq(userSubjects.subjectId, series.id))
-				.where(
-					and(
-						eq(userSubjects.userId, locals.user.id),
-						eq(userSubjects.featuredOnProfile, true),
-						eq(userSubjects.subjectType, 'series'),
-						isNull(series.deletedAt)
-					)
+			)
+			.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+			.all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				series
+			})
+			.from(userSubjects)
+			.innerJoin(series, eq(userSubjects.subjectId, series.id))
+			.where(
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.featuredOnProfile, true),
+					eq(userSubjects.subjectType, 'series'),
+					isNull(series.deletedAt)
 				)
-				.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
-				.all(),
-			locals.db
-				.select({
-					id: books.id,
-					title: books.title,
-					authorText: books.authorText,
-					slug: books.slug,
-					deletedAt: books.deletedAt
-				})
-				.from(books)
-				.orderBy(asc(books.title))
-				.all(),
-			locals.db
-				.select({
-					id: series.id,
-					title: series.title,
-					authorText: series.authorText,
-					slug: series.slug,
-					deletedAt: series.deletedAt
-				})
-				.from(series)
-				.orderBy(asc(series.title))
-				.all(),
-			locals.db.select().from(genres).orderBy(asc(genres.name)).all()
-		]);
+			)
+			.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+			.all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				author: authors
+			})
+			.from(userSubjects)
+			.innerJoin(authors, eq(userSubjects.subjectId, authors.id))
+			.where(
+				and(
+					eq(userSubjects.userId, locals.user.id),
+					eq(userSubjects.featuredOnProfile, true),
+					eq(userSubjects.subjectType, 'author'),
+					isNull(authors.deletedAt)
+				)
+			)
+			.orderBy(asc(userSubjects.featuredOrder), desc(userSubjects.updatedAt))
+			.all(),
+		locals.db
+			.select({
+				id: books.id,
+				title: books.title,
+				authorText: books.authorText,
+				slug: books.slug,
+				deletedAt: books.deletedAt
+			})
+			.from(books)
+			.orderBy(asc(books.title))
+			.all(),
+		locals.db
+			.select({
+				id: series.id,
+				title: series.title,
+				authorText: series.authorText,
+				slug: series.slug,
+				deletedAt: series.deletedAt
+			})
+			.from(series)
+			.orderBy(asc(series.title))
+			.all(),
+		locals.db
+			.select({
+				id: authors.id,
+				name: authors.name,
+				slug: authors.slug,
+				deletedAt: authors.deletedAt
+			})
+			.from(authors)
+			.orderBy(asc(authors.name))
+			.all(),
+		locals.db.select().from(genres).orderBy(asc(genres.name)).all()
+	]);
 	const profile = profileRows[0] ?? null;
 	const featuredSubjects = [
 		...featuredBookRows.map(({ relation, book }) => ({ kind: 'book' as const, relation, book })),
@@ -126,6 +162,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			kind: 'series' as const,
 			relation,
 			series
+		})),
+		...featuredAuthorRows.map(({ relation, author }) => ({
+			kind: 'author' as const,
+			relation,
+			author
 		}))
 	].sort(
 		(a, b) =>
@@ -140,6 +181,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		featuredSubjects,
 		allBooks,
 		allSeries,
+		allAuthors,
 		allGenres,
 		preferences,
 		defaultTimezone: DEFAULT_TIMEZONE
@@ -213,12 +255,14 @@ export const actions: Actions = {
 		if (subjectType === 'url') {
 			const url = data.get('url')?.toString()?.trim() || '';
 			if (!url) {
-				return fail(400, { featureError: 'Paste a Goodreads book or series URL.' });
+				return fail(400, { featureError: 'Paste a Goodreads book, series, or author URL.' });
 			}
 
 			const link = detectFirstSubjectLink(url);
 			if (!link) {
-				return fail(400, { featureError: 'Only Goodreads book or series URLs are supported.' });
+				return fail(400, {
+					featureError: 'Only Goodreads book, series, or author URLs are supported.'
+				});
 			}
 
 			const existingFeatured = await locals.db
@@ -249,8 +293,8 @@ export const actions: Actions = {
 
 			return { featureQueued: true };
 		}
-		if (subjectType !== 'book' && subjectType !== 'series') {
-			return fail(400, { featureError: 'Choose a book or series.' });
+		if (subjectType !== 'book' && subjectType !== 'series' && subjectType !== 'author') {
+			return fail(400, { featureError: 'Choose a book, series, or author.' });
 		}
 		const subjectId = data.get('subjectId')?.toString();
 		if (!subjectId) {
@@ -301,7 +345,10 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const subjectType = data.get('kind')?.toString();
 		const subjectId = data.get('subjectId')?.toString();
-		if ((subjectType !== 'book' && subjectType !== 'series') || !subjectId) {
+		if (
+			(subjectType !== 'book' && subjectType !== 'series' && subjectType !== 'author') ||
+			!subjectId
+		) {
 			return fail(400, { featureError: 'Missing featured subject.' });
 		}
 

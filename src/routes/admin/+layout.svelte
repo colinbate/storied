@@ -7,6 +7,7 @@
 	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import PenLineIcon from '@lucide/svelte/icons/pen-line';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import TagIcon from '@lucide/svelte/icons/tag';
 	import { resolve } from '$app/paths';
@@ -50,6 +51,12 @@
 			label: 'Series',
 			icon: LibraryIcon,
 			show: data.permissions.has('series:edit')
+		},
+		{
+			href: '/admin/authors',
+			label: 'Authors',
+			icon: PenLineIcon,
+			show: data.permissions.has('author:edit')
 		},
 		{
 			href: '/admin/ai-descriptions',

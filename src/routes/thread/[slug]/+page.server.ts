@@ -5,6 +5,7 @@ import {
 	posts,
 	users,
 	subscriptions,
+	authors,
 	books,
 	series,
 	subjectSources,
@@ -64,69 +65,91 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 
 	depends(`app:thread-subjects:${thread.thread.id}`);
 
-	const [threadPosts, subscription, bookSubjectRows, seriesSubjectRows] = await Promise.all([
-		locals.db
-			.select({
-				post: posts,
-				author: {
-					id: users.id,
-					displayName: users.displayName,
-					avatarUrl: users.avatarUrl
-				}
-			})
-			.from(posts)
-			.innerJoin(users, eq(posts.authorUserId, users.id))
-			.where(and(eq(posts.threadId, thread.thread.id), isNull(posts.deletedAt)))
-			.orderBy(asc(posts.createdAt))
-			.all(),
-		locals.db
-			.select()
-			.from(subscriptions)
-			.where(
-				and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.thread.id))
-			)
-			.get(),
-		locals.db
-			.select({
-				link: threadSubjects,
-				book: books
-			})
-			.from(threadSubjects)
-			.innerJoin(books, eq(threadSubjects.subjectId, books.id))
-			.where(
-				and(
-					eq(threadSubjects.threadId, thread.thread.id),
-					eq(threadSubjects.subjectType, 'book'),
-					isNull(books.deletedAt)
+	const [threadPosts, subscription, bookSubjectRows, seriesSubjectRows, authorSubjectRows] =
+		await Promise.all([
+			locals.db
+				.select({
+					post: posts,
+					author: {
+						id: users.id,
+						displayName: users.displayName,
+						avatarUrl: users.avatarUrl
+					}
+				})
+				.from(posts)
+				.innerJoin(users, eq(posts.authorUserId, users.id))
+				.where(and(eq(posts.threadId, thread.thread.id), isNull(posts.deletedAt)))
+				.orderBy(asc(posts.createdAt))
+				.all(),
+			locals.db
+				.select()
+				.from(subscriptions)
+				.where(
+					and(
+						eq(subscriptions.userId, locals.user.id),
+						eq(subscriptions.threadId, thread.thread.id)
+					)
 				)
-			)
-			.orderBy(asc(threadSubjects.displayOrder))
-			.all(),
-		locals.db
-			.select({
-				link: threadSubjects,
-				series
-			})
-			.from(threadSubjects)
-			.innerJoin(series, eq(threadSubjects.subjectId, series.id))
-			.where(
-				and(
-					eq(threadSubjects.threadId, thread.thread.id),
-					eq(threadSubjects.subjectType, 'series'),
-					isNull(series.deletedAt)
+				.get(),
+			locals.db
+				.select({
+					link: threadSubjects,
+					book: books
+				})
+				.from(threadSubjects)
+				.innerJoin(books, eq(threadSubjects.subjectId, books.id))
+				.where(
+					and(
+						eq(threadSubjects.threadId, thread.thread.id),
+						eq(threadSubjects.subjectType, 'book'),
+						isNull(books.deletedAt)
+					)
 				)
-			)
-			.orderBy(asc(threadSubjects.displayOrder))
-			.all()
-	]);
+				.orderBy(asc(threadSubjects.displayOrder))
+				.all(),
+			locals.db
+				.select({
+					link: threadSubjects,
+					series
+				})
+				.from(threadSubjects)
+				.innerJoin(series, eq(threadSubjects.subjectId, series.id))
+				.where(
+					and(
+						eq(threadSubjects.threadId, thread.thread.id),
+						eq(threadSubjects.subjectType, 'series'),
+						isNull(series.deletedAt)
+					)
+				)
+				.orderBy(asc(threadSubjects.displayOrder))
+				.all(),
+			locals.db
+				.select({
+					link: threadSubjects,
+					author: authors
+				})
+				.from(threadSubjects)
+				.innerJoin(authors, eq(threadSubjects.subjectId, authors.id))
+				.where(
+					and(
+						eq(threadSubjects.threadId, thread.thread.id),
+						eq(threadSubjects.subjectType, 'author'),
+						isNull(authors.deletedAt)
+					)
+				)
+				.orderBy(asc(threadSubjects.displayOrder))
+				.all()
+		]);
 
 	// Preserve display_order across both subject kinds.
 	const linkedSubjects = [
 		...bookSubjectRows.map(({ link, book }) => ({ kind: 'book' as const, link, book })),
-		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series }))
+		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series })),
+		...authorSubjectRows.map(({ link, author }) => ({ kind: 'author' as const, link, author }))
 	].sort((a, b) => a.link.displayOrder - b.link.displayOrder);
 
 	const uniqueBooks = linkedSubjects.filter((s) => s.kind === 'book').map((s) => s.book);
+	const uniqueAuthors = linkedSubjects.filter((s) => s.kind === 'author').map((s) => s.author);
 
 	// Load linked session if present
 	let session: {
@@ -177,6 +200,12 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			series: s.series,
 			sessionSubject: sessionSubjectMap.get(`series:${s.series.id}`) ?? null
 		}));
+	const authorsWithSessionLinks = linkedSubjects
+		.filter((s) => s.kind === 'author')
+		.map((s) => ({
+			author: s.author,
+			sessionSubject: sessionSubjectMap.get(`author:${s.author.id}`) ?? null
+		}));
 
 	const canModerate = locals.permissions.has('moderate');
 	const canPromoteBooks = locals.permissions.has('book:promote');
@@ -201,8 +230,10 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 			| 'none',
 		books: uniqueBooks,
 		series: linkedSubjects.filter((s) => s.kind === 'series').map((s) => s.series),
+		authors: uniqueAuthors,
 		booksWithSessionLinks,
 		seriesWithSessionLinks,
+		authorsWithSessionLinks,
 		session,
 		canModerate,
 		canPromoteBooks,
@@ -286,9 +317,9 @@ export const actions: Actions = {
 		// Detect and process subject links (books and series)
 		const detectedLinks = detectSubjectLinks(bodySource);
 		const queuedSubjectLinks: Array<{
-			sourceType: 'goodreads' | 'goodreads-series';
+			sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
 			sourceKey: string;
-			subjectKind: 'book' | 'series';
+			subjectKind: 'book' | 'series' | 'author';
 		}> = [];
 		for (let i = 0; i < detectedLinks.length; i++) {
 			const link = detectedLinks[i];
@@ -524,7 +555,7 @@ export const actions: Actions = {
 		const subjectType = data.get('subjectType')?.toString() as SubjectType | undefined;
 		const subjectId = data.get('subjectId')?.toString();
 		const status = getSessionSubjectStatus(data.get('status'));
-		if (!subjectId || (subjectType !== 'book' && subjectType !== 'series')) {
+		if (!subjectId || !subjectType || !['book', 'series', 'author'].includes(subjectType)) {
 			return fail(400, { error: 'Missing subject reference.' });
 		}
 
@@ -594,7 +625,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const subjectType = data.get('subjectType')?.toString() as SubjectType | undefined;
 		const subjectId = data.get('subjectId')?.toString();
-		if (!subjectId || (subjectType !== 'book' && subjectType !== 'series')) {
+		if (!subjectId || !subjectType || !['book', 'series', 'author'].includes(subjectType)) {
 			return fail(400, { error: 'Missing subject reference.' });
 		}
 

@@ -4,6 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -121,6 +122,10 @@
 						<LibraryIcon class="h-4 w-4" />
 						Series
 					</Button>
+					<Button href={resolve('/authors')} variant="outline" size="sm">
+						<UserIcon class="h-4 w-4" />
+						Authors
+					</Button>
 				</div>
 			{/if}
 		</div>
@@ -132,12 +137,14 @@
 				{/if}
 				{#if sections.includes('series')}
 					<Badge variant="secondary">
-						{series.length} {series.length === 1 ? 'series' : 'series'}
+						{series.length}
+						{series.length === 1 ? 'series' : 'series'}
 					</Badge>
 				{/if}
 				{#if sections.includes('authors')}
 					<Badge variant="secondary">
-						{authors.length} {authors.length === 1 ? 'author' : 'authors'}
+						{authors.length}
+						{authors.length === 1 ? 'author' : 'authors'}
 					</Badge>
 				{/if}
 			</div>
@@ -247,7 +254,8 @@
 									<div class="flex flex-wrap gap-2">
 										{#if item.bookCount}
 											<Badge variant="outline">
-												{item.bookCount} {item.bookCount === 1 ? 'book' : 'books'}
+												{item.bookCount}
+												{item.bookCount === 1 ? 'book' : 'books'}
 											</Badge>
 										{/if}
 										<Badge variant={item.isComplete ? 'secondary' : 'outline'}>
@@ -276,31 +284,7 @@
 			</div>
 			<div class="grid gap-3 sm:grid-cols-2">
 				{#each visibleAuthors as author (author.id)}
-					<a href={resolve('/authors/[slug]', { slug: author.slug })} class="block">
-						<Card.Root class="h-full transition-colors hover:border-primary/40">
-							<Card.Content class="flex gap-4">
-								{#if author.photoUrl}
-									<img
-										src={author.photoUrl}
-										alt={author.name}
-										class="h-16 w-16 shrink-0 rounded object-cover"
-									/>
-								{:else}
-									<div class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted">
-										<UserIcon class="h-6 w-6 text-muted-foreground" />
-									</div>
-								{/if}
-								<div class="min-w-0 space-y-2">
-									<h3 class="font-semibold">{author.name}</h3>
-									{#if summaryText(author.bio)}
-										<p class="line-clamp-3 text-sm leading-6 text-muted-foreground">
-											{summaryText(author.bio)}
-										</p>
-									{/if}
-								</div>
-							</Card.Content>
-						</Card.Root>
-					</a>
+					<AuthorCard {author} compact />
 				{/each}
 			</div>
 		</section>

@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	authors,
 	series,
 	sessionParticipantSubjects,
 	sessionParticipants,
@@ -16,7 +17,7 @@ import { renderMarkdown } from '$lib/server/markdown';
 import { getSessionRsvpSlug, upsertRsvpEvent } from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
-type SubjectKind = 'book' | 'series';
+type SubjectKind = 'book' | 'series' | 'author';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
@@ -73,13 +74,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Hydrate books
 	const bookIds = rawLinks.filter((l) => l.subjectType === 'book').map((l) => l.subjectId);
 	const seriesIds = rawLinks.filter((l) => l.subjectType === 'series').map((l) => l.subjectId);
+	const authorIds = rawLinks.filter((l) => l.subjectType === 'author').map((l) => l.subjectId);
 
 	const bookRows = bookIds.length ? await locals.db.select().from(books).all() : [];
 	const seriesRows = seriesIds.length ? await locals.db.select().from(series).all() : [];
+	const authorRows = authorIds.length ? await locals.db.select().from(authors).all() : [];
 
 	const bookMap = new Map(bookRows.filter((b) => bookIds.includes(b.id)).map((b) => [b.id, b]));
 	const seriesMap = new Map(
 		seriesRows.filter((s) => seriesIds.includes(s.id)).map((s) => [s.id, s])
+	);
+	const authorMap = new Map(
+		authorRows.filter((a) => authorIds.includes(a.id)).map((a) => [a.id, a])
 	);
 
 	const linkedSubjects = rawLinks
@@ -91,6 +97,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			if (l.subjectType === 'series') {
 				const s = seriesMap.get(l.subjectId);
 				return s ? { kind: 'series' as const, link: l, series: s } : null;
+			}
+			if (l.subjectType === 'author') {
+				const a = authorMap.get(l.subjectId);
+				return a ? { kind: 'author' as const, link: l, author: a } : null;
 			}
 			return null;
 		})
@@ -152,6 +162,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.from(series)
 		.orderBy(asc(series.title))
 		.all();
+	const allAuthors = await locals.db
+		.select({
+			id: authors.id,
+			name: authors.name,
+			slug: authors.slug,
+			deletedAt: authors.deletedAt
+		})
+		.from(authors)
+		.orderBy(asc(authors.name))
+		.all();
 	const allUsers = await locals.db
 		.select({
 			id: users.id,
@@ -172,6 +192,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		participantReads,
 		allBooks,
 		allSeries,
+		allAuthors,
 		allUsers
 	};
 };
@@ -283,7 +304,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
 		const subjectId = data.get('subjectId')?.toString();
-		if (!kind || (kind !== 'book' && kind !== 'series'))
+		if (!kind || !['book', 'series', 'author'].includes(kind))
 			return fail(400, { error: 'Invalid subject kind.' });
 		if (!subjectId) return fail(400, { error: 'Select a subject to link.' });
 
@@ -316,7 +337,8 @@ export const actions: Actions = {
 		const note = data.get('note')?.toString()?.trim() || null;
 
 		const link = detectFirstSubjectLink(url);
-		if (!link) return fail(400, { error: 'Only Goodreads book or series URLs are supported.' });
+		if (!link)
+			return fail(400, { error: 'Only Goodreads book, series, or author URLs are supported.' });
 
 		const result = await ensureSubjectSource(locals.db, link, platform?.env, {
 			sessionLink: {
@@ -497,6 +519,9 @@ export const actions: Actions = {
 		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
 		const subjectId = data.get('subjectId')?.toString();
 		if (!userId || !kind || !subjectId) return fail(400, { error: 'Missing read reference.' });
+		if (kind !== 'book' && kind !== 'series') {
+			return fail(400, { error: 'Invalid subject kind.' });
+		}
 
 		await locals.db
 			.delete(sessionParticipantSubjects)

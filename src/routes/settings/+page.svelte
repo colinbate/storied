@@ -8,6 +8,7 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import AuthorPicker from '$lib/components/admin/author-picker.svelte';
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
 	import ProfileGenrePicker from '$lib/components/profile-genre-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
@@ -16,6 +17,7 @@
 	import EyeIcon from '@lucide/svelte/icons/eye';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import StarIcon from '@lucide/svelte/icons/star';
+	import UserIcon from '@lucide/svelte/icons/user';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
@@ -34,9 +36,10 @@
 	let pushoverTesting = $state(false);
 	let dyslexicSaving = $state(false);
 	let featureSaving = $state(false);
-	let featureKind = $state<'book' | 'series' | 'url'>('book');
+	let featureKind = $state<'book' | 'series' | 'author' | 'url'>('book');
 	let featureBookId = $state<string | undefined>(undefined);
 	let featureSeriesId = $state<string | undefined>(undefined);
+	let featureAuthorId = $state<string | undefined>(undefined);
 	let featureUrl = $state<string | undefined>(undefined);
 	let profileGenres = $derived([...(data.profileGenres ?? [])]);
 
@@ -84,6 +87,17 @@
 					)
 			)
 			.map((entry) => ({ id: entry.id, title: entry.title, authorText: entry.authorText }))
+	);
+	const availableAuthors = $derived(
+		data.allAuthors
+			.filter((author) => !author.deletedAt)
+			.filter(
+				(author) =>
+					!data.featuredSubjects.some(
+						(item) => item.kind === 'author' && item.author.id === author.id
+					)
+			)
+			.map((author) => ({ id: author.id, name: author.name }))
 	);
 
 	onMount(() => {
@@ -309,8 +323,8 @@
 		<Card.Header>
 			<Card.Title>Featured On Profile</Card.Title>
 			<Card.Description>
-				Pick up to 5 books or series to lead your profile. Adding one creates a public profile and
-				includes you in the member list while profile visibility is on.
+				Pick up to 5 books, series, or authors to lead your profile. Adding one creates a public
+				profile and includes you in the member list while profile visibility is on.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
@@ -330,6 +344,7 @@
 							}
 							featureBookId = undefined;
 							featureSeriesId = undefined;
+							featureAuthorId = undefined;
 							featureUrl = undefined;
 						} else if (result.type === 'failure' && result.data?.featureError) {
 							toast.error(String(result.data.featureError));
@@ -360,6 +375,14 @@
 							<Button
 								type="button"
 								size="sm"
+								variant={featureKind === 'author' ? 'default' : 'outline'}
+								onclick={() => (featureKind = 'author')}
+							>
+								Author
+							</Button>
+							<Button
+								type="button"
+								size="sm"
 								variant={featureKind === 'url' ? 'default' : 'outline'}
 								onclick={() => (featureKind = 'url')}
 							>
@@ -367,7 +390,7 @@
 							</Button>
 							{#if featureKind === 'url'}
 								<p class="mb-1 hidden text-sm text-muted-foreground md:block">
-									Paste a Goodreads book or series URL to import.
+									Paste a Goodreads book, series, or author URL to import.
 								</p>
 							{/if}
 						</div>
@@ -389,9 +412,16 @@
 									name="subjectId"
 									placeholder="Search series to feature..."
 								/>
+							{:else if featureKind === 'author'}
+								<AuthorPicker
+									authors={availableAuthors}
+									bind:selectedId={featureAuthorId}
+									name="subjectId"
+									placeholder="Search authors to feature..."
+								/>
 							{:else}
 								<p class="mb-1 text-sm text-muted-foreground md:hidden">
-									Paste a Goodreads book or series URL to import.
+									Paste a Goodreads book, series, or author URL to import.
 								</p>
 								<Input
 									id="featured-url"
@@ -412,7 +442,9 @@
 									? !featureBookId
 									: featureKind === 'series'
 										? !featureSeriesId
-										: !featureUrl?.startsWith('https://www.goodreads.com/'))}
+										: featureKind === 'author'
+											? !featureAuthorId
+											: !featureUrl?.startsWith('https://www.goodreads.com/'))}
 						>
 							<PlusIcon class="h-4 w-4" />
 							Add
@@ -474,7 +506,7 @@
 										{/if}
 									</div>
 								</a>
-							{:else}
+							{:else if item.kind === 'series'}
 								<a
 									href={resolve('/series/[slug]', { slug: item.series.slug })}
 									class="flex items-start gap-4 rounded-md p-2 transition-colors hover:bg-muted"
@@ -497,6 +529,28 @@
 										{#if item.series.authorText}
 											<p class="mt-1 text-sm text-muted-foreground">{item.series.authorText}</p>
 										{/if}
+									</div>
+								</a>
+							{:else}
+								<a
+									href={resolve('/authors/[slug]', { slug: item.author.slug })}
+									class="flex items-start gap-4 rounded-md p-2 transition-colors hover:bg-muted"
+								>
+									<div
+										class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
+									>
+										{#if item.author.photoUrl}
+											<img
+												src={item.author.photoUrl}
+												alt={item.author.name}
+												class="h-full w-full object-cover"
+											/>
+										{:else}
+											<UserIcon class="h-5 w-5 text-muted-foreground" />
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<h3 class="font-medium">{item.author.name}</h3>
 									</div>
 								</a>
 							{/if}

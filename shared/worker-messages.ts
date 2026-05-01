@@ -15,6 +15,7 @@
 export type SubjectSourceType =
 	| 'goodreads'
 	| 'goodreads-series'
+	| 'goodreads-author'
 	| 'amazon'
 	| 'openlibrary'
 	| 'googlebooks'
@@ -23,7 +24,7 @@ export type SubjectSourceType =
 export type SubjectType = 'book' | 'series' | 'author';
 
 // ────────────────────────────────────────────────
-// subject.resolve — turn an external URL into a book or series row
+// subject.resolve — turn an external URL into a subject row
 // ────────────────────────────────────────────────
 
 export interface SubjectSessionLink {

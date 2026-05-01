@@ -4,6 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -86,8 +87,10 @@
 						<div class="space-y-2">
 							{#if item.kind === 'book'}
 								<BookCard book={item.book} />
-							{:else}
+							{:else if item.kind === 'series'}
 								<SeriesCard series={item.series} />
+							{:else}
+								<AuthorCard author={item.author} />
 							{/if}
 							{#if item.relation.note}
 								<details class="px-2 text-xs text-muted-foreground">
@@ -116,8 +119,10 @@
 						<div class="space-y-2">
 							{#if item.kind === 'book'}
 								<BookCard book={item.book} compact />
-							{:else}
+							{:else if item.kind === 'series'}
 								<SeriesCard series={item.series} compact />
+							{:else}
+								<AuthorCard author={item.author} compact />
 							{/if}
 						</div>
 					{/each}
@@ -140,8 +145,10 @@
 						<div class="space-y-2">
 							{#if item.kind === 'book'}
 								<BookCard book={item.book} compact />
-							{:else}
+							{:else if item.kind === 'series'}
 								<SeriesCard series={item.series} compact />
+							{:else}
+								<AuthorCard author={item.author} compact />
 							{/if}
 						</div>
 					{/each}

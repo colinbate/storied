@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	authors,
 	posts,
 	series,
 	sessionParticipantSubjects,
@@ -32,87 +33,110 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!session) throw error(404, 'Session not found');
 
-	const [bookSubjectRows, seriesSubjectRows, sessionThreads, participants, participantSubjectRows] =
-		await Promise.all([
-			locals.db
-				.select({
-					link: sessionSubjects,
-					book: books
-				})
-				.from(sessionSubjects)
-				.innerJoin(books, eq(sessionSubjects.subjectId, books.id))
-				.where(
-					and(
-						eq(sessionSubjects.sessionId, session.id),
-						eq(sessionSubjects.subjectType, 'book'),
-						isNull(books.deletedAt)
-					)
+	const [
+		bookSubjectRows,
+		seriesSubjectRows,
+		authorSubjectRows,
+		sessionThreads,
+		participants,
+		participantSubjectRows
+	] = await Promise.all([
+		locals.db
+			.select({
+				link: sessionSubjects,
+				book: books
+			})
+			.from(sessionSubjects)
+			.innerJoin(books, eq(sessionSubjects.subjectId, books.id))
+			.where(
+				and(
+					eq(sessionSubjects.sessionId, session.id),
+					eq(sessionSubjects.subjectType, 'book'),
+					isNull(books.deletedAt)
 				)
-				.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
-				.all(),
-			locals.db
-				.select({
-					link: sessionSubjects,
-					series
-				})
-				.from(sessionSubjects)
-				.innerJoin(series, eq(sessionSubjects.subjectId, series.id))
-				.where(
-					and(
-						eq(sessionSubjects.sessionId, session.id),
-						eq(sessionSubjects.subjectType, 'series'),
-						isNull(series.deletedAt)
-					)
+			)
+			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
+			.all(),
+		locals.db
+			.select({
+				link: sessionSubjects,
+				series
+			})
+			.from(sessionSubjects)
+			.innerJoin(series, eq(sessionSubjects.subjectId, series.id))
+			.where(
+				and(
+					eq(sessionSubjects.sessionId, session.id),
+					eq(sessionSubjects.subjectType, 'series'),
+					isNull(series.deletedAt)
 				)
-				.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
-				.all(),
-			locals.db
-				.select({
-					thread: threads,
-					author: {
-						id: users.id,
-						displayName: users.displayName,
-						avatarUrl: users.avatarUrl
-					}
-				})
-				.from(threads)
-				.innerJoin(users, eq(threads.authorUserId, users.id))
-				.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
-				.orderBy(desc(threads.createdAt))
-				.all(),
-			locals.db
-				.select({
-					participant: sessionParticipants,
-					user: {
-						id: users.id,
-						displayName: users.displayName,
-						avatarUrl: users.avatarUrl
-					}
-				})
-				.from(sessionParticipants)
-				.innerJoin(users, eq(sessionParticipants.userId, users.id))
-				.where(eq(sessionParticipants.sessionId, session.id))
-				.orderBy(asc(users.displayName))
-				.all(),
-			locals.db
-				.select({
-					read: sessionParticipantSubjects,
-					user: {
-						id: users.id,
-						displayName: users.displayName,
-						avatarUrl: users.avatarUrl
-					}
-				})
-				.from(sessionParticipantSubjects)
-				.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
-				.where(eq(sessionParticipantSubjects.sessionId, session.id))
-				.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
-				.all()
-		]);
+			)
+			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
+			.all(),
+		locals.db
+			.select({
+				link: sessionSubjects,
+				author: authors
+			})
+			.from(sessionSubjects)
+			.innerJoin(authors, eq(sessionSubjects.subjectId, authors.id))
+			.where(
+				and(
+					eq(sessionSubjects.sessionId, session.id),
+					eq(sessionSubjects.subjectType, 'author'),
+					isNull(authors.deletedAt)
+				)
+			)
+			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
+			.all(),
+		locals.db
+			.select({
+				thread: threads,
+				author: {
+					id: users.id,
+					displayName: users.displayName,
+					avatarUrl: users.avatarUrl
+				}
+			})
+			.from(threads)
+			.innerJoin(users, eq(threads.authorUserId, users.id))
+			.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
+			.orderBy(desc(threads.createdAt))
+			.all(),
+		locals.db
+			.select({
+				participant: sessionParticipants,
+				user: {
+					id: users.id,
+					displayName: users.displayName,
+					avatarUrl: users.avatarUrl
+				}
+			})
+			.from(sessionParticipants)
+			.innerJoin(users, eq(sessionParticipants.userId, users.id))
+			.where(eq(sessionParticipants.sessionId, session.id))
+			.orderBy(asc(users.displayName))
+			.all(),
+		locals.db
+			.select({
+				read: sessionParticipantSubjects,
+				user: {
+					id: users.id,
+					displayName: users.displayName,
+					avatarUrl: users.avatarUrl
+				}
+			})
+			.from(sessionParticipantSubjects)
+			.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
+			.where(eq(sessionParticipantSubjects.sessionId, session.id))
+			.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
+			.all()
+	]);
 
 	const subjects = [
 		...bookSubjectRows.map(({ link, book }) => ({ kind: 'book' as const, link, book })),
-		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series }))
+		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series })),
+		...authorSubjectRows.map(({ link, author }) => ({ kind: 'author' as const, link, author }))
 	].sort(
 		(a, b) =>
 			a.link.status.localeCompare(b.link.status) || a.link.createdAt.localeCompare(b.link.createdAt)

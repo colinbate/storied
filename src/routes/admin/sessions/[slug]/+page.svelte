@@ -7,6 +7,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import AuthorPicker from '$lib/components/admin/author-picker.svelte';
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
 	import MemberPicker from '$lib/components/admin/member-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
@@ -18,6 +19,7 @@
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import UserIcon from '@lucide/svelte/icons/user';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
@@ -26,11 +28,12 @@
 	let saving = $state(false);
 	let selectedThemeId = $state('');
 
-	type LinkKind = 'book' | 'series';
+	type LinkKind = 'book' | 'series' | 'author';
 	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 	let addKind = $state<LinkKind>('book');
 	let addBookId = $state<string | undefined>(undefined);
 	let addSeriesId = $state<string | undefined>(undefined);
+	let addAuthorId = $state<string | undefined>(undefined);
 	let addStatus = $state<SubjectStatus>('starter');
 	let participantUserId = $state<string | undefined>(undefined);
 	let participantStatus = $state<'attending' | 'not_attending' | 'maybe' | 'attended'>('attended');
@@ -55,6 +58,14 @@
 			)
 			.map((s) => ({ id: s.id, title: s.title, authorText: s.authorText }))
 	);
+	const authorPickerItems = $derived(
+		data.allAuthors
+			.filter((a) => !a.deletedAt)
+			.filter(
+				(a) => !data.linkedSubjects.some((ls) => ls.kind === 'author' && ls.author.id === a.id)
+			)
+			.map((a) => ({ id: a.id, name: a.name }))
+	);
 	const availableThemes = $derived(
 		data.themes
 			.filter((theme) => theme.status !== 'archived' || theme.id === data.session.themeId)
@@ -69,6 +80,7 @@
 
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
+	const authorLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'author'));
 	const activeUsers = $derived(data.allUsers.filter((user) => user.status === 'active'));
 	const participantUserIds = $derived(new Set(data.participants.map((p) => p.user.id)));
 	const addableUsers = $derived(activeUsers.filter((u) => !participantUserIds.has(u.id)));
@@ -96,6 +108,10 @@
 			'Unknown series'
 		);
 	}
+
+	const addSubjectSelected = $derived(
+		addKind === 'book' ? !!addBookId : addKind === 'series' ? !!addSeriesId : !!addAuthorId
+	);
 </script>
 
 <svelte:head>
@@ -740,6 +756,97 @@
 		</Card.Content>
 	</Card.Root>
 
+	<!-- Linked authors -->
+	<Card.Root>
+		<Card.Header>
+			<div class="flex items-center gap-2">
+				<UserIcon class="h-5 w-5 text-primary" />
+				<Card.Title class="text-base">Authors ({authorLinks.length})</Card.Title>
+			</div>
+		</Card.Header>
+		<Card.Content class="p-0">
+			{#if authorLinks.length > 0}
+				<div class="divide-y">
+					{#each authorLinks as entry (entry.author.id)}
+						<div
+							class="flex flex-wrap items-center gap-3 px-4 py-3 {entry.author.deletedAt
+								? 'opacity-60'
+								: ''}"
+						>
+							<form
+								method="POST"
+								action="?/updateLink"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.linkUpdated) toast.success('Updated.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
+							>
+								<input type="hidden" name="kind" value="author" />
+								<input type="hidden" name="subjectId" value={entry.author.id} />
+								{#if entry.author.photoUrl}
+									<img
+										src={entry.author.photoUrl}
+										alt=""
+										class="h-10 w-10 shrink-0 rounded object-cover"
+									/>
+								{:else}
+									<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-muted">
+										<UserIcon class="h-3 w-3 text-muted-foreground" />
+									</div>
+								{/if}
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline {entry.author
+										.deletedAt
+										? 'line-through'
+										: ''}"
+									href={resolve('/admin/authors/[slug]', { slug: entry.author.slug })}
+								>
+									{entry.author.name}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="status-a-{entry.author.id}" class="text-xs">Status</Label>
+									<NativeSelect
+										id="status-a-{entry.author.id}"
+										name="status"
+										value={entry.link.status}
+									>
+										<NativeSelectOption value="starter">starter</NativeSelectOption>
+										<NativeSelectOption value="featured">featured</NativeSelectOption>
+										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="mentioned_off_theme"
+											>mentioned off theme</NativeSelectOption
+										>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
+								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+							</form>
+							<ConfirmButton
+								confirmText="Remove this author from session?"
+								formAction="?/removeLink"
+								formData={{ kind: 'author', subjectId: entry.author.id }}
+								variant="ghost"
+								size="icon-sm"
+							>
+								<XIcon class="h-4 w-4" />
+							</ConfirmButton>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<div class="px-4 py-6 text-sm text-muted-foreground">No authors linked yet.</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
 	<!-- Add link from existing -->
 	<Card.Root>
 		<Card.Header>
@@ -759,6 +866,7 @@
 								toast.success('Linked to session.');
 								addBookId = undefined;
 								addSeriesId = undefined;
+								addAuthorId = undefined;
 							}
 							if (result.data?.error) toast.error(String(result.data.error));
 						}
@@ -785,17 +893,31 @@
 						>
 							Series
 						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant={addKind === 'author' ? 'default' : 'outline'}
+							onclick={() => (addKind = 'author')}
+						>
+							Author
+						</Button>
 					</div>
 				</div>
 				<input type="hidden" name="kind" value={addKind} />
 				<div class="min-w-0 flex-1 space-y-1">
-					<Label>{addKind === 'book' ? 'Book' : 'Series'}</Label>
+					<Label>{addKind === 'book' ? 'Book' : addKind === 'series' ? 'Series' : 'Author'}</Label>
 					{#if addKind === 'book'}
 						<BookPicker books={bookPickerItems} bind:selectedId={addBookId} name="subjectId" />
-					{:else}
+					{:else if addKind === 'series'}
 						<SeriesPicker
 							series={seriesPickerItems}
 							bind:selectedId={addSeriesId}
+							name="subjectId"
+						/>
+					{:else}
+						<AuthorPicker
+							authors={authorPickerItems}
+							bind:selectedId={addAuthorId}
 							name="subjectId"
 						/>
 					{/if}
@@ -813,7 +935,7 @@
 					<Label for="add-note">Note</Label>
 					<Input id="add-note" name="note" placeholder="optional" />
 				</div>
-				<Button type="submit" disabled={saving || (addKind === 'book' ? !addBookId : !addSeriesId)}>
+				<Button type="submit" disabled={saving || !addSubjectSelected}>
 					<PlusIcon class="h-4 w-4" />
 					Link
 				</Button>
@@ -826,8 +948,8 @@
 		<Card.Header>
 			<Card.Title class="text-base">Link from Goodreads URL</Card.Title>
 			<Card.Description>
-				Paste a Goodreads book or series URL. If not already in our library, it'll be queued for
-				resolution and auto-linked to this session once resolved.
+				Paste a Goodreads book, series, or author URL. If not already in our library, it'll be
+				queued for resolution and auto-linked to this session once resolved.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>

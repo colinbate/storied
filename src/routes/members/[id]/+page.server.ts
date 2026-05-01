@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
+import { authors, books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 
@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!member || member.status !== 'active') throw error(404, 'Member not found');
 
-	const [profileRows, bookSubjectRows, seriesSubjectRows] = await Promise.all([
+	const [profileRows, bookSubjectRows, seriesSubjectRows, authorSubjectRows] = await Promise.all([
 		locals.db.select().from(userProfiles).where(eq(userProfiles.userId, member.id)).all(),
 		locals.db
 			.select({
@@ -61,6 +61,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				asc(userSubjects.featuredOrder),
 				desc(userSubjects.updatedAt)
 			)
+			.all(),
+		locals.db
+			.select({
+				relation: userSubjects,
+				author: authors
+			})
+			.from(userSubjects)
+			.innerJoin(authors, eq(userSubjects.subjectId, authors.id))
+			.where(
+				and(
+					eq(userSubjects.userId, member.id),
+					eq(userSubjects.subjectType, 'author'),
+					isNull(authors.deletedAt)
+				)
+			)
+			.orderBy(
+				desc(userSubjects.featuredOnProfile),
+				asc(userSubjects.featuredOrder),
+				desc(userSubjects.updatedAt)
+			)
 			.all()
 	]);
 	const profile = profileRows[0] ?? null;
@@ -75,6 +95,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			kind: 'series' as const,
 			relation,
 			series
+		})),
+		...authorSubjectRows.map(({ relation, author }) => ({
+			kind: 'author' as const,
+			relation,
+			author
 		}))
 	].sort((a, b) => {
 		if (a.relation.featuredOnProfile !== b.relation.featuredOnProfile) {

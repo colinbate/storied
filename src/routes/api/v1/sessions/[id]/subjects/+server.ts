@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { books, series, sessionSubjects, sessions } from '$lib/server/db/schema';
+import { authors, books, series, sessionSubjects, sessions } from '$lib/server/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 const publicApiHeaders = {
@@ -91,6 +91,34 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt), asc(series.title))
 		.all();
 
+	const authorRows = await locals.db
+		.select({
+			linkStatus: sessionSubjects.status,
+			linkNote: sessionSubjects.note,
+			linkedAt: sessionSubjects.createdAt,
+			updatedAt: sessionSubjects.updatedAt,
+			id: authors.id,
+			slug: authors.slug,
+			name: authors.name,
+			bio: authors.bio,
+			photoUrl: authors.photoUrl,
+			goodreadsUrl: authors.goodreadsUrl,
+			openLibraryId: authors.openLibraryId,
+			websiteUrl: authors.websiteUrl,
+			createdAt: authors.createdAt
+		})
+		.from(sessionSubjects)
+		.innerJoin(authors, eq(sessionSubjects.subjectId, authors.id))
+		.where(
+			and(
+				eq(sessionSubjects.sessionId, session.id),
+				eq(sessionSubjects.subjectType, 'author'),
+				isNull(authors.deletedAt)
+			)
+		)
+		.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt), asc(authors.name))
+		.all();
+
 	return json(
 		{
 			sessionId: session.id,
@@ -132,6 +160,22 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				isComplete: seriesRow.isComplete,
 				bookCount: seriesRow.bookCount,
 				createdAt: seriesRow.createdAt
+			})),
+			authors: authorRows.map((author) => ({
+				type: 'author' as const,
+				linkStatus: author.linkStatus,
+				linkNote: author.linkNote,
+				linkedAt: author.linkedAt,
+				updatedAt: author.updatedAt,
+				id: author.id,
+				slug: author.slug,
+				name: author.name,
+				bio: author.bio,
+				photoUrl: author.photoUrl,
+				goodreadsUrl: author.goodreadsUrl,
+				openLibraryId: author.openLibraryId,
+				websiteUrl: author.websiteUrl,
+				createdAt: author.createdAt
 			}))
 		},
 		{ headers: publicApiHeaders }

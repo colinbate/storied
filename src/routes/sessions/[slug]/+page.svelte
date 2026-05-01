@@ -8,6 +8,7 @@
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as NativeSelect from '$lib/components/ui/native-select';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -28,7 +29,7 @@
 	let rsvping = $state(false);
 
 	function subjectCount(items: unknown[]) {
-		return items.length === 1 ? '1 title' : `${items.length} titles`;
+		return items.length === 1 ? '1 subject' : `${items.length} subjects`;
 	}
 
 	function readersFor(subjectType: string, subjectId: string) {
@@ -197,8 +198,10 @@
 							{#each group.items as item (item.link.subjectType + item.link.subjectId)}
 								{#if item.kind === 'book'}
 									<BookCard book={item.book} compact />
-								{:else}
+								{:else if item.kind === 'series'}
 									<SeriesCard series={item.series} compact />
+								{:else}
+									<AuthorCard author={item.author} compact />
 								{/if}
 								{#if item.link.note}
 									<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">{item.link.note}</p>
