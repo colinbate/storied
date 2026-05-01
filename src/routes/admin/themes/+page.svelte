@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -36,6 +37,7 @@
 	let { data, form } = $props();
 	let loading = $state(false);
 	let showCreateForm = $state(false);
+	let createNameInput = $state<HTMLInputElement | null>(null);
 	let editDialogOpen = $state(false);
 	let editTheme = $state<ThemeEntry | null>(null);
 	let quickStatusForm = $state<HTMLFormElement | null>(null);
@@ -68,6 +70,14 @@
 		quickStatus = status;
 		requestAnimationFrame(() => quickStatusForm?.requestSubmit());
 	}
+
+	async function toggleCreateForm() {
+		showCreateForm = !showCreateForm;
+		if (showCreateForm) {
+			await tick();
+			createNameInput?.focus();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -82,12 +92,7 @@
 				Curate theme ideas, shortlist candidates, and track selections.
 			</p>
 		</div>
-		<Button
-			onclick={() => {
-				showCreateForm = !showCreateForm;
-			}}
-			size="sm"
-		>
+		<Button onclick={toggleCreateForm} size="sm">
 			<PlusIcon class="h-4 w-4" />
 			New Theme
 		</Button>
@@ -151,7 +156,13 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2">
 							<Label for="create-name">Name</Label>
-							<Input id="create-name" name="name" placeholder="e.g. Haunted Futures" required />
+							<Input
+								id="create-name"
+								name="name"
+								placeholder="e.g. Haunted Futures"
+								bind:ref={createNameInput}
+								required
+							/>
 						</div>
 						<div class="space-y-2">
 							<Label for="create-status">Status</Label>

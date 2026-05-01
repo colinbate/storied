@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -14,6 +15,7 @@
 	let { data, form } = $props();
 	let saving = $state(false);
 	let showCreateForm = $state(false);
+	let createNameInput = $state<HTMLInputElement | null>(null);
 
 	const statusGroups = $derived([
 		{ status: 'shortlist', title: 'Shortlist' },
@@ -23,6 +25,14 @@
 
 	function sessionsForTheme(themeId: string) {
 		return data.sessions.filter((session) => session.themeId === themeId);
+	}
+
+	async function toggleCreateForm() {
+		showCreateForm = !showCreateForm;
+		if (showCreateForm) {
+			await tick();
+			createNameInput?.focus();
+		}
 	}
 </script>
 
@@ -36,12 +46,7 @@
 			<h1 class="text-2xl font-bold">Themes</h1>
 			<p class="text-muted-foreground">Ideas, shortlists, and past prompts for future sessions.</p>
 		</div>
-		<Button
-			onclick={() => {
-				showCreateForm = !showCreateForm;
-			}}
-			size="sm"
-		>
+		<Button onclick={toggleCreateForm} size="sm">
 			<PlusIcon class="h-4 w-4" />
 			Add Theme
 		</Button>
@@ -84,7 +89,13 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="theme-name">Name</Label>
-							<Input id="theme-name" name="name" placeholder="e.g. Haunted Futures" required />
+							<Input
+								id="theme-name"
+								name="name"
+								placeholder="e.g. Haunted Futures"
+								bind:ref={createNameInput}
+								required
+							/>
 						</div>
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="theme-description">Description</Label>

@@ -109,6 +109,7 @@
 					name="name"
 					bind:value={newThemeName}
 					placeholder="e.g. Haunted Futures"
+					autofocus
 					required
 				/>
 			</div>

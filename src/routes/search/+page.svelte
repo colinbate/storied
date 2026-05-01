@@ -65,6 +65,7 @@
 					value={data.q}
 					placeholder="Search the club..."
 					class="pl-9"
+					autofocus
 				/>
 			</div>
 			<Button type="submit">Search</Button>
@@ -108,7 +109,7 @@
 										<span>{author.displayName}</span>
 										{#if participants.length > 0}
 											<span>·</span>
-											<ThreadParticipants participants={participants} class="min-w-0" />
+											<ThreadParticipants {participants} class="min-w-0" />
 										{/if}
 										<span>·</span>
 										<span>

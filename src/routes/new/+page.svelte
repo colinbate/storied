@@ -71,6 +71,7 @@
 						minlength={3}
 						maxlength={200}
 						value={form?.title ?? ''}
+						autofocus
 					/>
 				</div>
 

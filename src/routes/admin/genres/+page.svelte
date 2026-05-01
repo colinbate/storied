@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -18,6 +19,7 @@
 	let loading = $state(false);
 	let showCreateForm = $state(false);
 	let editingId = $state<number | null>(null);
+	let createNameInput = $state<HTMLInputElement | null>(null);
 
 	// Form state for create
 	let createParentId = $state<number | undefined>(undefined);
@@ -52,6 +54,16 @@
 		editIsSpeculative = !!g.isSpeculative;
 		editingId = id;
 	}
+
+	async function toggleCreateForm() {
+		createParentId = undefined;
+		createIsSpeculative = true;
+		showCreateForm = !showCreateForm;
+		if (showCreateForm) {
+			await tick();
+			createNameInput?.focus();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -61,14 +73,7 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Genres</h1>
-		<Button
-			onclick={() => {
-				createParentId = undefined;
-				createIsSpeculative = true;
-				showCreateForm = !showCreateForm;
-			}}
-			size="sm"
-		>
+		<Button onclick={toggleCreateForm} size="sm">
 			<PlusIcon class="h-4 w-4" />
 			New Genre
 		</Button>
@@ -105,7 +110,13 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2">
 							<Label for="create-name">Name</Label>
-							<Input id="create-name" name="name" placeholder="e.g. Solarpunk" required />
+							<Input
+								id="create-name"
+								name="name"
+								placeholder="e.g. Solarpunk"
+								bind:ref={createNameInput}
+								required
+							/>
 						</div>
 						<div class="space-y-2">
 							<Label>Parent</Label>

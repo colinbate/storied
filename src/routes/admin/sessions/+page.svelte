@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -19,12 +20,21 @@
 	let loading = $state(false);
 	let showCreateForm = $state(false);
 	let createThemeId = $state('');
+	let createTitleInput = $state<HTMLInputElement | null>(null);
 
 	const availableThemes = $derived(
 		data.themes
 			.filter((theme) => theme.status !== 'archived')
 			.map((theme) => ({ id: theme.id, name: theme.name, status: theme.status }))
 	);
+
+	async function toggleCreateForm() {
+		showCreateForm = !showCreateForm;
+		if (showCreateForm) {
+			await tick();
+			createTitleInput?.focus();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -34,12 +44,7 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Sessions</h1>
-		<Button
-			onclick={() => {
-				showCreateForm = !showCreateForm;
-			}}
-			size="sm"
-		>
+		<Button onclick={toggleCreateForm} size="sm">
 			<PlusIcon class="h-4 w-4" />
 			New Session
 		</Button>
@@ -85,7 +90,13 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2">
 							<Label for="create-title">Title</Label>
-							<Input id="create-title" name="title" placeholder="e.g. January 2025" required />
+							<Input
+								id="create-title"
+								name="title"
+								placeholder="e.g. January 2025"
+								bind:ref={createTitleInput}
+								required
+							/>
 						</div>
 						<div class="space-y-2">
 							<Label for="create-slug">Slug</Label>

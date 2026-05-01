@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -23,6 +24,8 @@
 	let updatingUserId = $state<string | null>(null);
 	let updatingStatusUserId = $state<string | null>(null);
 	let moderatingUserId = $state<string | null>(null);
+	let inviteEmailInput = $state<HTMLInputElement | null>(null);
+	let addEmailInput = $state<HTMLInputElement | null>(null);
 	const pendingMembers = $derived(data.members.filter((member) => member.status === 'pending'));
 	const openInvites = $derived(data.invites.filter((invite) => !invite.claimedAt));
 
@@ -46,6 +49,22 @@
 		if (role === 'moderator') return 'secondary';
 		return 'outline';
 	}
+
+	async function toggleInviteForm() {
+		showInviteForm = !showInviteForm;
+		if (showInviteForm) {
+			await tick();
+			inviteEmailInput?.focus();
+		}
+	}
+
+	async function toggleAddForm() {
+		showAddForm = !showAddForm;
+		if (showAddForm) {
+			await tick();
+			addEmailInput?.focus();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -56,22 +75,11 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Members</h1>
 		<div class="flex gap-2">
-			<Button
-				onclick={() => {
-					showInviteForm = !showInviteForm;
-				}}
-				size="sm"
-				variant="outline"
-			>
+			<Button onclick={toggleInviteForm} size="sm" variant="outline">
 				<SendIcon class="h-4 w-4" />
 				Invite
 			</Button>
-			<Button
-				onclick={() => {
-					showAddForm = !showAddForm;
-				}}
-				size="sm"
-			>
+			<Button onclick={toggleAddForm} size="sm">
 				<PlusIcon class="h-4 w-4" />
 				Add Member
 			</Button>
@@ -113,6 +121,7 @@
 							name="email"
 							type="email"
 							placeholder="samwise@example.com"
+							bind:ref={inviteEmailInput}
 							required
 						/>
 					</div>
@@ -168,7 +177,14 @@
 				>
 					<div class="flex-1 space-y-2" style="min-width: 16rem;">
 						<Label for="email">Email Address</Label>
-						<Input id="email" name="email" type="email" placeholder="frodo@example.com" required />
+						<Input
+							id="email"
+							name="email"
+							type="email"
+							placeholder="frodo@example.com"
+							bind:ref={addEmailInput}
+							required
+						/>
 					</div>
 					<div class="flex-1 space-y-2" style="min-width: 16rem;">
 						<Label for="displayName">Display Name</Label>

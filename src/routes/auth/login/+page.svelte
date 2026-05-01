@@ -134,6 +134,7 @@
 								autocomplete="one-time-code"
 								placeholder="123 456"
 								required
+								autofocus
 								class="text-center text-lg tracking-[0.4em]"
 							/>
 						</div>
@@ -178,6 +179,7 @@
 							required
 							value={form?.email ?? ''}
 							autocomplete="email"
+							autofocus
 						/>
 					</div>
 					{#if form?.error}

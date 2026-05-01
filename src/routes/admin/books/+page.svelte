@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import { tick } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -23,6 +24,8 @@
 	let showManualForm = $state(false);
 	let showUrlForm = $state(false);
 	let filter = $state('');
+	let manualTitleInput = $state<HTMLInputElement | null>(null);
+	let urlInput = $state<HTMLInputElement | null>(null);
 
 	const filteredBooks = $derived.by(() => {
 		const q = filter.trim().toLowerCase();
@@ -43,6 +46,24 @@
 		if (status === 'failed') return 'destructive';
 		return 'outline';
 	}
+
+	async function toggleUrlForm() {
+		showUrlForm = !showUrlForm;
+		if (showUrlForm) {
+			showManualForm = false;
+			await tick();
+			urlInput?.focus();
+		}
+	}
+
+	async function toggleManualForm() {
+		showManualForm = !showManualForm;
+		if (showManualForm) {
+			showUrlForm = false;
+			await tick();
+			manualTitleInput?.focus();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -53,24 +74,11 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Books</h1>
 		<div class="flex items-center gap-2">
-			<Button
-				variant="outline"
-				size="sm"
-				onclick={() => {
-					showUrlForm = !showUrlForm;
-					if (showUrlForm) showManualForm = false;
-				}}
-			>
+			<Button variant="outline" size="sm" onclick={toggleUrlForm}>
 				<LinkIcon class="h-4 w-4" />
 				From URL
 			</Button>
-			<Button
-				size="sm"
-				onclick={() => {
-					showManualForm = !showManualForm;
-					if (showManualForm) showUrlForm = false;
-				}}
-			>
+			<Button size="sm" onclick={toggleManualForm}>
 				<PlusIcon class="h-4 w-4" />
 				New Book
 			</Button>
@@ -114,6 +122,7 @@
 							name="url"
 							type="url"
 							placeholder="https://www.goodreads.com/book/show/..."
+							bind:ref={urlInput}
 							required
 						/>
 					</div>
@@ -154,7 +163,7 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="title">Title</Label>
-							<Input id="title" name="title" required />
+							<Input id="title" name="title" bind:ref={manualTitleInput} required />
 						</div>
 						<div class="space-y-2">
 							<Label for="subtitle">Subtitle</Label>
