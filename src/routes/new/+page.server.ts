@@ -178,7 +178,7 @@ export const actions: Actions = {
 
 				// Source exists but not yet resolved — re-enqueue
 				if (!resolvedSubjectId) {
-					await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+					await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 						subjectSourceId: existingSource.id,
 						sourceType: link.sourceType as SubjectSourceType,
 						sourceUrl: link.url,
@@ -197,7 +197,7 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+				await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 					subjectSourceId: sourceId,
 					sourceType: link.sourceType as SubjectSourceType,
 					sourceUrl: link.url,
@@ -223,7 +223,7 @@ export const actions: Actions = {
 			}
 		}
 
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'notifications.new-thread', {
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.new-thread', {
 			threadId,
 			threadAuthorUserId: locals.user.id,
 			baseUrl: url.origin,

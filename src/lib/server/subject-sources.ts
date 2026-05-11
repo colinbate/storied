@@ -10,7 +10,7 @@ import {
 } from './db/schema';
 import { newId } from './ids';
 import { detectSubjectLinks, type DetectedSubjectLink } from './book-links';
-import { publishWorkerMessage, type WorkerQueueBinding } from './worker-queue';
+import { publishWorkerMessage, type WorkerServiceBinding } from './worker-queue';
 import type {
 	SubjectResolvePayload,
 	SubjectSessionLink,
@@ -26,8 +26,8 @@ export type {
 } from '$shared/worker-messages';
 
 /** Env subset we need to enqueue worker messages. */
-export interface WorkerQueueEnv {
-	WORKER_QUEUE?: WorkerQueueBinding | null;
+export interface WorkerServiceEnv {
+	STORIED_WORKER?: WorkerServiceBinding | null;
 }
 
 export interface ResolveOrEnqueueResult {
@@ -45,7 +45,7 @@ export interface ResolveOrEnqueueResult {
 export async function ensureSubjectSource(
 	db: ORM,
 	link: DetectedSubjectLink,
-	env: WorkerQueueEnv | undefined,
+	env: WorkerServiceEnv | undefined,
 	sideEffects: {
 		threadId?: string;
 		postId?: string;
@@ -99,7 +99,7 @@ export async function ensureSubjectSource(
 			seriesBookLink: sideEffects.seriesBookLink,
 			userFeatureLink: sideEffects.userFeatureLink
 		};
-		await publishWorkerMessage(env?.WORKER_QUEUE, 'subject.resolve', payload);
+		await publishWorkerMessage(env?.STORIED_WORKER, 'subject.resolve', payload);
 	}
 
 	// If already resolved, perform the side-effect linking now.

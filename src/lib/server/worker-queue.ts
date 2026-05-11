@@ -1,19 +1,19 @@
 import type { WorkerMessage, WorkerTopic, WorkerPayload } from '$shared/worker-messages';
 
-/** Minimal shape we care about from platform.env.WORKER_QUEUE. */
-export interface WorkerQueueBinding {
+/** Minimal shape we care about from platform.env.STORIED_WORKER. */
+export interface WorkerServiceBinding {
 	send: (message: WorkerMessage) => Promise<void>;
 }
 
 /**
- * Publish a typed message to the worker queue. No-op when the binding is
+ * Publish a typed message to the worker service. No-op when the binding is
  * unavailable (e.g. during SSR in environments without the Cloudflare runtime).
  */
 export async function publishWorkerMessage<T extends WorkerTopic>(
-	queue: WorkerQueueBinding | null | undefined,
+	service: WorkerServiceBinding | null | undefined,
 	topic: T,
 	payload: WorkerPayload<T>
 ): Promise<void> {
-	if (!queue) return;
-	await queue.send({ topic, payload } as WorkerMessage);
+	if (!service) return;
+	await service.send({ topic, payload } as WorkerMessage);
 }

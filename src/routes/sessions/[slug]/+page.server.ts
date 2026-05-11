@@ -281,7 +281,7 @@ export const actions: Actions = {
 			}
 		}
 
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'notifications.thread-reply', {
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.thread-reply', {
 			threadId: thread.id,
 			postId,
 			replyAuthorUserId: locals.user.id,

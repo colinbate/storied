@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"db:migrate": "wrangler d1 migrations apply storied-db --local",
 		"db:migrate:prod": "wrangler d1 migrations apply storied-db --remote",
-		"cf-typegen": "wrangler types ./src/worker-configuration.d.ts"
+		"cf-typegen": "wrangler types ./src/worker-configuration.d.ts",
+		"launch:worker": "pnpm wrangler dev -c ./workers/storied-worker/wrangler.toml --persist-to=./.wrangler/state"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260416.2",

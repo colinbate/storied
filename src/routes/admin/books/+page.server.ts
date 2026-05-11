@@ -50,7 +50,7 @@ export const actions: Actions = {
 			.set({ fetchStatus: 'pending', updatedAt: new Date().toISOString() })
 			.where(eq(subjectSources.id, sourceId));
 
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 			subjectSourceId: source.id,
 			sourceType: source.sourceType as SubjectSourceType,
 			sourceUrl: source.sourceUrl,

@@ -24,7 +24,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	rebuildSearch: async ({ platform, locals }) => {
 		if (!locals.permissions.has('search:rebuild')) return { searchRebuildQueued: false };
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'search.rebuild', { scope: 'all' });
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'search.rebuild', { scope: 'all' });
 		return { searchRebuildQueued: true };
 	},
 	deployStaticSite: async ({ platform, locals }) => {

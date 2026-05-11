@@ -154,7 +154,7 @@ export const actions: Actions = {
 				}
 
 				saved += 1;
-				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'search.subject.reindex', {
+				await publishWorkerMessage(platform?.env.STORIED_WORKER, 'search.subject.reindex', {
 					subjectType: 'book',
 					subjectId: row.id
 				});
@@ -177,7 +177,7 @@ export const actions: Actions = {
 				}
 
 				saved += 1;
-				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'search.subject.reindex', {
+				await publishWorkerMessage(platform?.env.STORIED_WORKER, 'search.subject.reindex', {
 					subjectType: 'series',
 					subjectId: row.id
 				});

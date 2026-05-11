@@ -15,7 +15,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
-import { publishWorkerMessage, type WorkerQueueBinding } from '$lib/server/worker-queue';
+import { publishWorkerMessage, type WorkerServiceBinding } from '$lib/server/worker-queue';
 import type { SubjectSourceType, SubjectType } from '$shared/worker-messages';
 
 const SUBJECT = 'author' as const;
@@ -27,7 +27,7 @@ function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 }
 
 async function queueSubjectReindex(
-	queue: WorkerQueueBinding | null | undefined,
+	queue: WorkerServiceBinding | null | undefined,
 	subjectType: SubjectType,
 	subjectId: string
 ) {
@@ -170,8 +170,8 @@ export const actions: Actions = {
 			})
 			.onConflictDoNothing();
 
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'author', author.id);
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'book', bookId);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'author', author.id);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'book', bookId);
 
 		return { bookLinkAdded: true };
 	},
@@ -193,8 +193,8 @@ export const actions: Actions = {
 			.delete(bookAuthors)
 			.where(and(eq(bookAuthors.bookId, bookId), eq(bookAuthors.authorId, author.id)));
 
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'author', author.id);
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'book', bookId);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'author', author.id);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'book', bookId);
 
 		return { bookLinkRemoved: true };
 	},
@@ -220,8 +220,8 @@ export const actions: Actions = {
 			})
 			.onConflictDoNothing();
 
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'author', author.id);
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'series', seriesId);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'author', author.id);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'series', seriesId);
 
 		return { seriesLinkAdded: true };
 	},
@@ -243,8 +243,8 @@ export const actions: Actions = {
 			.delete(seriesAuthors)
 			.where(and(eq(seriesAuthors.seriesId, seriesId), eq(seriesAuthors.authorId, author.id)));
 
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'author', author.id);
-		await queueSubjectReindex(platform?.env.WORKER_QUEUE, 'series', seriesId);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'author', author.id);
+		await queueSubjectReindex(platform?.env.STORIED_WORKER, 'series', seriesId);
 
 		return { seriesLinkRemoved: true };
 	},
@@ -456,7 +456,7 @@ export const actions: Actions = {
 			.set({ fetchStatus: 'pending', updatedAt: new Date().toISOString() })
 			.where(eq(subjectSources.id, sourceId));
 
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 			subjectSourceId: source.id,
 			sourceType: source.sourceType as SubjectSourceType,
 			sourceUrl: source.sourceUrl,

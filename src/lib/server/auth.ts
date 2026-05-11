@@ -297,7 +297,7 @@ async function notifyAdminsOfPendingSignup(
 	if (!platform) return;
 	if (!member) return;
 
-	await publishWorkerMessage(platform.env.WORKER_QUEUE, 'notifications.pending-signup', {
+	await publishWorkerMessage(platform.env.STORIED_WORKER, 'notifications.pending-signup', {
 		userId: member.id,
 		baseUrl: PRIMARY_ORIGIN
 	});

@@ -1,6 +1,7 @@
 /**
- * Message contract shared by the SvelteKit producer and the storied-worker
- * consumer. Keep this file dependency-free so both tsconfigs can include it.
+ * Message contract shared by the SvelteKit service-binding caller and the
+ * storied-worker producer/consumer. Keep this file dependency-free so both
+ * tsconfigs can include it.
  *
  * Add a new background task by:
  *   1. Adding a payload interface below.

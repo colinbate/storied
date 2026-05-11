@@ -1,8 +1,22 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { dispatchWorkerMessage, dispatchScheduled } from './dispatch';
 import { RetryablePushoverError } from './notifications/pushover';
 import { handleFetchTestRoute } from './test/routes';
+
+export class WorkerQueue extends WorkerEntrypoint<Env> {
+	async send(message: WorkerMessage): Promise<void> {
+		const queue =
+			message.topic === 'notifications.pushover' ? this.env.PUSHOVER_QUEUE : this.env.WORKER_QUEUE;
+		if (!queue) {
+			console.log(`[WORKER QUEUE DISABLED] topic=${message.topic}`);
+			return;
+		}
+
+		await queue.send(message);
+	}
+}
 
 export default {
 	async queue(batch: MessageBatch<WorkerMessage>, env: Env, ctx: ExecutionContext): Promise<void> {

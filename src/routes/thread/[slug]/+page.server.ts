@@ -346,7 +346,7 @@ export const actions: Actions = {
 
 				// Source exists but not yet resolved — re-enqueue
 				if (!resolvedSubjectId) {
-					await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+					await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 						subjectSourceId: existingSource.id,
 						sourceType: link.sourceType as SubjectSourceType,
 						sourceUrl: link.url,
@@ -371,7 +371,7 @@ export const actions: Actions = {
 				});
 
 				// Enqueue for resolution
-				await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'subject.resolve', {
+				await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
 					subjectSourceId: sourceId,
 					sourceType: link.sourceType as SubjectSourceType,
 					sourceUrl: link.url,
@@ -404,7 +404,7 @@ export const actions: Actions = {
 		}
 
 		// Fan out reply notifications in the background worker.
-		await publishWorkerMessage(platform?.env.WORKER_QUEUE, 'notifications.thread-reply', {
+		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.thread-reply', {
 			threadId: thread.id,
 			postId,
 			replyAuthorUserId: locals.user.id,

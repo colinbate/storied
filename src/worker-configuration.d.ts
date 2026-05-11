@@ -10,7 +10,9 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		RSVP_DB: D1Database;
 		EMAIL: SendEmail;
-		WORKER_QUEUE: Queue;
+		STORIED_WORKER: {
+			send(message: import('../shared/worker-messages').WorkerMessage): Promise<void>;
+		};
 		ASSETS: Fetcher;
 		SEND_EMAILS: '';
 		FILE_BASE_URL: 'https://assets.bermudatrianglesociety.com';
