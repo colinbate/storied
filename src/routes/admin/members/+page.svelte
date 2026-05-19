@@ -82,9 +82,9 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<h1 class="text-2xl font-bold">Members</h1>
-		<div class="flex gap-2">
+		<div class="flex flex-wrap gap-2">
 			<Button onclick={toggleInviteForm} size="sm" variant="outline">
 				<SendIcon class="h-4 w-4" />
 				Invite
@@ -230,21 +230,27 @@
 			<Card.Content class="p-0">
 				<div class="divide-y">
 					{#each pendingMembers as member (member.id)}
-						<div class="flex items-center justify-between gap-4 px-4 py-3">
+						<div
+							class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+						>
 							<div class="min-w-0 flex-1">
-								<div class="flex items-center gap-2">
+								<div class="flex flex-wrap items-center gap-2">
 									<span class="truncate font-medium">{member.displayName}</span>
 									<Badge variant="outline">pending</Badge>
 								</div>
 								<p class="truncate text-sm text-muted-foreground">{member.email}</p>
+								<p class="text-xs text-muted-foreground sm:hidden">
+									Requested {formatDate(member.createdAt, { time: 'never', timeZone })}
+								</p>
 							</div>
-							<div class="flex items-center gap-2">
+							<div class="flex flex-wrap items-center gap-2">
 								<span class="hidden text-xs whitespace-nowrap text-muted-foreground sm:inline">
 									Requested {formatDate(member.createdAt, { time: 'never', timeZone })}
 								</span>
 								<form
 									method="POST"
 									action="?/approveSignup"
+									class="flex-1 sm:flex-none"
 									use:enhance={() => {
 										moderatingUserId = member.id;
 										return async ({ result, update }) => {
@@ -263,7 +269,12 @@
 									}}
 								>
 									<input type="hidden" name="userId" value={member.id} />
-									<Button type="submit" size="sm" disabled={moderatingUserId === member.id}>
+									<Button
+										type="submit"
+										size="sm"
+										class="w-full sm:w-auto"
+										disabled={moderatingUserId === member.id}
+									>
 										<CheckIcon class="h-4 w-4" />
 										Approve
 									</Button>
@@ -271,6 +282,7 @@
 								<form
 									method="POST"
 									action="?/rejectSignup"
+									class="flex-1 sm:flex-none"
 									use:enhance={() => {
 										moderatingUserId = member.id;
 										return async ({ result, update }) => {
@@ -289,6 +301,7 @@
 										type="submit"
 										size="sm"
 										variant="outline"
+										class="w-full sm:w-auto"
 										disabled={moderatingUserId === member.id}
 									>
 										<XIcon class="h-4 w-4" />
@@ -311,14 +324,16 @@
 			<Card.Content class="p-0">
 				<div class="divide-y">
 					{#each openInvites as invite (invite.id)}
-						<div class="flex items-center justify-between gap-4 px-4 py-3">
+						<div
+							class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+						>
 							<div class="min-w-0 flex-1">
 								<p class="truncate font-medium">{invite.email ?? 'Reusable invitation'}</p>
 								<p class="text-sm text-muted-foreground">
 									Created {formatDate(invite.createdAt, { time: 'never', timeZone })}
 								</p>
 							</div>
-							<span class="text-xs whitespace-nowrap text-muted-foreground">
+							<span class="text-xs text-muted-foreground sm:whitespace-nowrap">
 								{#if invite.expiresAt}
 									Expires {formatDate(invite.expiresAt, { time: 'never', timeZone })}
 								{:else}
@@ -332,108 +347,115 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root class="py-1">
+	<Card.Root class="overflow-hidden py-1">
 		<Card.Content class="p-0">
 			<div class="divide-y">
 				{#each data.members as member (member.id)}
-					<div class="flex items-center justify-between gap-4 px-4 py-3">
-						<Avatar.Root class="h-8 w-8 shrink-0">
-							{#if member.avatarUrl}
-								<Avatar.Image src={member.avatarUrl} alt={member.displayName} />
-							{/if}
-							<Avatar.Fallback class="text-xs">{getInitial(member.displayName)}</Avatar.Fallback>
-						</Avatar.Root>
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
-								<span class="truncate font-medium">{member.displayName}</span>
-								<Badge variant={roleBadgeVariant(member.role)}>{member.role}</Badge>
-								{#if member.status !== 'active'}
-									<Badge variant="outline" class="text-muted-foreground">{member.status}</Badge>
-								{/if}
+					<div class="px-4 py-4 sm:px-5">
+						<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+							<div class="flex min-w-0 gap-3">
+								<Avatar.Root class="h-10 w-10 shrink-0 sm:h-9 sm:w-9">
+									{#if member.avatarUrl}
+										<Avatar.Image src={member.avatarUrl} alt={member.displayName} />
+									{/if}
+									<Avatar.Fallback class="text-xs">
+										{getInitial(member.displayName)}
+									</Avatar.Fallback>
+								</Avatar.Root>
+								<div class="min-w-0 flex-1 space-y-1">
+									<div class="flex min-w-0 flex-wrap items-center gap-1.5">
+										<span class="min-w-0 truncate font-medium">{member.displayName}</span>
+										<Badge variant={roleBadgeVariant(member.role)}>{member.role}</Badge>
+										{#if member.status !== 'active'}
+											<Badge variant="outline" class="text-muted-foreground">{member.status}</Badge>
+										{/if}
+									</div>
+									<p class="truncate text-sm text-muted-foreground">{member.email}</p>
+									<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+										<span>Joined {formatDate(member.createdAt, { time: 'never', timeZone })}</span>
+										<span>{formatActivity(member)}</span>
+									</div>
+								</div>
 							</div>
-							<p class="truncate text-sm text-muted-foreground">{member.email}</p>
-						</div>
-						<div class="flex items-center gap-3">
-							<form
-								method="POST"
-								action="?/updateRole"
-								use:enhance={() => {
-									updatingUserId = member.id;
-									const orole = member.role;
-									return async ({ result, update }) => {
-										await update({ reset: false });
-										updatingUserId = null;
-										if (result.type === 'success' && result.data?.roleUpdated) {
-											toast.success(`Role updated to ${result.data.updatedRole}.`);
-										} else if (result.type === 'failure' && result.data?.error) {
-											toast.error(String(result.data.error));
-											member.role = orole;
-										}
-									};
-								}}
-							>
-								<input type="hidden" name="userId" value={member.id} />
-								<NativeSelect
-									name="role"
-									value={member.role}
-									disabled={updatingUserId === member.id}
-									onchange={(e) => {
-										(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-64">
+								<form
+									method="POST"
+									action="?/updateRole"
+									use:enhance={() => {
+										updatingUserId = member.id;
+										const orole = member.role;
+										return async ({ result, update }) => {
+											await update({ reset: false });
+											updatingUserId = null;
+											if (result.type === 'success' && result.data?.roleUpdated) {
+												toast.success(`Role updated to ${result.data.updatedRole}.`);
+											} else if (result.type === 'failure' && result.data?.error) {
+												toast.error(String(result.data.error));
+												member.role = orole;
+											}
+										};
 									}}
-									aria-label="Role for {member.displayName}"
 								>
-									{#each roleOptions as opt (opt.value)}
-										<NativeSelectOption value={opt.value} selected={opt.value === member.role}
-											>{opt.label}</NativeSelectOption
-										>
-									{/each}
-								</NativeSelect>
-							</form>
-							<form
-								method="POST"
-								action="?/updateStatus"
-								use:enhance={() => {
-									updatingStatusUserId = member.id;
-									const originalStatus = member.status;
-									return async ({ result, update }) => {
-										await update({ reset: false });
-										updatingStatusUserId = null;
-										if (result.type === 'success' && result.data?.statusUpdated) {
-											toast.success(
-												result.data.approvalEmailSent
-													? `Status updated to ${result.data.updatedStatus}; approval email sent.`
-													: `Status updated to ${result.data.updatedStatus}.`
-											);
-										} else if (result.type === 'failure' && result.data?.error) {
-											toast.error(String(result.data.error));
-											member.status = originalStatus;
-										}
-									};
-								}}
-							>
-								<input type="hidden" name="userId" value={member.id} />
-								<NativeSelect
-									name="status"
-									value={member.status}
-									disabled={updatingStatusUserId === member.id}
-									onchange={(e) => {
-										(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+									<input type="hidden" name="userId" value={member.id} />
+									<NativeSelect
+										name="role"
+										value={member.role}
+										disabled={updatingUserId === member.id}
+										onchange={(e) => {
+											(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+										}}
+										aria-label="Role for {member.displayName}"
+										class="w-full"
+									>
+										{#each roleOptions as opt (opt.value)}
+											<NativeSelectOption value={opt.value} selected={opt.value === member.role}
+												>{opt.label}</NativeSelectOption
+											>
+										{/each}
+									</NativeSelect>
+								</form>
+								<form
+									method="POST"
+									action="?/updateStatus"
+									use:enhance={() => {
+										updatingStatusUserId = member.id;
+										const originalStatus = member.status;
+										return async ({ result, update }) => {
+											await update({ reset: false });
+											updatingStatusUserId = null;
+											if (result.type === 'success' && result.data?.statusUpdated) {
+												toast.success(
+													result.data.approvalEmailSent
+														? `Status updated to ${result.data.updatedStatus}; approval email sent.`
+														: `Status updated to ${result.data.updatedStatus}.`
+												);
+											} else if (result.type === 'failure' && result.data?.error) {
+												toast.error(String(result.data.error));
+												member.status = originalStatus;
+											}
+										};
 									}}
-									aria-label="Status for {member.displayName}"
 								>
-									{#each statusOptions as opt (opt.value)}
-										<NativeSelectOption value={opt.value} selected={opt.value === member.status}
-											>{opt.label}</NativeSelectOption
-										>
-									{/each}
-								</NativeSelect>
-							</form>
-							<span class="text-xs whitespace-nowrap text-muted-foreground">
-								Joined {formatDate(member.createdAt, { time: 'never', timeZone })}
-							</span>
-							<span class="text-xs whitespace-nowrap text-muted-foreground">
-								{formatActivity(member)}
-							</span>
+									<input type="hidden" name="userId" value={member.id} />
+									<NativeSelect
+										name="status"
+										value={member.status}
+										disabled={updatingStatusUserId === member.id}
+										onchange={(e) => {
+											(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+										}}
+										aria-label="Status for {member.displayName}"
+										class="w-full"
+									>
+										{#each statusOptions as opt (opt.value)}
+											<NativeSelectOption value={opt.value} selected={opt.value === member.status}
+												>{opt.label}</NativeSelectOption
+											>
+										{/each}
+									</NativeSelect>
+								</form>
+							</div>
 						</div>
 					</div>
 				{:else}
