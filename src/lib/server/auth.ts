@@ -11,7 +11,10 @@ import {
 } from './db/schema';
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
-import { ANNOUNCEMENTS_CATEGORY_ID } from './discussions';
+import {
+	ANNOUNCEMENTS_CATEGORY_ID,
+	subscribeUserToPrimaryCurrentSessionThreads
+} from './discussions';
 import { sendMagicLinkEmail } from './email';
 import { publishWorkerMessage } from './worker-queue';
 import { PRIMARY_ORIGIN } from '$shared/brand';
@@ -384,6 +387,13 @@ export async function createSession(
 		tokenHash,
 		expiresAt: expiresAt.toISOString()
 	});
+
+	const now = new Date().toISOString();
+	await db
+		.update(users)
+		.set({ lastLoginAt: now, lastActivityAt: now, updatedAt: now })
+		.where(eq(users.id, userId));
+	await subscribeUserToPrimaryCurrentSessionThreads(db, userId);
 
 	return { token, expiresAt };
 }

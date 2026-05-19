@@ -72,6 +72,7 @@ export interface ThreadReplyFanoutPayload {
 	threadId: string;
 	postId: string;
 	replyAuthorUserId: string;
+	mentionedUserIds?: string[];
 	/** Origin used to build absolute links in the email (e.g. https://discuss…). */
 	baseUrl: string;
 }
@@ -109,7 +110,13 @@ export interface PushoverNotificationPayload {
 	url?: string | null;
 	urlTitle?: string | null;
 	priority?: -2 | -1 | 0 | 1;
-	eventType?: 'reply' | 'new_thread' | 'announcement' | 'pending_signup' | 'pushover_test';
+	eventType?:
+		| 'reply'
+		| 'mention'
+		| 'new_thread'
+		| 'announcement'
+		| 'pending_signup'
+		| 'pushover_test';
 	threadId?: string | null;
 	postId?: string | null;
 }

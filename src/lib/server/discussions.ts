@@ -1,7 +1,7 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import type { ORM } from '$lib/server/db';
-import { categories, threads } from '$lib/server/db/schema';
+import { categories, notificationPreferences, threads } from '$lib/server/db/schema';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { slugify } from '$lib/server/slugify';
@@ -93,6 +93,49 @@ export async function getPrimaryThreadForSession(db: ORM, sessionId: string) {
 			)
 		)
 		.get();
+}
+
+export async function subscribeActiveMembersToSessionThread(db: ORM, threadId: string) {
+	await db.run(sql`
+		INSERT OR IGNORE INTO subscriptions (id, user_id, thread_id, mode)
+		SELECT
+			'sub_session_' || u.id || '_' || ${threadId},
+			u.id,
+			${threadId},
+			np.default_sub_mode
+		FROM users u
+		INNER JOIN notification_preferences np ON np.user_id = u.id
+		WHERE u.status = 'active'
+			AND u.last_login_at IS NOT NULL
+			AND np.auto_subscribe_session_threads = 1
+	`);
+}
+
+export async function subscribeUserToPrimaryCurrentSessionThreads(db: ORM, userId: string) {
+	const prefs = await db
+		.select({
+			defaultSubMode: notificationPreferences.defaultSubMode,
+			autoSubscribeSessionThreads: notificationPreferences.autoSubscribeSessionThreads
+		})
+		.from(notificationPreferences)
+		.where(eq(notificationPreferences.userId, userId))
+		.get();
+
+	if (!prefs?.autoSubscribeSessionThreads) return;
+
+	await db.run(sql`
+		INSERT OR IGNORE INTO subscriptions (id, user_id, thread_id, mode)
+		SELECT
+			'sub_session_' || ${userId} || '_' || t.id,
+			${userId},
+			t.id,
+			${prefs.defaultSubMode}
+		FROM threads t
+		INNER JOIN sessions se ON se.id = t.session_id
+		WHERE t.session_thread_role = 'primary'
+			AND t.deleted_at IS NULL
+			AND se.status = 'current'
+	`);
 }
 
 export type ThreadParticipant = {

@@ -15,9 +15,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
-import { renderMarkdown } from '$lib/server/markdown';
-import { publishWorkerMessage } from '$lib/server/worker-queue';
-import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
+import { createThreadReply } from '$lib/server/thread-replies';
 import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -244,47 +242,12 @@ export const actions: Actions = {
 			return fail(400, { error: 'Reply cannot be empty.' });
 		}
 
-		const postId = newId();
-		const now = new Date().toISOString();
-		await locals.db.insert(posts).values({
-			id: postId,
-			threadId: thread.id,
+		await createThreadReply({
+			db: locals.db,
+			platform,
+			thread,
 			authorUserId: locals.user.id,
 			bodySource,
-			bodyHtml: renderMarkdown(bodySource)
-		});
-
-		await locals.db
-			.update(threads)
-			.set({
-				replyCount: thread.replyCount + 1,
-				lastPostAt: now,
-				updatedAt: now
-			})
-			.where(eq(threads.id, thread.id));
-
-		const existingSub = await locals.db
-			.select()
-			.from(subscriptions)
-			.where(and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id)))
-			.get();
-
-		if (!existingSub) {
-			const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
-			if (prefs.autoSubscribeOwn) {
-				await locals.db.insert(subscriptions).values({
-					id: newId(),
-					userId: locals.user.id,
-					threadId: thread.id,
-					mode: prefs.defaultSubMode
-				});
-			}
-		}
-
-		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.thread-reply', {
-			threadId: thread.id,
-			postId,
-			replyAuthorUserId: locals.user.id,
 			baseUrl: url.origin
 		});
 

@@ -757,6 +757,15 @@
 					Automatically watch threads I create or reply to
 				</label>
 
+				<label class="flex items-center gap-2 text-sm">
+					<input
+						type="checkbox"
+						name="autoSubscribeSessionThreads"
+						checked={data.preferences.autoSubscribeSessionThreads}
+					/>
+					Automatically watch primary session discussions
+				</label>
+
 				{#if form?.prefsError}
 					<p class="text-sm text-destructive">{form.prefsError}</p>
 				{/if}

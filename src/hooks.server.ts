@@ -1,7 +1,9 @@
 import { getDb } from '$lib/server/db';
 import { validateSession, SESSION_COOKIE_NAME } from '$lib/server/auth';
+import { users } from '$lib/server/db/schema';
 import { error, redirect, type Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
+import { eq } from 'drizzle-orm';
 
 const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?: boolean }[] = [
 	{ route: '/api/', isPrefix: true, perms: undefined },
@@ -49,6 +51,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 	]
 };
 
+const ACTIVITY_WRITE_INTERVAL_MS = 15 * 60 * 1000;
+
 function canAccess(path: string, permissions: Set<string>) {
 	for (const ra of ROUTE_ACCESS) {
 		const isMatch = ra.isPrefix ? path.startsWith(ra.route) : path === ra.route;
@@ -81,6 +85,20 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 			event.locals.sessionId = result.sessionId;
 			if (result.user.status === 'active') {
 				event.locals.permissions = new Set(ROLE_PERMISSIONS[result.user.role] ?? []);
+			}
+			const lastActivityMs = result.user.lastActivityAt
+				? Date.parse(result.user.lastActivityAt)
+				: Number.NaN;
+			if (
+				Number.isNaN(lastActivityMs) ||
+				Date.now() - lastActivityMs > ACTIVITY_WRITE_INTERVAL_MS
+			) {
+				const now = new Date().toISOString();
+				await event.locals.db
+					.update(users)
+					.set({ lastActivityAt: now, updatedAt: now })
+					.where(eq(users.id, result.user.id));
+				event.locals.user = { ...result.user, lastActivityAt: now, updatedAt: now };
 			}
 		} else {
 			event.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });

@@ -14,6 +14,10 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
+import {
+	getPrimaryThreadForSession,
+	subscribeActiveMembersToSessionThread
+} from '$lib/server/discussions';
 import { getSessionRsvpSlug, upsertRsvpEvent } from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
@@ -274,6 +278,13 @@ export const actions: Actions = {
 				updatedAt: updatedSession.updatedAt
 			})
 			.where(eq(sessions.id, row.id));
+
+		if (row.status !== 'current' && updatedSession.status === 'current') {
+			const primaryThread = await getPrimaryThreadForSession(locals.db, row.id);
+			if (primaryThread) {
+				await subscribeActiveMembersToSessionThread(locals.db, primaryThread.id);
+			}
+		}
 
 		return { updated: true };
 	},

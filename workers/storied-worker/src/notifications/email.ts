@@ -79,6 +79,33 @@ export function renderReplyNotificationEmail(args: ReplyNotificationTemplateArgs
 	};
 }
 
+export function renderMentionNotificationEmail(args: ReplyNotificationTemplateArgs): {
+	subject: string;
+	textBody: string;
+	htmlBody: string;
+} {
+	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
+	return {
+		subject: `${args.replyAuthor} mentioned you in "${args.threadTitle}" — ${APP_NAME}`,
+		textBody: `${args.replyAuthor} mentioned you in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
+		htmlBody: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
+        <h3 style="color: #1a1a2e; margin-top: 0;">${escapeHtml(args.replyAuthor)} mentioned you in "${escapeHtml(args.threadTitle)}"</h3>
+        <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
+          <p style="color: #444; margin: 0; line-height: 1.5;">${escapeHtml(args.replyPreview)}</p>
+        </div>
+        <div style="margin: 24px 0;">
+          <a href="${threadUrl}" style="display: inline-block; background: #6d28d9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            View Thread
+          </a>
+        </div>
+        <p style="color: #aaa; font-size: 12px;">You're receiving this because you were mentioned.</p>
+      </div>
+    `.trim()
+	};
+}
+
 export interface DigestThreadPost {
 	authorDisplayName: string;
 	bodyPreview: string;

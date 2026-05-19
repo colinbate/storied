@@ -25,22 +25,28 @@ export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 // ──────────────────────────────────────────────
 // users
 // ──────────────────────────────────────────────
-export const users = sqliteTable('users', {
-	id: text('id').primaryKey(),
-	email: text('email').notNull().unique(),
-	displayName: text('display_name').notNull(),
-	avatarUrl: text('avatar_url'),
-	/** Allowed values: 'member' | 'moderator' | 'admin' */
-	role: text('role').notNull().default('member'),
-	/** Allowed values: 'active' | 'pending' | 'suspended' */
-	status: text('status').notNull().default('active'),
-	/** IANA timezone identifier, e.g. 'Atlantic/Bermuda' */
-	timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
-	/** 0 = default fonts, 1 = use OpenDyslexic for all site text */
-	dyslexicFont: integer('dyslexic_font', { mode: 'boolean' }).notNull().default(false),
-	createdAt: text('created_at').notNull().default(timestampDefault),
-	updatedAt: text('updated_at').notNull().default(timestampDefault)
-});
+export const users = sqliteTable(
+	'users',
+	{
+		id: text('id').primaryKey(),
+		email: text('email').notNull().unique(),
+		displayName: text('display_name').notNull(),
+		avatarUrl: text('avatar_url'),
+		/** Allowed values: 'member' | 'moderator' | 'admin' */
+		role: text('role').notNull().default('member'),
+		/** Allowed values: 'active' | 'pending' | 'suspended' */
+		status: text('status').notNull().default('active'),
+		/** IANA timezone identifier, e.g. 'Atlantic/Bermuda' */
+		timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
+		/** 0 = default fonts, 1 = use OpenDyslexic for all site text */
+		dyslexicFont: integer('dyslexic_font', { mode: 'boolean' }).notNull().default(false),
+		lastLoginAt: text('last_login_at'),
+		lastActivityAt: text('last_activity_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_users_status_last_activity').on(table.status, table.lastActivityAt)]
+);
 
 // ──────────────────────────────────────────────
 // user_profiles  (club-facing identity)
@@ -255,6 +261,10 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 	defaultSubMode: text('default_sub_mode').notNull().default('immediate'),
 	/** 0 = do not auto-subscribe on create/reply, 1 = auto-subscribe. */
 	autoSubscribeOwn: integer('auto_subscribe_own', { mode: 'boolean' }).notNull().default(true),
+	/** 0 = do not auto-subscribe to primary session threads, 1 = auto-subscribe. */
+	autoSubscribeSessionThreads: integer('auto_subscribe_session_threads', { mode: 'boolean' })
+		.notNull()
+		.default(true),
 	/** ISO-8601 timestamp of the last digest delivery, or NULL if none. */
 	lastDigestAt: text('last_digest_at'),
 	createdAt: text('created_at').notNull().default(timestampDefault),

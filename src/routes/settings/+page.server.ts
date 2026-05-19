@@ -459,6 +459,8 @@ export const actions: Actions = {
 		const mode = data.get('mode')?.toString();
 		const digestHourRaw = data.get('digestHour')?.toString();
 		const autoSubscribe = data.get('autoSubscribe')?.toString() === 'on';
+		const autoSubscribeSessionThreads =
+			data.get('autoSubscribeSessionThreads')?.toString() === 'on';
 
 		if (!isNotificationMode(mode)) {
 			return fail(400, { prefsError: 'Invalid notification mode.' });
@@ -498,6 +500,7 @@ export const actions: Actions = {
 				digestHourLocal,
 				defaultSubMode,
 				autoSubscribeOwn: autoSubscribe,
+				autoSubscribeSessionThreads,
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(notificationPreferences.userId, locals.user.id));

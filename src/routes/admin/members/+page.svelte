@@ -50,6 +50,16 @@
 		return 'outline';
 	}
 
+	function formatActivity(member: { lastActivityAt: string | null; lastLoginAt: string | null }) {
+		if (member.lastActivityAt) {
+			return `Active ${formatDate(member.lastActivityAt, { dateStyle: 'short', time: 'always', timeZone })}`;
+		}
+		if (member.lastLoginAt) {
+			return `Logged in ${formatDate(member.lastLoginAt, { dateStyle: 'short', time: 'always', timeZone })}`;
+		}
+		return 'Never logged in';
+	}
+
 	async function toggleInviteForm() {
 		showInviteForm = !showInviteForm;
 		if (showInviteForm) {
@@ -420,6 +430,9 @@
 							</form>
 							<span class="text-xs whitespace-nowrap text-muted-foreground">
 								Joined {formatDate(member.createdAt, { time: 'never', timeZone })}
+							</span>
+							<span class="text-xs whitespace-nowrap text-muted-foreground">
+								{formatActivity(member)}
 							</span>
 						</div>
 					</div>

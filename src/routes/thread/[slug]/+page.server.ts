@@ -8,7 +8,6 @@ import {
 	authors,
 	books,
 	series,
-	subjectSources,
 	threadSubjects,
 	sessionSubjects,
 	sessions,
@@ -19,10 +18,7 @@ import {
 import { eq, and, isNull, asc, not } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
-import { detectSubjectLinks } from '$lib/server/book-links';
-import { publishWorkerMessage } from '$lib/server/worker-queue';
-import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
-import type { SubjectSourceType } from '$shared/worker-messages';
+import { createThreadReply } from '$lib/server/thread-replies';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -271,144 +267,15 @@ export const actions: Actions = {
 			return fail(403, { error: 'This thread is locked.' });
 		}
 
-		const bodyHtml = renderMarkdown(bodySource);
-		const postId = newId();
-		const now = new Date().toISOString();
-
-		await locals.db.insert(posts).values({
-			id: postId,
-			threadId: thread.id,
+		const { queuedSubjectLinks } = await createThreadReply({
+			db: locals.db,
+			platform,
+			thread,
 			authorUserId: locals.user.id,
-			parentPostId,
 			bodySource,
-			bodyHtml
-		});
-
-		// Update thread reply count and last post timestamp
-		await locals.db
-			.update(threads)
-			.set({
-				replyCount: thread.replyCount + 1,
-				lastPostAt: now,
-				updatedAt: now
-			})
-			.where(eq(threads.id, thread.id));
-
-		// Auto-subscribe the replier to the thread (if not already), honoring
-		// the user's notification preferences.
-		const existingSub = await locals.db
-			.select()
-			.from(subscriptions)
-			.where(and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id)))
-			.get();
-
-		if (!existingSub) {
-			const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
-			if (prefs.autoSubscribeOwn) {
-				await locals.db.insert(subscriptions).values({
-					id: newId(),
-					userId: locals.user.id,
-					threadId: thread.id,
-					mode: prefs.defaultSubMode
-				});
-			}
-		}
-
-		// Detect and process subject links (books and series)
-		const detectedLinks = detectSubjectLinks(bodySource);
-		const queuedSubjectLinks: Array<{
-			sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
-			sourceKey: string;
-			subjectKind: 'book' | 'series' | 'author';
-		}> = [];
-		for (let i = 0; i < detectedLinks.length; i++) {
-			const link = detectedLinks[i];
-
-			const existingSource = await locals.db
-				.select()
-				.from(subjectSources)
-				.where(
-					and(
-						eq(subjectSources.sourceType, link.sourceType),
-						eq(subjectSources.sourceKey, link.sourceKey)
-					)
-				)
-				.get();
-
-			let sourceId: string;
-			let resolvedSubjectType: string | null = null;
-			let resolvedSubjectId: string | null = null;
-
-			if (existingSource) {
-				sourceId = existingSource.id;
-				resolvedSubjectType = existingSource.subjectType;
-				resolvedSubjectId = existingSource.subjectId;
-
-				// Source exists but not yet resolved — re-enqueue
-				if (!resolvedSubjectId) {
-					await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
-						subjectSourceId: existingSource.id,
-						sourceType: link.sourceType as SubjectSourceType,
-						sourceUrl: link.url,
-						sourceKey: link.sourceKey,
-						threadId: thread.id,
-						postId
-					});
-					queuedSubjectLinks.push({
-						sourceType: link.sourceType,
-						sourceKey: link.sourceKey,
-						subjectKind: link.subjectKind
-					});
-				}
-			} else {
-				sourceId = newId();
-				await locals.db.insert(subjectSources).values({
-					id: sourceId,
-					sourceType: link.sourceType,
-					sourceUrl: link.url,
-					sourceKey: link.sourceKey,
-					fetchStatus: 'pending'
-				});
-
-				// Enqueue for resolution
-				await publishWorkerMessage(platform?.env.STORIED_WORKER, 'subject.resolve', {
-					subjectSourceId: sourceId,
-					sourceType: link.sourceType as SubjectSourceType,
-					sourceUrl: link.url,
-					sourceKey: link.sourceKey,
-					threadId: thread.id,
-					postId
-				});
-				queuedSubjectLinks.push({
-					sourceType: link.sourceType,
-					sourceKey: link.sourceKey,
-					subjectKind: link.subjectKind
-				});
-			}
-
-			if (resolvedSubjectType && resolvedSubjectId) {
-				await locals.db
-					.insert(threadSubjects)
-					.values({
-						id: newId(),
-						threadId: thread.id,
-						postId,
-						subjectType: resolvedSubjectType as SubjectType,
-						subjectId: resolvedSubjectId,
-						displayOrder: i,
-						context: 'linked',
-						addedBy: locals.user.id
-					})
-					.onConflictDoNothing();
-			}
-		}
-
-		// Fan out reply notifications in the background worker.
-		await publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.thread-reply', {
-			threadId: thread.id,
-			postId,
-			replyAuthorUserId: locals.user.id,
-			baseUrl: url.origin
+			parentPostId,
+			baseUrl: url.origin,
+			processSubjectLinks: true
 		});
 
 		return { success: true, queuedSubjectLinks };

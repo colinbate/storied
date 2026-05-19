@@ -6,7 +6,10 @@ import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
 import { renderMarkdown } from '$lib/server/markdown';
-import { createPrimarySessionThread } from '$lib/server/discussions';
+import {
+	createPrimarySessionThread,
+	subscribeActiveMembersToSessionThread
+} from '$lib/server/discussions';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import { upsertRsvpEvent } from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
@@ -111,6 +114,9 @@ export const actions: Actions = {
 				threadId: primaryThread.id,
 				mode: prefs.defaultSubMode
 			});
+		}
+		if (status === 'current') {
+			await subscribeActiveMembersToSessionThread(locals.db, primaryThread.id);
 		}
 
 		return { created: true };
