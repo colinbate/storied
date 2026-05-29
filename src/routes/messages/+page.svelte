@@ -63,7 +63,10 @@
 							<div class="flex flex-wrap items-center gap-2">
 								<h2 class="truncate text-sm font-semibold">{conversation.otherDisplayName}</h2>
 								{#if conversation.unread}
-									<Badge>Unread</Badge>
+									<Badge>
+										{conversation.unreadCount}
+										unread
+									</Badge>
 								{/if}
 								{#if conversation.muted}
 									<Badge variant="secondary" class="gap-1">

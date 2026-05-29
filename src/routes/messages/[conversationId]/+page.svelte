@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -13,6 +14,7 @@
 	import SendIcon from '@lucide/svelte/icons/send';
 	import Volume2Icon from '@lucide/svelte/icons/volume-2';
 	import VolumeXIcon from '@lucide/svelte/icons/volume-x';
+	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	let { data, form } = $props();
@@ -21,6 +23,10 @@
 
 	const currentUserId = $derived(data.user?.id ?? null);
 	const isMuted = $derived(Boolean(data.membership.mutedAt));
+
+	onMount(() => {
+		void invalidate('app:message-unread-count');
+	});
 </script>
 
 <svelte:head>

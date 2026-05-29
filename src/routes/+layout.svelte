@@ -32,7 +32,6 @@
 		{ kind: 'static' as const, label: 'Themes', href: '/themes' as const, icon: LightbulbIcon },
 		{ kind: 'static' as const, label: 'Library', href: '/library' as const, icon: LibraryIcon },
 		{ kind: 'static' as const, label: 'Members', href: '/members' as const, icon: UsersIcon },
-		{ kind: 'static' as const, label: 'Messages', href: '/messages' as const, icon: MailIcon },
 		...data.navCategories.map((category) => ({
 			kind: 'category' as const,
 			label: category.name,
@@ -103,6 +102,29 @@
 							{/each}
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
+				{/if}
+
+				{#if user}
+					<Button
+						href={resolve('/messages')}
+						variant="ghost"
+						size="icon"
+						class="relative h-9 w-9"
+						aria-label={data.unreadMessageConversationCount > 0
+							? `${data.unreadMessageConversationCount} unread message conversation${data.unreadMessageConversationCount === 1 ? '' : 's'}`
+							: 'Messages'}
+					>
+						<MailIcon class="h-4 w-4" />
+						{#if data.unreadMessageConversationCount > 0}
+							<span
+								class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-foreground"
+							>
+								{data.unreadMessageConversationCount > 9
+									? '9+'
+									: data.unreadMessageConversationCount}
+							</span>
+						{/if}
+					</Button>
 				{/if}
 
 				<Button onclick={toggleMode} variant="ghost" size="icon" class="h-9 w-9">

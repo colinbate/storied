@@ -22,6 +22,7 @@ export type InboxConversation = {
 	otherAvatarUrl: string | null;
 	lastMessageBodySource: string | null;
 	lastMessageAt: string | null;
+	unreadCount: number;
 	unread: boolean;
 	muted: boolean;
 };
@@ -122,6 +123,7 @@ export async function getInboxConversations(db: ORM, userId: string): Promise<In
 		lastMessageAt: string | null;
 		lastReadAt: string | null;
 		mutedAt: string | null;
+		unreadCount: number;
 	}>(sql`
 		SELECT
 			c.id AS conversationId,
@@ -131,7 +133,18 @@ export async function getInboxConversations(db: ORM, userId: string): Promise<In
 			last_message.body_source AS lastMessageBodySource,
 			last_message.created_at AS lastMessageAt,
 			cm.last_read_at AS lastReadAt,
-			cm.muted_at AS mutedAt
+			cm.muted_at AS mutedAt,
+			(
+				SELECT COUNT(*)
+				FROM private_messages unread_message
+				WHERE unread_message.conversation_id = c.id
+					AND unread_message.deleted_at IS NULL
+					AND unread_message.author_user_id <> cm.user_id
+					AND (
+						cm.last_read_at IS NULL
+						OR unread_message.created_at > cm.last_read_at
+					)
+			) AS unreadCount
 		FROM conversation_members cm
 		INNER JOIN conversations c ON c.id = cm.conversation_id
 		INNER JOIN conversation_members other_member
@@ -159,9 +172,32 @@ export async function getInboxConversations(db: ORM, userId: string): Promise<In
 		otherAvatarUrl: row.otherAvatarUrl,
 		lastMessageBodySource: messageSnippet(row.lastMessageBodySource),
 		lastMessageAt: row.lastMessageAt,
-		unread: Boolean(row.lastMessageAt && (!row.lastReadAt || row.lastMessageAt > row.lastReadAt)),
+		unreadCount: Number(row.unreadCount),
+		unread: Number(row.unreadCount) > 0,
 		muted: Boolean(row.mutedAt)
 	}));
+}
+
+export async function getUnreadConversationCount(db: ORM, userId: string) {
+	const row = await db.get<{ count: number }>(sql`
+		SELECT COUNT(*) AS count
+		FROM conversation_members cm
+		WHERE cm.user_id = ${userId}
+			AND cm.archived_at IS NULL
+			AND EXISTS (
+				SELECT 1
+				FROM private_messages pm
+				WHERE pm.conversation_id = cm.conversation_id
+					AND pm.deleted_at IS NULL
+					AND pm.author_user_id <> cm.user_id
+					AND (
+						cm.last_read_at IS NULL
+						OR pm.created_at > cm.last_read_at
+					)
+			)
+	`);
+
+	return Number(row?.count ?? 0);
 }
 
 export async function loadConversation(db: ORM, conversationId: string, userId: string) {
