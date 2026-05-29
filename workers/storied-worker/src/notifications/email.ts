@@ -213,6 +213,40 @@ export function renderPendingSignupAlertEmail(args: PendingSignupAlertTemplateAr
 	return { subject, textBody, htmlBody };
 }
 
+export interface PrivateMessageNotificationTemplateArgs {
+	authorDisplayName: string;
+	messagePreview: string;
+	conversationUrl: string;
+}
+
+export function renderPrivateMessageNotificationEmail(
+	args: PrivateMessageNotificationTemplateArgs
+): {
+	subject: string;
+	textBody: string;
+	htmlBody: string;
+} {
+	const subject = `New private message from ${args.authorDisplayName} — ${APP_NAME}`;
+	const textBody = `${args.authorDisplayName} sent you a private message:\n\n${args.messagePreview}\n\nRead and reply here:\n\n${args.conversationUrl}`;
+	const htmlBody = `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
+        <h3 style="color: #1a1a2e; margin-top: 0;">New private message from ${escapeHtml(args.authorDisplayName)}</h3>
+        <div style="background: #f5f3ff; border-left: 3px solid #6d28d9; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
+          <p style="color: #444; margin: 0; line-height: 1.5;">${escapeHtml(args.messagePreview)}</p>
+        </div>
+        <div style="margin: 24px 0;">
+          <a href="${escapeHtml(args.conversationUrl)}" style="display: inline-block; background: #6d28d9; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Open Message
+          </a>
+        </div>
+        <p style="color: #aaa; font-size: 12px;">You're receiving this because someone sent you a private message.</p>
+      </div>
+    `.trim();
+
+	return { subject, textBody, htmlBody };
+}
+
 export interface DigestFollowedThread {
 	threadId: string;
 	threadSlug: string;

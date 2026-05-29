@@ -1,8 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 import { authors, books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
+import { getOrCreateDirectConversation } from '$lib/server/private-messages';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
@@ -128,4 +129,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 						({ relation }) => relation.readingStatus === 'read' && !relation.featuredOnProfile
 					)
 	};
+};
+
+export const actions: Actions = {
+	message: async ({ locals, params }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		if (locals.user.id === params.id) throw redirect(303, '/settings');
+
+		const conversation = await getOrCreateDirectConversation(locals.db, locals.user.id, params.id);
+
+		throw redirect(303, `/messages/${conversation.conversationId}`);
+	}
 };

@@ -8,6 +8,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SendIcon from '@lucide/svelte/icons/send';
+	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { toast } from 'svelte-sonner';
@@ -378,7 +379,23 @@
 								</div>
 							</div>
 
-							<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-64">
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-96">
+								{#if member.status === 'active' && member.id !== data.user?.id}
+									<form method="POST" action="?/message" class="flex justify-end">
+										<input type="hidden" name="userId" value={member.id} />
+										<Button
+											type="submit"
+											variant="outline"
+											size="icon-lg"
+											class="size-9"
+											aria-label="Message"
+										>
+											<MessageSquareIcon class="h-4 w-4" />
+										</Button>
+									</form>
+								{:else}
+									<div class="hidden sm:block"></div>
+								{/if}
 								<form
 									method="POST"
 									action="?/updateRole"

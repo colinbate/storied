@@ -57,12 +57,11 @@ export async function sendMagicLinkEmail(
 	baseUrl: string
 ): Promise<{ success: boolean; error?: string }> {
 	const magicUrl = `${baseUrl}/auth/verify?token=${encodeURIComponent(token)}`;
-	const displayCode = `${code.slice(0, 3)} ${code.slice(3)}`;
 
 	return sendEmail(platform, {
 		to: email,
 		subject: `Sign in to ${APP_NAME}`,
-		textBody: `Click the link below to sign in to ${APP_NAME}.\n\n${magicUrl}\n\nOr enter this code on the sign-in page if you're on a different device:\n\n${displayCode}\n\nThe link and code expire in 15 minutes and can only be used once.\n\nIf you didn't request this, you can safely ignore this email.`,
+		textBody: `Click the link below to sign in to ${APP_NAME}.\n\n${magicUrl}\n\nOr enter this code on the sign-in page if you're on a different device:\n\n${code}\n\nThe link and code expire in 15 minutes and can only be used once.\n\nIf you didn't request this, you can safely ignore this email.`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
         <p style="color: #888; font-size: 13px; margin-bottom: 4px;">${APP_SUBTITLE}</p>
@@ -77,7 +76,7 @@ export async function sendMagicLinkEmail(
           Or if you are on a different device, enter this code on the sign-in page:
         </p>
         <p style="text-align: center; font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #1a1a2e; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 32px;">
-          ${displayCode}
+          ${code}
         </p>
         <p style="color: #888; font-size: 14px; line-height: 1.5;">
           Or copy and paste this URL into your browser:<br>

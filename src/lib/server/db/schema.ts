@@ -49,6 +49,99 @@ export const users = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
+// conversations
+// ──────────────────────────────────────────────
+export const conversations = sqliteTable(
+	'conversations',
+	{
+		id: text('id').primaryKey(),
+		kind: text('kind').notNull().default('direct'),
+		createdByUserId: text('created_by_user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'restrict' }),
+		lastMessageAt: text('last_message_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_conversations_last_message').on(table.lastMessageAt)]
+);
+
+// ──────────────────────────────────────────────
+// conversation_members
+// ──────────────────────────────────────────────
+export const conversationMembers = sqliteTable(
+	'conversation_members',
+	{
+		conversationId: text('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		role: text('role').notNull().default('member'),
+		lastReadMessageId: text('last_read_message_id'),
+		lastReadAt: text('last_read_at'),
+		mutedAt: text('muted_at'),
+		archivedAt: text('archived_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.conversationId, table.userId] }),
+		index('idx_conversation_members_user').on(table.userId, table.createdAt),
+		index('idx_conversation_members_user_archived').on(table.userId, table.archivedAt)
+	]
+);
+
+// ──────────────────────────────────────────────
+// private_messages
+// ──────────────────────────────────────────────
+export const privateMessages = sqliteTable(
+	'private_messages',
+	{
+		id: text('id').primaryKey(),
+		conversationId: text('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		authorUserId: text('author_user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'restrict' }),
+		bodySource: text('body_source').notNull(),
+		bodyHtml: text('body_html').notNull(),
+		deletedAt: text('deleted_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_private_messages_conversation_created').on(table.conversationId, table.createdAt),
+		index('idx_private_messages_author').on(table.authorUserId, table.createdAt),
+		index('idx_private_messages_deleted').on(table.deletedAt)
+	]
+);
+
+// ──────────────────────────────────────────────
+// direct_conversation_keys
+// ──────────────────────────────────────────────
+export const directConversationKeys = sqliteTable(
+	'direct_conversation_keys',
+	{
+		userAId: text('user_a_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		userBId: text('user_b_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		conversationId: text('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.userAId, table.userBId] }),
+		uniqueIndex('direct_conversation_keys_conversation_unique').on(table.conversationId)
+	]
+);
+
+// ──────────────────────────────────────────────
 // user_profiles  (club-facing identity)
 // ──────────────────────────────────────────────
 export const userProfiles = sqliteTable('user_profiles', {
@@ -281,7 +374,7 @@ export const notificationEvents = sqliteTable(
 		userId: text('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' | 'pushover_test' */
+		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' | 'pushover_test' | 'private_message' */
 		eventType: text('event_type').notNull(),
 		threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
 		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),

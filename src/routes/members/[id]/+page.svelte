@@ -9,6 +9,7 @@
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import StarIcon from '@lucide/svelte/icons/star';
 
 	let { data } = $props();
@@ -66,9 +67,18 @@
 			{#if data.profile?.bio}
 				<p class="max-w-3xl leading-7 whitespace-pre-wrap">{data.profile.bio}</p>
 			{/if}
-			{#if data.isOwnProfile}
-				<Button href={resolve('/settings')} variant="outline" size="sm">Edit Profile</Button>
-			{/if}
+			<div class="flex flex-wrap gap-2">
+				{#if data.isOwnProfile}
+					<Button href={resolve('/settings')} variant="outline" size="sm">Edit Profile</Button>
+				{:else}
+					<form method="POST" action="?/message">
+						<Button type="submit" variant="outline" size="sm">
+							<MessageSquareIcon class="h-4 w-4" />
+							Message
+						</Button>
+					</form>
+				{/if}
+			</div>
 		</div>
 	</section>
 

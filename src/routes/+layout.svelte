@@ -15,6 +15,7 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
 	import LibraryIcon from '@lucide/svelte/icons/library';
+	import MailIcon from '@lucide/svelte/icons/mail';
 	import MenuIcon from '@lucide/svelte/icons/menu';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -31,6 +32,7 @@
 		{ kind: 'static' as const, label: 'Themes', href: '/themes' as const, icon: LightbulbIcon },
 		{ kind: 'static' as const, label: 'Library', href: '/library' as const, icon: LibraryIcon },
 		{ kind: 'static' as const, label: 'Members', href: '/members' as const, icon: UsersIcon },
+		{ kind: 'static' as const, label: 'Messages', href: '/messages' as const, icon: MailIcon },
 		...data.navCategories.map((category) => ({
 			kind: 'category' as const,
 			label: category.name,

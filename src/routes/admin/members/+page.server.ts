@@ -1,4 +1,4 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { invites, moderationEvents, users } from '$lib/server/db/schema';
 import { desc, eq, and } from 'drizzle-orm';
@@ -12,6 +12,7 @@ import {
 } from '$lib/server/auth';
 import { sendAccountApprovedEmail, sendInviteEmail } from '$lib/server/email';
 import { normalizeEmail } from '$lib/server/form-values';
+import { getOrCreateDirectConversation } from '$lib/server/private-messages';
 
 async function notifyIfActivatedFromPending({
 	userId,
@@ -231,5 +232,26 @@ export const actions: Actions = {
 		});
 
 		return { signupRejected: true, updatedUserId: userId };
+	},
+
+	message: async ({ request, locals }) => {
+		requirePermission(locals, 'members:edit');
+
+		if (!locals.user) {
+			return fail(401, { error: 'Missing current user.' });
+		}
+
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		if (!userId) {
+			return fail(400, { error: 'Missing user id.' });
+		}
+
+		if (locals.user.id === userId) {
+			throw redirect(303, '/messages');
+		}
+
+		const conversation = await getOrCreateDirectConversation(locals.db, locals.user.id, userId);
+		throw redirect(303, `/messages/${conversation.conversationId}`);
 	}
 };

@@ -98,6 +98,18 @@ export interface PendingSignupNotificationPayload {
 }
 
 // ────────────────────────────────────────────────
+// notifications.private-message — notify a direct-message recipient
+// ────────────────────────────────────────────────
+
+export interface PrivateMessageNotificationPayload {
+	conversationId: string;
+	messageId: string;
+	authorUserId: string;
+	recipientUserId: string;
+	baseUrl: string;
+}
+
+// ────────────────────────────────────────────────
 // notifications.pushover — send one Pushover notification
 // ────────────────────────────────────────────────
 
@@ -116,6 +128,7 @@ export interface PushoverNotificationPayload {
 		| 'new_thread'
 		| 'announcement'
 		| 'pending_signup'
+		| 'private_message'
 		| 'pushover_test';
 	threadId?: string | null;
 	postId?: string | null;
@@ -151,6 +164,7 @@ export type WorkerMessage =
 	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload }
 	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload }
 	| { topic: 'notifications.pending-signup'; payload: PendingSignupNotificationPayload }
+	| { topic: 'notifications.private-message'; payload: PrivateMessageNotificationPayload }
 	| { topic: 'notifications.pushover'; payload: PushoverNotificationPayload }
 	| { topic: 'search.thread.reindex'; payload: SearchThreadReindexPayload }
 	| { topic: 'search.session.reindex'; payload: SearchSessionReindexPayload }
