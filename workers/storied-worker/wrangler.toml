@@ -42,6 +42,6 @@ retry_delay = 5
 name = "EMAIL"
 allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]
 
-# Cron triggers — handlers wired in src/dispatch.ts#dispatchScheduled.
+# Cron triggers — handlers wired in src/dispatch.ts#dispatchScheduled
 [triggers]
 crons = ["0 * * * *"]
