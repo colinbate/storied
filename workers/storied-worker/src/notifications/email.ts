@@ -59,7 +59,7 @@ export function renderReplyNotificationEmail(args: ReplyNotificationTemplateArgs
 } {
 	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
-		subject: `New reply in "${args.threadTitle}" — ${APP_NAME}`,
+		subject: `New reply in "${args.threadTitle}" - ${APP_NAME}`,
 		textBody: `${args.replyAuthor} replied in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
@@ -86,7 +86,7 @@ export function renderMentionNotificationEmail(args: ReplyNotificationTemplateAr
 } {
 	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
-		subject: `${args.replyAuthor} mentioned you in "${args.threadTitle}" — ${APP_NAME}`,
+		subject: `${args.replyAuthor} mentioned you in "${args.threadTitle}" - ${APP_NAME}`,
 		textBody: `${args.replyAuthor} mentioned you in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
@@ -128,7 +128,7 @@ export function renderNewThreadNotificationEmail(args: NewThreadNotificationTemp
 } {
 	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
-		subject: `New thread in ${args.categoryName} — ${APP_NAME}`,
+		subject: `New thread in ${args.categoryName} - ${APP_NAME}`,
 		textBody: `${args.threadAuthor} started "${args.threadTitle}" in ${args.categoryName}.\n\n${args.threadPreview}\n\nJoin the conversation: ${threadUrl}`,
 		htmlBody: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
@@ -226,7 +226,7 @@ export function renderPrivateMessageNotificationEmail(
 	textBody: string;
 	htmlBody: string;
 } {
-	const subject = `New private message from ${args.authorDisplayName} — ${APP_NAME}`;
+	const subject = `New private message from ${args.authorDisplayName} - ${APP_NAME}`;
 	const textBody = `${args.authorDisplayName} sent you a private message:\n\n${args.messagePreview}\n\nRead and reply here:\n\n${args.conversationUrl}`;
 	const htmlBody = `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
@@ -276,7 +276,7 @@ export interface DigestSiteCounts {
 
 export interface DigestEmailTemplateArgs {
 	displayName: string;
-	windowStart: string; // ISO-8601 — start of the digest window
+	windowStart: string; // ISO-8601 - start of the digest window
 	followedThreads: DigestFollowedThread[];
 	followedCategories: DigestFollowedCategory[];
 	siteCounts: DigestSiteCounts;
@@ -313,7 +313,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 
 	const subject =
 		totalUpdates > 0
-			? `Your ${APP_NAME} digest — ${totalUpdates} update${totalUpdates === 1 ? '' : 's'}`
+			? `Your ${APP_NAME} digest - ${totalUpdates} update${totalUpdates === 1 ? '' : 's'}`
 			: `Your ${APP_NAME} digest`;
 
 	// ─── Text body ──────────────────────────────────────────────────────────
@@ -341,7 +341,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 			textLines.push('');
 			textLines.push(`${c.categoryName}:`);
 			for (const t of c.threads) {
-				textLines.push(`  - ${t.threadTitle} — ${t.authorDisplayName}`);
+				textLines.push(`  - ${t.threadTitle} - ${t.authorDisplayName}`);
 				textLines.push(`    ${args.baseUrl}/thread/${t.threadSlug}`);
 			}
 		}
@@ -398,7 +398,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 			for (const t of c.threads) {
 				const threadUrl = `${args.baseUrl}/thread/${t.threadSlug}`;
 				htmlParts.push(
-					`<li><a href="${escapeHtml(threadUrl)}" style="color: #6d28d9; text-decoration: none;">${escapeHtml(t.threadTitle)}</a> — ${escapeHtml(t.authorDisplayName)}</li>`
+					`<li><a href="${escapeHtml(threadUrl)}" style="color: #6d28d9; text-decoration: none;">${escapeHtml(t.threadTitle)}</a> - ${escapeHtml(t.authorDisplayName)}</li>`
 				);
 			}
 			htmlParts.push(`</ul></div>`);
