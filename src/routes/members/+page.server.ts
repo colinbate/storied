@@ -1,16 +1,16 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { userProfiles, userSubjects, users } from '$lib/server/db/schema';
-import { and, asc, count, eq } from 'drizzle-orm';
+import { asc, count, eq, sql } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 
-function hasProfileContent(profile: typeof userProfiles.$inferSelect) {
+function hasProfileContent(profile: typeof userProfiles.$inferSelect | null) {
 	return Boolean(
-		profile.headline?.trim() ||
-		profile.bio?.trim() ||
-		profile.favoriteGenresText?.trim() ||
-		profile.locationText?.trim() ||
-		profile.websiteUrl?.trim()
+		profile?.headline?.trim() ||
+		profile?.bio?.trim() ||
+		profile?.favoriteGenresText?.trim() ||
+		profile?.locationText?.trim() ||
+		profile?.websiteUrl?.trim()
 	);
 }
 
@@ -24,11 +24,25 @@ export const load: PageServerLoad = async ({ locals }) => {
 				displayName: users.displayName,
 				avatarUrl: users.avatarUrl,
 				status: users.status,
-				profile: userProfiles
+				profile: userProfiles,
+				threadCount: sql<number>`(
+					SELECT count(*)
+					FROM threads
+					WHERE threads.author_user_id = users.id
+						AND threads.deleted_at IS NULL
+				)`,
+				postCount: sql<number>`(
+					SELECT count(*)
+					FROM posts
+					INNER JOIN threads ON threads.id = posts.thread_id
+					WHERE posts.author_user_id = users.id
+						AND posts.deleted_at IS NULL
+						AND threads.deleted_at IS NULL
+				)`
 			})
 			.from(users)
-			.innerJoin(userProfiles, eq(userProfiles.userId, users.id))
-			.where(and(eq(users.status, 'active'), eq(userProfiles.showProfile, true)))
+			.leftJoin(userProfiles, eq(userProfiles.userId, users.id))
+			.where(eq(users.status, 'active'))
 			.orderBy(asc(users.displayName)),
 
 		locals.db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
@@ -42,8 +56,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			})
 			.from(userSubjects)
 			.innerJoin(users, eq(users.id, userSubjects.userId))
-			.innerJoin(userProfiles, eq(userProfiles.userId, users.id))
-			.where(and(eq(users.status, 'active'), eq(userProfiles.showProfile, true)))
+			.where(eq(users.status, 'active'))
 	]);
 
 	const activeMemberCount = countResult[0]?.count ?? members.length;
@@ -57,17 +70,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 		statsMap.set(relation.userId, existing);
 	}
 
-	const publicProfileMembers = members
+	const listedMembers = members
 		.map((member) => ({
 			...member,
-			profileGenres: parseProfileGenres(member.profile.favoriteGenresText),
+			profileGenres: parseProfileGenres(member.profile?.favoriteGenresText),
 			stats: statsMap.get(member.id) ?? { recommendations: 0, read: 0, featured: 0 }
 		}))
-		.filter((member) => hasProfileContent(member.profile) || member.stats.featured > 0);
+		.filter((member) => {
+			const hasVisibleProfile =
+				member.profile?.showProfile !== false &&
+				(hasProfileContent(member.profile) || member.stats.featured > 0);
+			const hasPostedOrReplied = member.threadCount > 0 || member.postCount > 0;
+
+			return hasVisibleProfile || hasPostedOrReplied;
+		});
 
 	return {
-		members: publicProfileMembers,
-		membersWithoutPublicProfiles: Math.max(0, activeMemberCount - publicProfileMembers.length),
-		isCurrentUserListed: publicProfileMembers.some((member) => member.id === locals.user?.id)
+		members: listedMembers,
+		membersNotYetListed: Math.max(0, activeMemberCount - listedMembers.length),
+		isCurrentUserListed: listedMembers.some((member) => member.id === locals.user?.id)
 	};
 };

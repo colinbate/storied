@@ -16,14 +16,14 @@
 	<div>
 		<h1 class="text-2xl font-bold">Members</h1>
 		<p class="text-muted-foreground">
-			Profiles from members who have chosen to introduce themselves to the archive.
+			Members who have introduced themselves or joined the discussion.
 		</p>
 		<p class="mt-1 text-sm text-muted-foreground">
 			{data.members.length}
-			{data.members.length === 1 ? 'member has' : 'members have'} created public profiles.
-			{#if data.membersWithoutPublicProfiles > 0}
-				{data.membersWithoutPublicProfiles}
-				{data.membersWithoutPublicProfiles === 1 ? 'member has' : 'members have'} not yet.
+			{data.members.length === 1 ? 'member is' : 'members are'} listed.
+			{#if data.membersNotYetListed > 0}
+				{data.membersNotYetListed}
+				{data.membersNotYetListed === 1 ? 'member is' : 'members are'} not yet.
 			{/if}
 		</p>
 	</div>
@@ -32,7 +32,8 @@
 		<Card.Root>
 			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<p class="text-sm text-muted-foreground">
-					You're not listed here yet. Add public profile details when you're ready to be included.
+					You're not listed here yet. Add profile details or join a discussion when you're ready to
+					be included.
 				</p>
 				<Button href={resolve('/settings')}>Edit Profile</Button>
 			</Card.Content>
@@ -79,7 +80,7 @@
 		</div>
 	{:else}
 		<p class="rounded-lg border bg-card px-4 py-6 text-sm text-muted-foreground">
-			No members have created public profiles yet.
+			No members are listed yet.
 		</p>
 	{/if}
 </div>
