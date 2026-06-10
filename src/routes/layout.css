@@ -161,3 +161,13 @@
 		font-family: 'OpenDyslexic', ui-sans-serif, system-ui, sans-serif !important;
 	}
 }
+
+@layer components {
+	.prose a.mention-link {
+		@apply rounded-sm bg-primary/10 px-1 py-0.5 font-medium text-primary no-underline! transition-colors;
+	}
+
+	.prose a.mention-link:hover {
+		@apply bg-primary/15 underline!;
+	}
+}

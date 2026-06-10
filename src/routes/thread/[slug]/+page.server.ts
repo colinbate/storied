@@ -18,6 +18,7 @@ import {
 import { eq, and, isNull, asc, not } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
+import { listActiveMentionableUsers } from '$lib/server/mentions';
 import { createThreadReply } from '$lib/server/thread-replies';
 
 /** How long after posting a user can edit their own post or thread. */
@@ -612,7 +613,9 @@ export const actions: Actions = {
 			return fail(403, { error: 'Edit window has passed.' });
 		}
 
-		const bodyHtml = renderMarkdown(body);
+		const bodyHtml = renderMarkdown(body, {
+			mentionableUsers: await listActiveMentionableUsers(locals.db)
+		});
 		const now = new Date().toISOString();
 		await locals.db
 			.update(threads)
@@ -647,7 +650,9 @@ export const actions: Actions = {
 			return fail(403, { error: 'Edit window has passed.' });
 		}
 
-		const bodyHtml = renderMarkdown(body);
+		const bodyHtml = renderMarkdown(body, {
+			mentionableUsers: await listActiveMentionableUsers(locals.db)
+		});
 		const now = new Date().toISOString();
 		await locals.db
 			.update(posts)

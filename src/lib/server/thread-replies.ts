@@ -35,6 +35,7 @@ export async function createThreadReply(args: {
 }) {
 	const postId = newId();
 	const now = new Date().toISOString();
+	const mentionableUsers = await listActiveMentionableUsers(args.db);
 
 	await args.db.insert(posts).values({
 		id: postId,
@@ -42,7 +43,7 @@ export async function createThreadReply(args: {
 		authorUserId: args.authorUserId,
 		parentPostId: args.parentPostId ?? null,
 		bodySource: args.bodySource,
-		bodyHtml: renderMarkdown(args.bodySource)
+		bodyHtml: renderMarkdown(args.bodySource, { mentionableUsers })
 	});
 
 	await args.db
@@ -67,10 +68,7 @@ export async function createThreadReply(args: {
 			})
 		: [];
 
-	const mentionedUserIds = findMentionedUserIds(
-		args.bodySource,
-		await listActiveMentionableUsers(args.db)
-	);
+	const mentionedUserIds = findMentionedUserIds(args.bodySource, mentionableUsers);
 
 	await publishWorkerMessage(args.platform?.env.STORIED_WORKER, 'notifications.thread-reply', {
 		threadId: args.thread.id,

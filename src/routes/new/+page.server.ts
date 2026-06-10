@@ -13,6 +13,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { detectSubjectLinks } from '$lib/server/book-links';
+import { listActiveMentionableUsers } from '$lib/server/mentions';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import type { SubjectSourceType } from '$shared/worker-messages';
@@ -123,7 +124,9 @@ export const actions: Actions = {
 			});
 		}
 
-		const bodyHtml = renderMarkdown(bodySource);
+		const bodyHtml = renderMarkdown(bodySource, {
+			mentionableUsers: await listActiveMentionableUsers(locals.db)
+		});
 		const slug = await createUniqueThreadSlug(locals.db, title);
 		const threadId = newId();
 		const now = new Date().toISOString();
