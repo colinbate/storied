@@ -63,7 +63,7 @@ function rsvpEventStatus(session: Pick<StoriedSession, 'status'>) {
 }
 
 function canonicalSessionUrl(slug: string) {
-	return `${PUBLIC_ORIGIN}/sessions/${encodeURIComponent(slug)}`;
+	return `${PUBLIC_ORIGIN}${encodeURI(slug)}`;
 }
 
 export async function upsertRsvpEvent({
