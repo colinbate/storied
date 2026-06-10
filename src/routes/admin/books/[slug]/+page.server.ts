@@ -192,7 +192,7 @@ export const actions: Actions = {
 		if (mode === 'url') {
 			const url = data.get('url')?.toString()?.trim() || '';
 			const link = detectFirstSubjectLinkOfKind(url, 'series');
-			if (!link) return fail(400, { error: 'Only Goodreads series URLs are supported.' });
+			if (!link) return fail(400, { error: 'Only Goodreads or Hardcover series URLs are supported.' });
 
 			// Enqueue with a series-book side effect so the worker links this book
 			// to the resolved series automatically.

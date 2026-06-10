@@ -257,7 +257,7 @@ export const actions: Actions = {
 			const link = detectFirstSubjectLink(url);
 			if (!link) {
 				return fail(400, {
-					featureError: 'Only Goodreads book, series, or author URLs are supported.'
+					featureError: 'Only Goodreads or Hardcover book, series, or author URLs are supported.'
 				});
 			}
 

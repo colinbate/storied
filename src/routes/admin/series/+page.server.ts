@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { series, subjectSources } from '$lib/server/db/schema';
-import { eq, desc, isNull, and } from 'drizzle-orm';
+import { eq, desc, isNull, and, inArray } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
@@ -21,7 +21,12 @@ export const load: PageServerLoad = async (event) => {
 	const unresolvedSources = await event.locals.db
 		.select()
 		.from(subjectSources)
-		.where(and(isNull(subjectSources.subjectId), eq(subjectSources.sourceType, 'goodreads-series')))
+		.where(
+			and(
+				isNull(subjectSources.subjectId),
+				inArray(subjectSources.sourceType, ['goodreads-series', 'hardcover-series'])
+			)
+		)
 		.orderBy(desc(subjectSources.createdAt))
 		.all();
 
@@ -125,10 +130,14 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const url = data.get('url')?.toString()?.trim() || '';
-		if (!url) return fail(400, { error: 'Please provide a Goodreads series URL.' });
+		if (!url) return fail(400, { error: 'Please provide a Goodreads or Hardcover series URL.' });
 
 		const link = detectFirstSubjectLinkOfKind(url, 'series');
-		if (!link) return fail(400, { error: 'Only Goodreads series URLs are supported right now.' });
+		if (!link) {
+			return fail(400, {
+				error: 'Only Goodreads or Hardcover series URLs are supported right now.'
+			});
+		}
 
 		await ensureSubjectSource(locals.db, link, platform?.env);
 

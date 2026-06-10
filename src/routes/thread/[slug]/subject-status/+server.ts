@@ -2,8 +2,17 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { subjectSources, threadSubjects, threads, type SubjectType } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+import type { SubjectSourceType } from '$shared/worker-messages';
 
-type SupportedSourceType = 'goodreads' | 'goodreads-series' | 'goodreads-author';
+type SupportedSourceType = Extract<
+	SubjectSourceType,
+	| 'goodreads'
+	| 'goodreads-series'
+	| 'goodreads-author'
+	| 'hardcover'
+	| 'hardcover-series'
+	| 'hardcover-author'
+>;
 type SubjectStatus = 'pending' | 'resolved' | 'failed' | 'unknown';
 
 interface RequestedSource {
@@ -20,7 +29,10 @@ function parseSourceParam(value: string): RequestedSource | null {
 	if (
 		(sourceType !== 'goodreads' &&
 			sourceType !== 'goodreads-series' &&
-			sourceType !== 'goodreads-author') ||
+			sourceType !== 'goodreads-author' &&
+			sourceType !== 'hardcover' &&
+			sourceType !== 'hardcover-series' &&
+			sourceType !== 'hardcover-author') ||
 		sourceKey.trim().length === 0
 	) {
 		return null;

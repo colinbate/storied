@@ -7,6 +7,7 @@ export interface Env {
 	PUSHOVER_QUEUE?: Queue<WorkerMessage>;
 	SEND_EMAILS?: string;
 	PUSHOVER_APP_TOKEN?: string;
+	HARDCOVER_API_TOKEN?: string;
 	/** Base URL (no trailing slash) used when composing links inside emails. */
 	DIGEST_BASE_URL?: string;
 }

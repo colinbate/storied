@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { authors, subjectSources } from '$lib/server/db/schema';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
@@ -18,7 +18,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.select()
 			.from(subjectSources)
 			.where(
-				and(isNull(subjectSources.subjectId), eq(subjectSources.sourceType, 'goodreads-author'))
+				and(
+					isNull(subjectSources.subjectId),
+					inArray(subjectSources.sourceType, ['goodreads-author', 'hardcover-author'])
+				)
 			)
 			.orderBy(desc(subjectSources.createdAt))
 			.all()
@@ -107,10 +110,14 @@ export const actions: Actions = {
 		requirePermission(locals, 'author:edit');
 
 		const url = (await request.formData()).get('url')?.toString()?.trim() || '';
-		if (!url) return fail(400, { error: 'Please provide a Goodreads author URL.' });
+		if (!url) return fail(400, { error: 'Please provide a Goodreads or Hardcover author URL.' });
 
 		const link = detectFirstSubjectLinkOfKind(url, 'author');
-		if (!link) return fail(400, { error: 'Only Goodreads author URLs are supported right now.' });
+		if (!link) {
+			return fail(400, {
+				error: 'Only Goodreads or Hardcover author URLs are supported right now.'
+			});
+		}
 
 		await ensureSubjectSource(locals.db, link, platform?.env);
 		return { queued: true };

@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { books, subjectSources } from '$lib/server/db/schema';
-import { eq, desc, isNull, and } from 'drizzle-orm';
+import { eq, desc, isNull, and, inArray } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
@@ -21,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 			and(
 				isNull(subjectSources.subjectId),
 				// Only book-producing source types
-				eq(subjectSources.sourceType, 'goodreads')
+				inArray(subjectSources.sourceType, ['goodreads', 'hardcover'])
 			)
 		)
 		.orderBy(desc(subjectSources.createdAt))
@@ -136,12 +136,12 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const url = data.get('url')?.toString()?.trim() || '';
 		if (!url) {
-			return fail(400, { error: 'Please provide a Goodreads book URL.' });
+			return fail(400, { error: 'Please provide a Goodreads or Hardcover book URL.' });
 		}
 
 		const link = detectFirstSubjectLinkOfKind(url, 'book');
 		if (!link) {
-			return fail(400, { error: 'Only Goodreads book URLs are supported right now.' });
+			return fail(400, { error: 'Only Goodreads or Hardcover book URLs are supported right now.' });
 		}
 
 		await ensureSubjectSource(locals.db, link, platform?.env);

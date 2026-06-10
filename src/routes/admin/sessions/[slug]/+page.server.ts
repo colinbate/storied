@@ -349,7 +349,9 @@ export const actions: Actions = {
 
 		const link = detectFirstSubjectLink(url);
 		if (!link)
-			return fail(400, { error: 'Only Goodreads book, series, or author URLs are supported.' });
+			return fail(400, {
+				error: 'Only Goodreads or Hardcover book, series, or author URLs are supported.'
+			});
 
 		const result = await ensureSubjectSource(locals.db, link, platform?.env, {
 			sessionLink: {

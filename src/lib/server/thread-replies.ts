@@ -18,7 +18,7 @@ import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
 
 export type QueuedSubjectLink = {
-	sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
+	sourceType: SubjectSourceType;
 	sourceKey: string;
 	subjectKind: 'book' | 'series' | 'author';
 };

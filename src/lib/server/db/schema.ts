@@ -603,7 +603,7 @@ export const subjectSources = sqliteTable(
 	'subject_sources',
 	{
 		id: text('id').primaryKey(),
-		/** Allowed values: 'goodreads' | 'goodreads-series' | 'goodreads-author' | 'amazon' | 'openlibrary' | 'googlebooks' | 'manual' */
+		/** Allowed values include Goodreads, Hardcover, Amazon, Open Library, Google Books, and manual sources. */
 		sourceType: text('source_type').notNull(),
 		sourceUrl: text('source_url').notNull(),
 		sourceKey: text('source_key').notNull(),

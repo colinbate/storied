@@ -38,19 +38,39 @@
 	import { formatDate } from '$lib/date-format';
 	import { cn } from '$lib/utils.js';
 	import { onDestroy, tick } from 'svelte';
+	import type { SubjectSourceType } from '$shared/worker-messages';
+
+	type QueuedSubjectLink = {
+		sourceType: Extract<
+			SubjectSourceType,
+			| 'goodreads'
+			| 'goodreads-series'
+			| 'goodreads-author'
+			| 'hardcover'
+			| 'hardcover-series'
+			| 'hardcover-author'
+		>;
+		sourceKey: string;
+		subjectKind: 'book' | 'series' | 'author';
+	};
+
+	function isQueuedSubjectSourceType(value: unknown): value is QueuedSubjectLink['sourceType'] {
+		return (
+			value === 'goodreads' ||
+			value === 'goodreads-series' ||
+			value === 'goodreads-author' ||
+			value === 'hardcover' ||
+			value === 'hardcover-series' ||
+			value === 'hardcover-author'
+		);
+	}
 
 	let { data, form } = $props();
 	let replyBody = $state('');
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
-	let queuedSubjectLinks = $state<
-		Array<{
-			sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
-			sourceKey: string;
-			subjectKind: 'book' | 'series' | 'author';
-		}>
-	>([]);
+	let queuedSubjectLinks = $state<QueuedSubjectLink[]>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let queuedSubjectPollStartedAt = 0;
 
@@ -105,16 +125,7 @@
 		return name.charAt(0).toUpperCase();
 	}
 
-	function addQueuedSubjectLinks(
-		value:
-			| {
-					sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
-					sourceKey: string;
-					subjectKind: 'book' | 'series' | 'author';
-			  }[]
-			| null
-			| undefined
-	) {
+	function addQueuedSubjectLinks(value: QueuedSubjectLink[] | null | undefined) {
 		if (!Array.isArray(value)) return;
 
 		const next = [...queuedSubjectLinks];
@@ -124,9 +135,7 @@
 			if (
 				typeof link !== 'object' ||
 				link === null ||
-				(link.sourceType !== 'goodreads' &&
-					link.sourceType !== 'goodreads-series' &&
-					link.sourceType !== 'goodreads-author') ||
+				!isQueuedSubjectSourceType(link.sourceType) ||
 				(link.subjectKind !== 'book' &&
 					link.subjectKind !== 'series' &&
 					link.subjectKind !== 'author') ||
@@ -742,11 +751,7 @@
 										typeof result.data === 'object' && result.data !== null
 											? (
 													result.data as {
-														queuedSubjectLinks?: Array<{
-															sourceType: 'goodreads' | 'goodreads-series' | 'goodreads-author';
-															sourceKey: string;
-															subjectKind: 'book' | 'series' | 'author';
-														}>;
+														queuedSubjectLinks?: QueuedSubjectLink[];
 													}
 												).queuedSubjectLinks
 											: null;
@@ -755,7 +760,7 @@
 									replyingTo = null;
 									toast.success(
 										Array.isArray(queued) && queued.length > 0
-											? 'Reply posted. Goodreads links are being processed.'
+											? 'Reply posted. Book links are being processed.'
 											: 'Reply posted!'
 									);
 								}
@@ -802,7 +807,7 @@
 
 	{#if data.books.length > 0 || data.series.length > 0 || data.authors.length > 0 || queuedSubjectLinks.length > 0}
 		<aside class="w-full shrink-0 lg:w-64">
-			<div class="sticky top-20 space-y-6">
+			<div class="top-20 space-y-6">
 				{#if queuedSubjectLinks.length > 0}
 					<div>
 						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Processing</h3>
@@ -832,7 +837,7 @@
 											</span>
 										</div>
 										<p class="text-xs text-muted-foreground">
-											Goodreads URL is being processed. It should appear here shortly.
+											Book URL is being processed. It should appear here shortly.
 										</p>
 									</div>
 								</div>

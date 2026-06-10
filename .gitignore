@@ -28,3 +28,4 @@ private
 .claude/worktrees
 src/routes/admin/debug
 pnpm-workspace.yaml
+.dev.vars

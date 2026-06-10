@@ -1,4 +1,10 @@
-export type SubjectSourceType = 'goodreads' | 'goodreads-series' | 'goodreads-author';
+export type SubjectSourceType =
+	| 'goodreads'
+	| 'goodreads-series'
+	| 'goodreads-author'
+	| 'hardcover'
+	| 'hardcover-series'
+	| 'hardcover-author';
 export type SubjectKind = 'book' | 'series' | 'author';
 
 export interface DetectedSubjectLink {
@@ -56,6 +62,42 @@ export function detectSubjectLinks(text: string): DetectedSubjectLink[] {
 			url: match[0],
 			sourceType: 'goodreads-author',
 			sourceKey: match[1],
+			subjectKind: 'author'
+		});
+	}
+
+	// Hardcover book URLs: https://hardcover.app/books/<slug>
+	const hardcoverBookRegex =
+		/https?:\/\/(?:www\.)?hardcover\.app\/books\/([a-z0-9][a-z0-9-]*)(?:[/?#][^\s<)]*)?/gi;
+	while ((match = hardcoverBookRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'hardcover',
+			sourceKey: match[1].toLowerCase(),
+			subjectKind: 'book'
+		});
+	}
+
+	// Hardcover series URLs: https://hardcover.app/series/<slug>
+	const hardcoverSeriesRegex =
+		/https?:\/\/(?:www\.)?hardcover\.app\/series\/([a-z0-9][a-z0-9-]*)(?:[/?#][^\s<)]*)?/gi;
+	while ((match = hardcoverSeriesRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'hardcover-series',
+			sourceKey: match[1].toLowerCase(),
+			subjectKind: 'series'
+		});
+	}
+
+	// Hardcover author URLs: https://hardcover.app/authors/<slug>
+	const hardcoverAuthorRegex =
+		/https?:\/\/(?:www\.)?hardcover\.app\/authors\/([a-z0-9][a-z0-9-]*)(?:[/?#][^\s<)]*)?/gi;
+	while ((match = hardcoverAuthorRegex.exec(text)) !== null) {
+		push({
+			url: match[0],
+			sourceType: 'hardcover-author',
+			sourceKey: match[1].toLowerCase(),
 			subjectKind: 'author'
 		});
 	}

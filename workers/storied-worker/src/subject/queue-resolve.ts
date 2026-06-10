@@ -10,6 +10,11 @@ import {
 import { resolveGoodreadsBook } from './resolve-book';
 import { resolveGoodreadsSeries } from './resolve-series';
 import { resolveGoodreadsAuthor } from './resolve-author';
+import {
+	resolveHardcoverAuthor,
+	resolveHardcoverBook,
+	resolveHardcoverSeries
+} from './resolve-hardcover';
 import { reindexSession, reindexSubject, reindexThread } from '$shared/search';
 
 export async function handleSubjectResolve(
@@ -64,6 +69,15 @@ export async function handleSubjectResolve(
 			return;
 		case 'goodreads-author':
 			await resolveGoodreadsAuthor(payload, env);
+			return;
+		case 'hardcover':
+			await resolveHardcoverBook(payload, env);
+			return;
+		case 'hardcover-series':
+			await resolveHardcoverSeries(payload, env);
+			return;
+		case 'hardcover-author':
+			await resolveHardcoverAuthor(payload, env);
 			return;
 		default:
 			console.log(`[RESOLVER] Unsupported source type: ${sourceType}`);
