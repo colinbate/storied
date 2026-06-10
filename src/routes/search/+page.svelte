@@ -156,7 +156,10 @@
 								</div>
 								{#if session.startsAt}
 									<p class="text-sm text-muted-foreground">
-										{formatDate(session.startsAt, { time: 'always' })}
+										{formatDate(session.startsAt, {
+											time: 'always',
+											timeZone: session.timezone
+										})}
 									</p>
 								{/if}
 								{#if summaryText(session.themeSummary)}

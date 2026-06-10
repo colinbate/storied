@@ -124,7 +124,7 @@
 				<CalendarIcon class="h-4 w-4" />
 				{formatDate(data.session.startsAt, {
 					time: 'always',
-					timeZone,
+					timeZone: data.session.timezone ?? timeZone,
 					dateStyle: 'full'
 				})}
 			</span>

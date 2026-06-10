@@ -23,10 +23,18 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import { supportedTimeZones } from '$lib/timezone-options';
+	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 	let saving = $state(false);
 	let selectedThemeId = $state('');
+	let sessionTimezone = $state('');
+	let allTimezones = $state<string[]>([]);
+
+	onMount(() => {
+		allTimezones = supportedTimeZones(data.session.timezone, sessionTimezone, data.user?.timezone);
+	});
 
 	type LinkKind = 'book' | 'series' | 'author';
 	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -75,6 +83,9 @@
 	$effect(() => {
 		if (!selectedThemeId && data.session.themeId) {
 			selectedThemeId = data.session.themeId;
+		}
+		if (!sessionTimezone) {
+			sessionTimezone = data.session.timezone ?? 'Atlantic/Bermuda';
 		}
 	});
 
@@ -186,6 +197,14 @@
 							type="datetime-local"
 							value={data.session.startsAt ?? ''}
 						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="timezone">Timezone</Label>
+						<NativeSelect id="timezone" name="timezone" bind:value={sessionTimezone}>
+							{#each allTimezones as tz (tz)}
+								<NativeSelectOption value={tz}>{tz}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
 					</div>
 					<div class="space-y-2">
 						<Label for="durationMinutes">Duration Minutes</Label>

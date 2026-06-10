@@ -1,3 +1,5 @@
+import { isOffsetlessDateTime, zonedDateTimeToDate } from '$lib/timezone';
+
 type TimeDisplay = 'never' | 'auto' | 'always';
 
 interface FormatDateOptions {
@@ -31,11 +33,14 @@ function validTimeZone(timeZone: string | null | undefined) {
 	}
 }
 
-function parseDate(value: string) {
+function parseDate(value: string, timeZone?: string) {
 	const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
 	if (isDateOnly) {
 		const [year, month, day] = value.split('-').map(Number);
 		return new Date(Date.UTC(year, month - 1, day, 12));
+	}
+	if (timeZone && isOffsetlessDateTime(value)) {
+		return zonedDateTimeToDate(value, timeZone) ?? new Date(value);
 	}
 	return new Date(value);
 }
@@ -48,17 +53,17 @@ export function formatDate(
 
 	let source: string | null = null;
 	let date: Date;
+	const timeZone = validTimeZone(options.timeZone) ?? browserTimeZone();
 	if (value instanceof Date) {
 		date = value;
 	} else {
 		source = value.toString();
-		date = parseDate(source);
+		date = parseDate(source, timeZone);
 	}
 	if (Number.isNaN(date.getTime())) return options.empty ?? '';
 
 	const time = options.time ?? 'auto';
 	const includeTime = time === 'always' || (time === 'auto' && source !== null && hasTime(source));
-	const timeZone = validTimeZone(options.timeZone) ?? browserTimeZone();
 	const dateOnly = source !== null && /^\d{4}-\d{2}-\d{2}$/.test(source);
 
 	const formatOptions: Intl.DateTimeFormatOptions = {

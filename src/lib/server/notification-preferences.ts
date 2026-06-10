@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { ORM } from './db';
 import { notificationPreferences } from './db/schema';
+export { DEFAULT_TIMEZONE } from '$lib/timezone';
 
 export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
 
@@ -67,5 +68,3 @@ export function isValidTimezone(tz: unknown): tz is string {
 		return false;
 	}
 }
-
-export const DEFAULT_TIMEZONE = 'Atlantic/Bermuda';

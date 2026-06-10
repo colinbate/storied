@@ -49,7 +49,12 @@
 								<Card.Content class="space-y-2 text-sm text-muted-foreground">
 									<div class="flex items-center gap-2">
 										<CalendarIcon class="h-4 w-4" />
-										<span>{formatDate(session.startsAt, { time: 'always', timeZone })}</span>
+										<span
+											>{formatDate(session.startsAt, {
+												time: 'always',
+												timeZone: session.timezone ?? timeZone
+											})}</span
+										>
 									</div>
 									{#if session.locationName}
 										<div class="flex items-center gap-2">

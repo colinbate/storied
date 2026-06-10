@@ -14,6 +14,7 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
+import { DEFAULT_TIMEZONE, isValidTimezone } from '$lib/server/notification-preferences';
 import {
 	getPrimaryThreadForSession,
 	subscribeActiveMembersToSessionThread
@@ -216,6 +217,10 @@ export const actions: Actions = {
 		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 		const startsAt = getOptionalString(data, 'startsAt');
+		const timezone = getOptionalString(data, 'timezone') ?? DEFAULT_TIMEZONE;
+		if (!isValidTimezone(timezone)) {
+			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
+		}
 		if (!startsAt) {
 			return fail(400, { error: 'Starts At is required to sync an RSVP event.' });
 		}
@@ -241,6 +246,7 @@ export const actions: Actions = {
 			bodySource,
 			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
 			startsAt,
+			timezone,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
 			locationName: getOptionalString(data, 'locationName'),
 			rsvpSlug: getOptionalString(data, 'rsvpSlug') ?? getSessionRsvpSlug(row),
@@ -270,6 +276,7 @@ export const actions: Actions = {
 				bodySource: updatedSession.bodySource,
 				bodyHtml: updatedSession.bodyHtml,
 				startsAt: updatedSession.startsAt,
+				timezone: updatedSession.timezone,
 				durationMinutes: updatedSession.durationMinutes,
 				locationName: updatedSession.locationName,
 				rsvpSlug: rsvpEvent.slug,

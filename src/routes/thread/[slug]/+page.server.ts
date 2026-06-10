@@ -153,6 +153,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		slug: string;
 		title: string;
 		startsAt: string | null;
+		timezone: string;
 		themeTitle: string | null;
 		theme: string | null;
 		locationName: string | null;
@@ -164,6 +165,7 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 				slug: sessions.slug,
 				title: sessions.title,
 				startsAt: sessions.startsAt,
+				timezone: sessions.timezone,
 				themeTitle: sessions.themeTitle,
 				theme: sessions.theme,
 				locationName: sessions.locationName

@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { sessionParticipants, sessions, type users } from '$lib/server/db/schema';
 import type { ORM } from '$lib/server/db';
 import { PUBLIC_ORIGIN } from '$shared/brand';
+import { DEFAULT_TIMEZONE, isOffsetlessDateTime, zonedDateTimeToDate } from '$lib/timezone';
 
 type StoriedSession = typeof sessions.$inferSelect;
 type StoriedUser = typeof users.$inferSelect;
@@ -28,10 +29,23 @@ export function getSessionRsvpSlug(session: Pick<StoriedSession, 'slug' | 'rsvpS
 	return session.rsvpSlug?.trim() || session.slug;
 }
 
-export function isFutureSession(session: Pick<StoriedSession, 'startsAt'>, now = new Date()) {
-	if (!session.startsAt) return false;
+export function sessionStartDate(
+	session: Pick<StoriedSession, 'startsAt'> & Partial<Pick<StoriedSession, 'timezone'>>
+) {
+	if (!session.startsAt) return null;
+	if (isOffsetlessDateTime(session.startsAt)) {
+		return zonedDateTimeToDate(session.startsAt, session.timezone ?? DEFAULT_TIMEZONE);
+	}
 	const startsAt = new Date(session.startsAt);
-	return Number.isFinite(startsAt.valueOf()) && startsAt > now;
+	return Number.isFinite(startsAt.valueOf()) ? startsAt : null;
+}
+
+export function isFutureSession(
+	session: Pick<StoriedSession, 'startsAt'> & Partial<Pick<StoriedSession, 'timezone'>>,
+	now = new Date()
+) {
+	const startsAt = sessionStartDate(session);
+	return startsAt !== null && startsAt > now;
 }
 
 function requireRsvpDb(platform: App.Platform | undefined) {
@@ -64,6 +78,7 @@ export async function upsertRsvpEvent({
 		| 'title'
 		| 'locationName'
 		| 'startsAt'
+		| 'timezone'
 		| 'durationMinutes'
 		| 'status'
 		| 'astroPath'
@@ -72,8 +87,9 @@ export async function upsertRsvpEvent({
 	if (!session.startsAt) return null;
 
 	const slug = getSessionRsvpSlug(session);
-	const startsAt = new Date(session.startsAt);
-	if (!Number.isFinite(startsAt.valueOf())) return null;
+	const startsAt = sessionStartDate(session);
+	if (!startsAt) return null;
+	const timezone = session.timezone || DEFAULT_TIMEZONE;
 
 	const endsAt = session.durationMinutes
 		? new Date(startsAt.valueOf() + session.durationMinutes * 60_000).toISOString()
@@ -93,7 +109,7 @@ export async function upsertRsvpEvent({
 				capacity,
 				waitlist_enabled,
 				status
-			) VALUES (?, ?, ?, ?, ?, ?, 'Atlantic/Bermuda', 12, 1, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, 12, 1, ?)
 			ON CONFLICT(slug) DO UPDATE SET
 				title = excluded.title,
 				canonical_url = excluded.canonical_url,
@@ -115,6 +131,7 @@ export async function upsertRsvpEvent({
 			session.locationName,
 			startsAt.toISOString(),
 			endsAt,
+			timezone,
 			rsvpEventStatus(session)
 		)
 		.first<{ id: number; slug: string }>();

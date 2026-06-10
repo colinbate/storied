@@ -10,7 +10,11 @@ import {
 	createPrimarySessionThread,
 	subscribeActiveMembersToSessionThread
 } from '$lib/server/discussions';
-import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
+import {
+	DEFAULT_TIMEZONE,
+	getOrCreateNotificationPreferences,
+	isValidTimezone
+} from '$lib/server/notification-preferences';
 import { upsertRsvpEvent } from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
@@ -52,6 +56,10 @@ export const actions: Actions = {
 		const rsvpSlug = getOptionalString(data, 'rsvpSlug') ?? slug;
 		const status = getSessionStatus(data);
 		const startsAt = getOptionalString(data, 'startsAt');
+		const timezone = getOptionalString(data, 'timezone') ?? DEFAULT_TIMEZONE;
+		if (!isValidTimezone(timezone)) {
+			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
+		}
 		if (!startsAt) {
 			return fail(400, { error: 'Starts At is required to create an RSVP event.' });
 		}
@@ -79,6 +87,7 @@ export const actions: Actions = {
 			bodySource,
 			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
 			startsAt,
+			timezone,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
 			locationName: getOptionalString(data, 'locationName'),
 			rsvpSlug,

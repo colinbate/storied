@@ -197,6 +197,7 @@ export const sessions = sqliteTable(
 		slug: text('slug').notNull().unique(),
 		title: text('title').notNull(),
 		startsAt: text('starts_at'),
+		timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
 		status: text('status').notNull().default('draft').$type<SessionStatus>(),
 		themeId: text('theme_id').references(() => themes.id, { onDelete: 'set null' }),
 		theme: text('theme'),

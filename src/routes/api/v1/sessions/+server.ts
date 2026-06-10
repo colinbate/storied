@@ -22,6 +22,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			title: sessions.title,
 			date: sessions.startsAt,
 			start: sessions.startsAt,
+			timezone: sessions.timezone,
 			status: sessions.status,
 			theme: sessions.theme,
 			themeTitle: sessions.themeTitle,

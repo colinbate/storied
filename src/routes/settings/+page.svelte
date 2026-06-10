@@ -22,6 +22,7 @@
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
+	import { detectedTimeZone, supportedTimeZones } from '$lib/timezone-options';
 	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
@@ -101,38 +102,8 @@
 	);
 
 	onMount(() => {
-		try {
-			detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
-		} catch {
-			detectedTimezone = '';
-		}
-		let zones: string[] = [];
-		try {
-			if (typeof Intl.supportedValuesOf === 'function') {
-				zones = Intl.supportedValuesOf('timeZone') as string[];
-			}
-		} catch {
-			zones = [];
-		}
-		if (zones.length === 0) {
-			// Fallback minimal list if the runtime lacks supportedValuesOf.
-			zones = [
-				...new Set([
-					data.user.timezone || 'UTC',
-					detectedTimezone || 'UTC',
-					'UTC',
-					'Atlantic/Bermuda',
-					'America/Chicago',
-					'America/Denver',
-					'America/Halifax',
-					'America/Los_Angeles',
-					'America/New_York',
-					'Europe/London',
-					'Europe/Berlin'
-				])
-			];
-		}
-		allTimezones = zones;
+		detectedTimezone = detectedTimeZone();
+		allTimezones = supportedTimeZones(data.user.timezone, detectedTimezone);
 	});
 
 	// Format a given hour (0-23) in the user's stored timezone for the dropdown label.

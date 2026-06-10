@@ -498,7 +498,10 @@
 							{#if data.session.startsAt}
 								<span class="inline-flex items-center gap-1">
 									<CalendarIcon class="h-3.5 w-3.5" />
-									{formatDate(data.session.startsAt, { time: 'never', timeZone })}
+									{formatDate(data.session.startsAt, {
+										time: 'never',
+										timeZone: data.session.timezone ?? timeZone
+									})}
 								</span>
 							{/if}
 							{#if data.session.locationName}

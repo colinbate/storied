@@ -83,7 +83,7 @@
 									<CalendarIcon class="h-4 w-4" />
 									{formatDate(data.currentSession.startsAt, {
 										time: 'always',
-										timeZone,
+										timeZone: data.currentSession.timezone ?? timeZone,
 										dateStyle: 'medium'
 									})}
 								</span>

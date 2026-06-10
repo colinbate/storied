@@ -14,6 +14,8 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import { toast } from 'svelte-sonner';
 	import { formatDate } from '$lib/date-format';
+	import { supportedTimeZones } from '$lib/timezone-options';
+	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -21,6 +23,11 @@
 	let showCreateForm = $state(false);
 	let createThemeId = $state('');
 	let createTitleInput = $state<HTMLInputElement | null>(null);
+	let allTimezones = $state<string[]>([]);
+
+	onMount(() => {
+		allTimezones = supportedTimeZones('Atlantic/Bermuda', data.user?.timezone);
+	});
 
 	const availableThemes = $derived(
 		data.themes
@@ -115,6 +122,14 @@
 							<Input id="create-startsAt" name="startsAt" type="datetime-local" />
 						</div>
 						<div class="space-y-2">
+							<Label for="create-timezone">Timezone</Label>
+							<NativeSelect id="create-timezone" name="timezone" value="Atlantic/Bermuda">
+								{#each allTimezones as tz (tz)}
+									<NativeSelectOption value={tz}>{tz}</NativeSelectOption>
+								{/each}
+							</NativeSelect>
+						</div>
+						<div class="space-y-2">
 							<Label for="create-durationMinutes">Duration Minutes</Label>
 							<Input id="create-durationMinutes" name="durationMinutes" type="number" min="0" />
 						</div>
@@ -192,7 +207,12 @@
 								class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground"
 							>
 								{#if session.startsAt}
-									<span>Starts {formatDate(session.startsAt, { time: 'never', timeZone })}</span>
+									<span
+										>Starts {formatDate(session.startsAt, {
+											time: 'never',
+											timeZone: session.timezone ?? timeZone
+										})}</span
+									>
 								{/if}
 								{#if session.astroPath}
 									<span class="font-mono text-xs">{session.astroPath}</span>
