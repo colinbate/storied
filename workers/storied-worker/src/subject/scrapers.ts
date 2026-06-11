@@ -37,8 +37,10 @@ function stringValue(value: unknown): string | undefined {
 
 export async function scrapeGoodreadsBook(url: string): Promise<GoodreadsBookMetadata | null> {
 	const response = await fetchHtml(url);
-	if (!response) return null;
-
+	if (!response) {
+		console.log('[GOODREADS] Could not fetch', url);
+		return null;
+	}
 	const ogData: Record<string, string> = {};
 	let ldJsonRaw = '';
 	let capturingLdJson = false;
@@ -77,7 +79,10 @@ export async function scrapeGoodreadsBook(url: string): Promise<GoodreadsBookMet
 	}
 
 	const title = ldJson?.name || ogData['og:title'] || '';
-	if (!title) return null;
+	if (!title) {
+		console.log('[GOODREADS] No title found.');
+		return null;
+	}
 
 	let authorText: string | undefined;
 	if (ldJson?.author) {
