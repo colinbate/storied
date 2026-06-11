@@ -23,6 +23,7 @@ export async function dispatchWorkerMessage(
 	message: WorkerMessage,
 	context: HandlerContext
 ): Promise<void> {
+	console.log('[dispatchWorkerMessage] Topic', message.topic);
 	switch (message.topic) {
 		case 'subject.resolve':
 			await handleSubjectResolve(message.payload, context);

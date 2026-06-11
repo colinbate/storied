@@ -139,4 +139,5 @@ export async function markSourceFailed(db: D1Database, subjectSourceId: string):
 		)
 		.bind(now, now, subjectSourceId)
 		.run();
+	console.log('[RESOLVER] Failed', subjectSourceId);
 }

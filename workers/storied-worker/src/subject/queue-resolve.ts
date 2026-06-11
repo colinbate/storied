@@ -60,6 +60,7 @@ export async function handleSubjectResolve(
 		return;
 	}
 
+	console.log('[RESOLVER] sourceType', sourceType);
 	switch (sourceType) {
 		case 'goodreads':
 			await resolveGoodreadsBook(payload, env);
