@@ -11,6 +11,8 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 				subtitle: books.subtitle,
 				authorText: books.authorText,
 				coverUrl: books.coverUrl,
+				goodreadsUrl: books.goodreadsUrl,
+				hardcoverUrl: books.hardcoverUrl,
 				firstPublishYear: books.firstPublishYear,
 				description: books.description
 			})
@@ -25,6 +27,8 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 				title: series.title,
 				authorText: series.authorText,
 				coverUrl: series.coverUrl,
+				goodreadsUrl: series.goodreadsUrl,
+				hardcoverUrl: series.hardcoverUrl,
 				bookCount: series.bookCount,
 				isComplete: series.isComplete,
 				description: series.description
@@ -39,7 +43,9 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 				slug: authors.slug,
 				name: authors.name,
 				bio: authors.bio,
-				photoUrl: authors.photoUrl
+				photoUrl: authors.photoUrl,
+				goodreadsUrl: authors.goodreadsUrl,
+				hardcoverUrl: authors.hardcoverUrl
 			})
 			.from(authors)
 			.where(isNull(authors.deletedAt))

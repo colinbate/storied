@@ -20,6 +20,8 @@
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
+	const externalSourceLabel = $derived(data.series.hardcoverUrl ? 'Hardcover' : 'Goodreads');
+	const externalSourceUrl = $derived(data.series.hardcoverUrl ?? data.series.goodreadsUrl);
 
 	const statusLabels: Record<string, string> = {
 		want_to_read: 'Want to Read',
@@ -84,15 +86,15 @@
 						{/if}
 					</Badge>
 
-					{#if data.series.goodreadsUrl}
+					{#if externalSourceUrl}
 						<a
-							href={data.series.goodreadsUrl}
+							href={externalSourceUrl}
 							target="_blank"
 							rel="noopener noreferrer external"
 							class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
 						>
 							<ExternalLinkIcon class="h-3.5 w-3.5" />
-							Goodreads
+							{externalSourceLabel}
 						</a>
 					{/if}
 					{#if data.permissions.has('series:edit')}

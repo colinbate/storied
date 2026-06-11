@@ -152,6 +152,15 @@
 							value={data.series.goodreadsUrl ?? ''}
 						/>
 					</div>
+					<div class="space-y-2">
+						<Label for="hardcoverUrl">Hardcover URL</Label>
+						<Input
+							id="hardcoverUrl"
+							name="hardcoverUrl"
+							type="url"
+							value={data.series.hardcoverUrl ?? ''}
+						/>
+					</div>
 					<div class="flex items-center gap-2 sm:col-span-2">
 						<input type="checkbox" id="isComplete" bind:checked={isComplete} class="h-4 w-4" />
 						<Label for="isComplete">Series is complete</Label>

@@ -99,6 +99,7 @@ export const actions: Actions = {
 			bio: data.get('bio')?.toString()?.trim() || null,
 			photoUrl: data.get('photoUrl')?.toString()?.trim() || null,
 			goodreadsUrl: data.get('goodreadsUrl')?.toString()?.trim() || null,
+			hardcoverUrl: data.get('hardcoverUrl')?.toString()?.trim() || null,
 			openLibraryId: data.get('openLibraryId')?.toString()?.trim() || null,
 			websiteUrl: data.get('websiteUrl')?.toString()?.trim() || null
 		});

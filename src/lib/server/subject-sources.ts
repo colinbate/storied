@@ -2,6 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import type { ORM } from './db';
 import {
 	subjectSources,
+	authors,
+	books,
+	series,
 	threadSubjects,
 	sessionSubjects,
 	seriesBooks,
@@ -35,6 +38,21 @@ export interface ResolveOrEnqueueResult {
 	resolvedSubjectType: 'book' | 'series' | 'author' | null;
 	resolvedSubjectId: string | null;
 	alreadyExisted: boolean;
+}
+
+async function storeHardcoverUrlForResolvedSource(
+	db: ORM,
+	link: DetectedSubjectLink,
+	subjectType: 'book' | 'series' | 'author',
+	subjectId: string
+) {
+	if (link.sourceType === 'hardcover' && subjectType === 'book') {
+		await db.update(books).set({ hardcoverUrl: link.url }).where(eq(books.id, subjectId));
+	} else if (link.sourceType === 'hardcover-series' && subjectType === 'series') {
+		await db.update(series).set({ hardcoverUrl: link.url }).where(eq(series.id, subjectId));
+	} else if (link.sourceType === 'hardcover-author' && subjectType === 'author') {
+		await db.update(authors).set({ hardcoverUrl: link.url }).where(eq(authors.id, subjectId));
+	}
 }
 
 /**
@@ -104,6 +122,8 @@ export async function ensureSubjectSource(
 
 	// If already resolved, perform the side-effect linking now.
 	if (resolvedSubjectType && resolvedSubjectId) {
+		await storeHardcoverUrlForResolvedSource(db, link, resolvedSubjectType, resolvedSubjectId);
+
 		if (sideEffects.threadId) {
 			await db
 				.insert(threadSubjects)

@@ -14,11 +14,14 @@
 		authorText?: string | null;
 		coverUrl?: string | null;
 		goodreadsUrl?: string | null;
+		hardcoverUrl?: string | null;
 		firstPublishYear?: number | null;
 		description?: string | null;
 	}
 
 	let { book, compact = false }: { book: BookData; compact?: boolean } = $props();
+	const externalSourceLabel = $derived(book.hardcoverUrl ? 'Hardcover' : 'Goodreads');
+	const externalSourceUrl = $derived(book.hardcoverUrl ?? book.goodreadsUrl);
 
 	function summaryText(text?: string | null, maxLength = 180) {
 		if (!text) return null;
@@ -83,10 +86,10 @@
 					{#if book.firstPublishYear}
 						<Badge variant="secondary">{book.firstPublishYear}</Badge>
 					{/if}
-					{#if book.goodreadsUrl}
+					{#if externalSourceUrl}
 						<span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
 							<ExternalLinkIcon class="h-3 w-3" />
-							Goodreads
+							{externalSourceLabel}
 						</span>
 					{/if}
 				</div>

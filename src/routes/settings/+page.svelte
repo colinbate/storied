@@ -361,7 +361,7 @@
 							</Button>
 							{#if featureKind === 'url'}
 								<p class="mb-1 hidden text-sm text-muted-foreground md:block">
-									Paste a Goodreads book, series, or author URL to import.
+									Paste a Hardcover or Goodreads book, series, or author URL to import.
 								</p>
 							{/if}
 						</div>
@@ -392,14 +392,14 @@
 								/>
 							{:else}
 								<p class="mb-1 text-sm text-muted-foreground md:hidden">
-									Paste a Goodreads book, series, or author URL to import.
+									Paste a Hardcover or Goodreads book, series, or author URL to import.
 								</p>
 								<Input
 									id="featured-url"
 									name="url"
 									type="url"
 									bind:value={featureUrl}
-									placeholder="https://www.goodreads.com/book/show/..."
+									placeholder="https://hardcover.app/books/..."
 									class="flex-1"
 								/>
 							{/if}

@@ -45,6 +45,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			googleBooksId: books.googleBooksId,
 			amazonAsin: books.amazonAsin,
 			goodreadsUrl: books.goodreadsUrl,
+			hardcoverUrl: books.hardcoverUrl,
 			firstPublishYear: books.firstPublishYear,
 			description: books.description,
 			createdAt: books.createdAt
@@ -75,6 +76,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			coverUrl: series.coverUrl,
 			amazonAsin: series.amazonAsin,
 			goodreadsUrl: series.goodreadsUrl,
+			hardcoverUrl: series.hardcoverUrl,
 			isComplete: series.isComplete,
 			bookCount: series.bookCount,
 			createdAt: series.createdAt
@@ -103,6 +105,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			bio: authors.bio,
 			photoUrl: authors.photoUrl,
 			goodreadsUrl: authors.goodreadsUrl,
+			hardcoverUrl: authors.hardcoverUrl,
 			openLibraryId: authors.openLibraryId,
 			websiteUrl: authors.websiteUrl,
 			createdAt: authors.createdAt
@@ -139,6 +142,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				googleBooksId: book.googleBooksId,
 				amazonAsin: book.amazonAsin,
 				goodreadsUrl: book.goodreadsUrl,
+				hardcoverUrl: book.hardcoverUrl,
 				firstPublishYear: book.firstPublishYear,
 				description: book.description,
 				createdAt: book.createdAt
@@ -157,6 +161,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				coverUrl: seriesRow.coverUrl,
 				amazonAsin: seriesRow.amazonAsin,
 				goodreadsUrl: seriesRow.goodreadsUrl,
+				hardcoverUrl: seriesRow.hardcoverUrl,
 				isComplete: seriesRow.isComplete,
 				bookCount: seriesRow.bookCount,
 				createdAt: seriesRow.createdAt
@@ -173,6 +178,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				bio: author.bio,
 				photoUrl: author.photoUrl,
 				goodreadsUrl: author.goodreadsUrl,
+				hardcoverUrl: author.hardcoverUrl,
 				openLibraryId: author.openLibraryId,
 				websiteUrl: author.websiteUrl,
 				createdAt: author.createdAt

@@ -13,9 +13,12 @@
 		bio?: string | null;
 		photoUrl?: string | null;
 		goodreadsUrl?: string | null;
+		hardcoverUrl?: string | null;
 	}
 
 	let { author, compact = false }: { author: AuthorData; compact?: boolean } = $props();
+	const externalSourceLabel = $derived(author.hardcoverUrl ? 'Hardcover' : 'Goodreads');
+	const externalSourceUrl = $derived(author.hardcoverUrl ?? author.goodreadsUrl);
 
 	function summaryText(text?: string | null, maxLength = 180) {
 		if (!text) return null;
@@ -79,10 +82,10 @@
 						<PenLineIcon class="h-3 w-3" />
 						Author
 					</Badge>
-					{#if author.goodreadsUrl}
+					{#if externalSourceUrl}
 						<span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
 							<ExternalLinkIcon class="h-3 w-3" />
-							Goodreads
+							{externalSourceLabel}
 						</span>
 					{/if}
 				</div>

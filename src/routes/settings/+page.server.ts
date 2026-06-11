@@ -251,7 +251,9 @@ export const actions: Actions = {
 		if (subjectType === 'url') {
 			const url = data.get('url')?.toString()?.trim() || '';
 			if (!url) {
-				return fail(400, { featureError: 'Paste a Goodreads book, series, or author URL.' });
+				return fail(400, {
+					featureError: 'Paste a Hardcover or Goodreads book, series, or author URL.'
+				});
 			}
 
 			const link = detectFirstSubjectLink(url);

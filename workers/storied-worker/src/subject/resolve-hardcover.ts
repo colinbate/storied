@@ -40,6 +40,12 @@ async function findExistingBook(
 	const bySource = await findResolvedSource(db, 'hardcover', metadata.slug);
 	if (bySource) return bySource;
 
+	const byUrl = await db
+		.prepare(`SELECT id FROM books WHERE hardcover_url = ?`)
+		.bind(metadata.hardcoverUrl)
+		.first<{ id: string }>();
+	if (byUrl) return byUrl.id;
+
 	if (metadata.isbn13) {
 		const byIsbn = await db
 			.prepare(`SELECT id FROM books WHERE isbn13 = ?`)
@@ -70,6 +76,12 @@ async function findExistingAuthor(
 	const bySource = await findResolvedSource(db, 'hardcover-author', metadata.slug);
 	if (bySource) return bySource;
 
+	const byUrl = await db
+		.prepare(`SELECT id FROM authors WHERE hardcover_url = ?`)
+		.bind(metadata.hardcoverUrl)
+		.first<{ id: string }>();
+	if (byUrl) return byUrl.id;
+
 	const byName = await db
 		.prepare(`SELECT id FROM authors WHERE lower(name) = lower(?) AND deleted_at IS NULL`)
 		.bind(metadata.name)
@@ -83,6 +95,12 @@ async function findExistingSeries(
 ): Promise<string | null> {
 	const bySource = await findResolvedSource(db, 'hardcover-series', metadata.slug);
 	if (bySource) return bySource;
+
+	const byUrl = await db
+		.prepare(`SELECT id FROM series WHERE hardcover_url = ?`)
+		.bind(metadata.hardcoverUrl)
+		.first<{ id: string }>();
+	if (byUrl) return byUrl.id;
 
 	if (metadata.authorText) {
 		const byTitleAuthor = await db
@@ -126,8 +144,8 @@ export async function resolveHardcoverBook(
 		bookId = generateId();
 		const slug = generateSlug(metadata.title, bookId);
 		await env.DB.prepare(
-			`INSERT INTO books (id, slug, title, subtitle, author_text, cover_url, isbn13, first_publish_year, description, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO books (id, slug, title, subtitle, author_text, cover_url, isbn13, hardcover_url, first_publish_year, description, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 			.bind(
 				bookId,
@@ -137,6 +155,7 @@ export async function resolveHardcoverBook(
 				metadata.authorText || null,
 				metadata.coverUrl || null,
 				metadata.isbn13 || null,
+				metadata.hardcoverUrl,
 				metadata.firstPublishYear || null,
 				metadata.description || null,
 				now,
@@ -148,7 +167,7 @@ export async function resolveHardcoverBook(
 		await env.DB.prepare(
 			`UPDATE books SET subtitle = COALESCE(subtitle, ?), cover_url = COALESCE(cover_url, ?),
 			 author_text = COALESCE(author_text, ?), isbn13 = COALESCE(isbn13, ?),
-			 first_publish_year = COALESCE(first_publish_year, ?), description = COALESCE(description, ?),
+			 hardcover_url = COALESCE(hardcover_url, ?), first_publish_year = COALESCE(first_publish_year, ?), description = COALESCE(description, ?),
 			 updated_at = ?
 			 WHERE id = ?`
 		)
@@ -157,6 +176,7 @@ export async function resolveHardcoverBook(
 				metadata.coverUrl || null,
 				metadata.authorText || null,
 				metadata.isbn13 || null,
+				metadata.hardcoverUrl,
 				metadata.firstPublishYear || null,
 				metadata.description || null,
 				now,
@@ -202,8 +222,8 @@ export async function resolveHardcoverAuthor(
 		authorId = generateId();
 		const slug = generateSlug(metadata.name, authorId);
 		await env.DB.prepare(
-			`INSERT INTO authors (id, slug, name, bio, photo_url, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO authors (id, slug, name, bio, photo_url, hardcover_url, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 			.bind(
 				authorId,
@@ -211,6 +231,7 @@ export async function resolveHardcoverAuthor(
 				metadata.name,
 				metadata.bio || null,
 				metadata.photoUrl || null,
+				metadata.hardcoverUrl,
 				now,
 				now
 			)
@@ -219,10 +240,10 @@ export async function resolveHardcoverAuthor(
 	} else {
 		await env.DB.prepare(
 			`UPDATE authors SET bio = COALESCE(bio, ?), photo_url = COALESCE(photo_url, ?),
-			 updated_at = ?
+			 hardcover_url = COALESCE(hardcover_url, ?), updated_at = ?
 			 WHERE id = ?`
 		)
-			.bind(metadata.bio || null, metadata.photoUrl || null, now, authorId)
+			.bind(metadata.bio || null, metadata.photoUrl || null, metadata.hardcoverUrl, now, authorId)
 			.run();
 		console.log(`[RESOLVER] Updated existing author from Hardcover ${authorId}`);
 	}
@@ -269,8 +290,8 @@ export async function resolveHardcoverSeries(
 		seriesId = generateId();
 		const slug = generateSlug(metadata.title, seriesId);
 		await env.DB.prepare(
-			`INSERT INTO series (id, slug, title, author_text, description, cover_url, book_count, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO series (id, slug, title, author_text, description, cover_url, hardcover_url, book_count, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 			.bind(
 				seriesId,
@@ -279,6 +300,7 @@ export async function resolveHardcoverSeries(
 				metadata.authorText || null,
 				metadata.description || null,
 				metadata.coverUrl || null,
+				metadata.hardcoverUrl,
 				metadata.bookCount ?? null,
 				now,
 				now
@@ -288,13 +310,14 @@ export async function resolveHardcoverSeries(
 	} else {
 		await env.DB.prepare(
 			`UPDATE series SET cover_url = COALESCE(cover_url, ?), author_text = COALESCE(author_text, ?),
-			 description = COALESCE(description, ?), book_count = COALESCE(?, book_count), updated_at = ?
+			 description = COALESCE(description, ?), hardcover_url = COALESCE(hardcover_url, ?), book_count = COALESCE(?, book_count), updated_at = ?
 			 WHERE id = ?`
 		)
 			.bind(
 				metadata.coverUrl || null,
 				metadata.authorText || null,
 				metadata.description || null,
+				metadata.hardcoverUrl,
 				metadata.bookCount ?? null,
 				now,
 				seriesId

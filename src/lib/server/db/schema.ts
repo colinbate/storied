@@ -493,6 +493,7 @@ export const books = sqliteTable(
 		googleBooksId: text('google_books_id'),
 		amazonAsin: text('amazon_asin'),
 		goodreadsUrl: text('goodreads_url'),
+		hardcoverUrl: text('hardcover_url'),
 		firstPublishYear: integer('first_publish_year'),
 		description: text('description'),
 		deletedAt: text('deleted_at'),
@@ -520,6 +521,7 @@ export const series = sqliteTable(
 		coverUrl: text('cover_url'),
 		amazonAsin: text('amazon_asin'),
 		goodreadsUrl: text('goodreads_url'),
+		hardcoverUrl: text('hardcover_url'),
 		/** 0 = ongoing, 1 = complete */
 		isComplete: integer('is_complete', { mode: 'boolean' }).notNull().default(false),
 		bookCount: integer('book_count'),
@@ -546,6 +548,7 @@ export const authors = sqliteTable(
 		bio: text('bio'),
 		photoUrl: text('photo_url'),
 		goodreadsUrl: text('goodreads_url'),
+		hardcoverUrl: text('hardcover_url'),
 		openLibraryId: text('open_library_id'),
 		websiteUrl: text('website_url'),
 		deletedAt: text('deleted_at'),

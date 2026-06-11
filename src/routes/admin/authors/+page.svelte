@@ -35,6 +35,7 @@
 			(author) =>
 				author.name.toLowerCase().includes(q) ||
 				(author.goodreadsUrl ?? '').toLowerCase().includes(q) ||
+				(author.hardcoverUrl ?? '').toLowerCase().includes(q) ||
 				author.slug.toLowerCase().includes(q)
 		);
 	});
@@ -89,7 +90,7 @@
 			<Card.Header>
 				<Card.Title class="text-base">Add Author from URL</Card.Title>
 				<Card.Description>
-					Paste a Goodreads author URL. It'll be queued for resolution by the worker.
+					Paste a Hardcover or Goodreads author URL. It'll be queued for resolution by the worker.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -112,12 +113,12 @@
 					class="flex flex-col gap-3 sm:flex-row sm:items-end"
 				>
 					<div class="flex-1 space-y-2">
-						<Label for="url-input">Goodreads Author URL</Label>
+						<Label for="url-input">Author URL</Label>
 						<Input
 							id="url-input"
 							name="url"
 							type="url"
-							placeholder="https://www.goodreads.com/author/show/..."
+							placeholder="https://hardcover.app/authors/..."
 							bind:ref={urlInput}
 							required
 						/>
@@ -171,6 +172,10 @@
 						<div class="space-y-2">
 							<Label for="goodreadsUrl">Goodreads URL</Label>
 							<Input id="goodreadsUrl" name="goodreadsUrl" type="url" />
+						</div>
+						<div class="space-y-2">
+							<Label for="hardcoverUrl">Hardcover URL</Label>
+							<Input id="hardcoverUrl" name="hardcoverUrl" type="url" />
 						</div>
 						<div class="space-y-2">
 							<Label for="openLibraryId">Open Library ID</Label>
@@ -320,8 +325,10 @@
 									<Badge variant="outline" class="ml-2">deleted</Badge>
 								{/if}
 							</p>
-							{#if author.goodreadsUrl}
-								<p class="truncate text-sm text-muted-foreground">{author.goodreadsUrl}</p>
+							{#if author.hardcoverUrl || author.goodreadsUrl}
+								<p class="truncate text-sm text-muted-foreground">
+									{author.hardcoverUrl ?? author.goodreadsUrl}
+								</p>
 							{/if}
 						</div>
 					</a>

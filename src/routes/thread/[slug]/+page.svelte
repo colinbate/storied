@@ -783,8 +783,8 @@
 							required
 						/>
 						<p class="text-xs text-muted-foreground">
-							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Goodreads book,
-							series, and author URLs are linked to the thread after posting.
+							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover
+							and Goodreads book, series, and author URLs are linked to the thread after posting.
 						</p>
 						{#if form?.error}
 							<p class="text-sm text-destructive">{form.error}</p>

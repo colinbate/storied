@@ -105,6 +105,7 @@ export const actions: Actions = {
 		const googleBooksId = data.get('googleBooksId')?.toString()?.trim() || null;
 		const amazonAsin = data.get('amazonAsin')?.toString()?.trim() || null;
 		const goodreadsUrl = data.get('goodreadsUrl')?.toString()?.trim() || null;
+		const hardcoverUrl = data.get('hardcoverUrl')?.toString()?.trim() || null;
 		const firstPublishYearStr = data.get('firstPublishYear')?.toString()?.trim() || '';
 		const firstPublishYear = firstPublishYearStr ? Number(firstPublishYearStr) : null;
 		const description = data.get('description')?.toString()?.trim() || null;
@@ -122,6 +123,7 @@ export const actions: Actions = {
 			googleBooksId,
 			amazonAsin,
 			goodreadsUrl,
+			hardcoverUrl,
 			firstPublishYear:
 				firstPublishYear && Number.isFinite(firstPublishYear) ? firstPublishYear : null,
 			description

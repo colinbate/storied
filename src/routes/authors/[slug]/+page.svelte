@@ -10,6 +10,8 @@
 	import UserIcon from '@lucide/svelte/icons/user';
 
 	let { data } = $props();
+	const externalSourceLabel = $derived(data.author.hardcoverUrl ? 'Hardcover' : 'Goodreads');
+	const externalSourceUrl = $derived(data.author.hardcoverUrl ?? data.author.goodreadsUrl);
 </script>
 
 <svelte:head>
@@ -50,14 +52,14 @@
 						Website
 					</a>
 				{/if}
-				{#if data.author.goodreadsUrl}
+				{#if externalSourceUrl}
 					<a
-						href={data.author.goodreadsUrl}
+						href={externalSourceUrl}
 						rel="external"
 						class={buttonVariants({ variant: 'outline', size: 'sm' })}
 					>
 						<ExternalLinkIcon class="h-4 w-4" />
-						Goodreads
+						{externalSourceLabel}
 					</a>
 				{/if}
 			</div>

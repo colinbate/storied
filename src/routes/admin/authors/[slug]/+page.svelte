@@ -146,6 +146,15 @@
 						/>
 					</div>
 					<div class="space-y-2">
+						<Label for="hardcoverUrl">Hardcover URL</Label>
+						<Input
+							id="hardcoverUrl"
+							name="hardcoverUrl"
+							type="url"
+							value={data.author.hardcoverUrl ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
 						<Label for="openLibraryId">Open Library ID</Label>
 						<Input
 							id="openLibraryId"

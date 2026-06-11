@@ -962,13 +962,13 @@
 		</Card.Content>
 	</Card.Root>
 
-	<!-- Add link from Goodreads URL -->
+	<!-- Add link from external subject URL -->
 	<Card.Root>
 		<Card.Header>
-			<Card.Title class="text-base">Link from Goodreads URL</Card.Title>
+			<Card.Title class="text-base">Link from URL</Card.Title>
 			<Card.Description>
-				Paste a Goodreads book, series, or author URL. If not already in our library, it'll be
-				queued for resolution and auto-linked to this session once resolved.
+				Paste a Hardcover or Goodreads book, series, or author URL. If not already in our
+				library, it'll be queued for resolution and auto-linked to this session once resolved.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -991,12 +991,12 @@
 				class="flex flex-wrap items-end gap-2"
 			>
 				<div class="min-w-0 flex-1 space-y-1">
-					<Label for="url-input">Goodreads URL</Label>
+					<Label for="url-input">Subject URL</Label>
 					<Input
 						id="url-input"
 						name="url"
 						type="url"
-						placeholder="https://www.goodreads.com/book/show/..."
+						placeholder="https://hardcover.app/books/..."
 						required
 					/>
 				</div>

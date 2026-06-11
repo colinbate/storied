@@ -123,6 +123,7 @@ export const actions: Actions = {
 				coverUrl: data.get('coverUrl')?.toString()?.trim() || null,
 				amazonAsin: data.get('amazonAsin')?.toString()?.trim() || null,
 				goodreadsUrl: data.get('goodreadsUrl')?.toString()?.trim() || null,
+				hardcoverUrl: data.get('hardcoverUrl')?.toString()?.trim() || null,
 				isComplete,
 				bookCount: bookCount && Number.isFinite(bookCount) ? bookCount : null,
 				updatedAt: new Date().toISOString()

@@ -134,6 +134,7 @@ export const actions: Actions = {
 				googleBooksId: data.get('googleBooksId')?.toString()?.trim() || null,
 				amazonAsin: data.get('amazonAsin')?.toString()?.trim() || null,
 				goodreadsUrl: data.get('goodreadsUrl')?.toString()?.trim() || null,
+				hardcoverUrl: data.get('hardcoverUrl')?.toString()?.trim() || null,
 				firstPublishYear:
 					firstPublishYear && Number.isFinite(firstPublishYear) ? firstPublishYear : null,
 				description: data.get('description')?.toString()?.trim() || null,

@@ -104,6 +104,7 @@ export const actions: Actions = {
 		const coverUrl = data.get('coverUrl')?.toString()?.trim() || null;
 		const amazonAsin = data.get('amazonAsin')?.toString()?.trim() || null;
 		const goodreadsUrl = data.get('goodreadsUrl')?.toString()?.trim() || null;
+		const hardcoverUrl = data.get('hardcoverUrl')?.toString()?.trim() || null;
 		const isComplete = data.get('isComplete')?.toString() === '1';
 		const bookCountStr = data.get('bookCount')?.toString()?.trim() || '';
 		const bookCount = bookCountStr ? Number(bookCountStr) : null;
@@ -118,6 +119,7 @@ export const actions: Actions = {
 			coverUrl,
 			amazonAsin,
 			goodreadsUrl,
+			hardcoverUrl,
 			isComplete,
 			bookCount: bookCount && Number.isFinite(bookCount) ? bookCount : null
 		});
