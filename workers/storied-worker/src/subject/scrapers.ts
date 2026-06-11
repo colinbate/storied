@@ -41,6 +41,7 @@ export async function scrapeGoodreadsBook(url: string): Promise<GoodreadsBookMet
 		console.log('[GOODREADS] Could not fetch', url);
 		return null;
 	}
+	const debugResponse = response.clone();
 	const ogData: Record<string, string> = {};
 	let ldJsonRaw = '';
 	let capturingLdJson = false;
@@ -80,7 +81,20 @@ export async function scrapeGoodreadsBook(url: string): Promise<GoodreadsBookMet
 
 	const title = ldJson?.name || ogData['og:title'] || '';
 	if (!title) {
-		console.log('[GOODREADS] No title found.');
+		const html = await debugResponse.text();
+		const head = html.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? html;
+		console.log(
+			'[GOODREADS] No title found',
+			JSON.stringify({
+				url,
+				finalUrl: response.url,
+				status: response.status,
+				contentType: response.headers.get('content-type'),
+				ogKeys: Object.keys(ogData),
+				ldJsonBytes: ldJsonRaw.length,
+				headSample: head.slice(0, 12000)
+			})
+		);
 		return null;
 	}
 
