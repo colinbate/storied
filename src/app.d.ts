@@ -2,6 +2,11 @@ import type { ORM } from '$lib/server/db';
 import type { users } from '$lib/server/db/schema';
 
 declare global {
+	interface Env {
+		/** Server-only answer for the first restricted catalog challenge. */
+		RESTRICTED_CATALOG_CODE?: string;
+	}
+
 	namespace App {
 		// interface Error {}
 		interface Locals {

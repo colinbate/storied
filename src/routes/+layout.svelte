@@ -21,6 +21,7 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import UserIcon from '@lucide/svelte/icons/user';
+	import MemberName from '$lib/components/member-name.svelte';
 	import { resolve } from '$app/paths';
 	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME } from '$shared/brand';
 
@@ -148,14 +149,18 @@
 											>{user.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
 										>
 									</Avatar.Root>
-									<span class="hidden sm:inline">{user.displayName}</span>
+									<MemberName
+										class="hidden sm:inline-flex"
+										userId={user.id}
+										name={user.displayName}
+									/>
 								</Button>
 							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="end" class="w-48">
 							<DropdownMenu.Label>
 								<div class="flex flex-col">
-									<span>{user.displayName}</span>
+									<MemberName userId={user.id} name={user.displayName} />
 									<span class="text-xs font-normal text-muted-foreground">{user.email}</span>
 								</div>
 							</DropdownMenu.Label>

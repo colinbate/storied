@@ -39,6 +39,7 @@
 	import { cn } from '$lib/utils.js';
 	import { onDestroy, tick } from 'svelte';
 	import type { SubjectSourceType } from '$shared/worker-messages';
+	import MemberName from '$lib/components/member-name.svelte';
 
 	type QueuedSubjectLink = {
 		sourceType: Extract<
@@ -321,7 +322,7 @@
 						{/if}
 					</div>
 					<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-						<span>{data.author.displayName}</span>
+						<MemberName userId={data.author.id} name={data.author.displayName} />
 						<span>·</span>
 						<span>{formatDate(data.thread.createdAt, { time: 'never', timeZone })}</span>
 						{#if data.thread.replyCount > 0}
@@ -538,7 +539,7 @@
 								href={resolve('/members/[id]', { id: data.author.id })}
 								class="font-medium hover:underline"
 							>
-								{data.author.displayName}
+								<MemberName userId={data.author.id} name={data.author.displayName} />
 							</a>
 							<span class="text-xs text-muted-foreground"
 								>{formatDate(data.thread.createdAt, { time: 'always', timeZone })}</span
@@ -616,7 +617,7 @@
 											href={resolve('/members/[id]', { id: author.id })}
 											class="text-sm font-medium hover:underline"
 										>
-											{author.displayName}
+											<MemberName userId={author.id} name={author.displayName} />
 										</a>
 										<span class="text-xs text-muted-foreground"
 											>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
@@ -783,8 +784,8 @@
 							required
 						/>
 						<p class="text-xs text-muted-foreground">
-							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover
-							and Goodreads book, series, and author URLs are linked to the thread after posting.
+							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
+							Goodreads book, series, and author URLs are linked to the thread after posting.
 						</p>
 						{#if form?.error}
 							<p class="text-sm text-destructive">{form.error}</p>

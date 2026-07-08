@@ -19,6 +19,7 @@
 	import { formatDate } from '$lib/date-format';
 	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
 	import { toast } from 'svelte-sonner';
+	import MemberName from '$lib/components/member-name.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -153,7 +154,10 @@
 					</div>
 					<Card.Title class="text-xl">{data.featuredDiscussion.thread.title}</Card.Title>
 					<Card.Description>
-						Started by {data.featuredDiscussion.author.displayName}
+						Started by <MemberName
+							userId={data.featuredDiscussion.author.id}
+							name={data.featuredDiscussion.author.displayName}
+						/>
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
@@ -224,7 +228,7 @@
 										{/if}
 									</div>
 									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-										<span>{author.displayName}</span>
+										<MemberName userId={author.id} name={author.displayName} />
 										<span>·</span>
 										<span
 											>{formatDate(thread.lastPostAt ?? thread.createdAt, {

@@ -48,6 +48,29 @@ export const users = sqliteTable(
 	(table) => [index('idx_users_status_last_activity').on(table.status, table.lastActivityAt)]
 );
 
+// ─────────────────────────────────────────────
+// user_achievements
+// ─────────────────────────────────────────────
+export const userAchievements = sqliteTable(
+	'user_achievements',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		achievementKey: text('achievement_key').notNull(),
+		/** Where the award originated, e.g. 'challenge' or 'admin'. */
+		source: text('source').notNull().default('challenge'),
+		/** Optional achievement-specific details. */
+		metadataJson: text('metadata_json'),
+		awardedAt: text('awarded_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('user_achievements_user_key_unique').on(table.userId, table.achievementKey),
+		index('idx_user_achievements_key').on(table.achievementKey, table.awardedAt)
+	]
+);
+
 // ──────────────────────────────────────────────
 // conversations
 // ──────────────────────────────────────────────

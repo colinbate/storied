@@ -11,6 +11,7 @@
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import StarIcon from '@lucide/svelte/icons/star';
+	import MemberName from '$lib/components/member-name.svelte';
 
 	let { data } = $props();
 
@@ -43,7 +44,9 @@
 		</Avatar.Root>
 		<div class="min-w-0 flex-1 space-y-3">
 			<div>
-				<h1 class="text-3xl font-bold tracking-tight">{data.member.displayName}</h1>
+				<h1 class="text-3xl font-bold tracking-tight">
+					<MemberName userId={data.member.id} name={data.member.displayName} />
+				</h1>
 				{#if data.profile?.headline}
 					<p class="mt-1 text-xl text-muted-foreground">{data.profile.headline}</p>
 				{/if}

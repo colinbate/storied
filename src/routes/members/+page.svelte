@@ -4,6 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import MemberName from '$lib/components/member-name.svelte';
 
 	let { data } = $props();
 </script>
@@ -54,7 +55,9 @@
 							</Avatar.Root>
 							<div class="min-w-0 flex-1 space-y-2">
 								<div>
-									<h2 class="truncate text-lg font-semibold">{member.displayName}</h2>
+									<h2 class="truncate text-lg font-semibold">
+										<MemberName userId={member.id} name={member.displayName} />
+									</h2>
 									{#if member.profile?.headline}
 										<p class="line-clamp-2 text-sm text-muted-foreground">
 											{member.profile.headline}

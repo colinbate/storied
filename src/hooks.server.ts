@@ -14,6 +14,7 @@ const ROUTE_ACCESS: { route: string; isPrefix?: boolean; perms?: string; isApi?:
 	{ route: '/category/', isPrefix: true, perms: 'access:general' },
 	{ route: '/library', isPrefix: true, perms: 'access:general' },
 	{ route: '/new', isPrefix: false, perms: 'access:general' },
+	{ route: '/restricted', isPrefix: false, perms: undefined },
 	{ route: '/search', isPrefix: true, perms: 'access:general' },
 	{ route: '/series', isPrefix: true, perms: 'access:general' },
 	{ route: '/settings', isPrefix: true, perms: 'access:general' },

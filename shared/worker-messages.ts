@@ -131,6 +131,7 @@ export interface PushoverNotificationPayload {
 		| 'new_thread'
 		| 'announcement'
 		| 'pending_signup'
+		| 'achievement'
 		| 'private_message'
 		| 'pushover_test';
 	threadId?: string | null;
