@@ -36,6 +36,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import SeriesCard from '$lib/components/series-card.svelte';
 	import { formatDate } from '$lib/date-format';
+	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { cn } from '$lib/utils.js';
 	import { onDestroy, tick } from 'svelte';
 	import type { SubjectSourceType } from '$shared/worker-messages';
@@ -71,6 +72,7 @@
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
+	let activeReplyDraftId = $state<string | null>(null);
 	let queuedSubjectLinks = $state<QueuedSubjectLink[]>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let queuedSubjectPollStartedAt = 0;
@@ -86,6 +88,26 @@
 	const postsById = $derived(new Map(data.posts.map((entry) => [entry.post.id, entry])));
 	const replyingToPost = $derived(replyingTo ? postsById.get(replyingTo) : null);
 	const threadSubjectsDependency = $derived(`app:thread-subjects:${data.thread.id}`);
+	const replyDraftComposerId = $derived(`thread:${data.thread.id}`);
+
+	$effect(() => {
+		if (!currentUserId) return;
+
+		const nextDraftId = `${currentUserId}:${replyDraftComposerId}`;
+		if (activeReplyDraftId !== nextDraftId) {
+			const draft = loadReplyDraft(currentUserId, replyDraftComposerId);
+			replyBody = draft?.body ?? '';
+			replyingTo =
+				draft?.parentPostId && postsById.has(draft.parentPostId) ? draft.parentPostId : null;
+			activeReplyDraftId = nextDraftId;
+			return;
+		}
+
+		saveReplyDraft(currentUserId, replyDraftComposerId, {
+			body: replyBody,
+			parentPostId: replyingTo
+		});
+	});
 
 	function canEdit(authorId: string, createdAt: string): boolean {
 		if (!currentUserId || currentUserId !== authorId) return false;
@@ -760,6 +782,9 @@
 												).queuedSubjectLinks
 											: null;
 									addQueuedSubjectLinks(queued);
+									if (currentUserId) {
+										removeReplyDraft(currentUserId, replyDraftComposerId);
+									}
 									replyBody = '';
 									replyingTo = null;
 									toast.success(

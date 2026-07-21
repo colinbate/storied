@@ -20,13 +20,32 @@
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { formatDate } from '$lib/date-format';
+	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
 	let replyBody = $state('');
 	let replying = $state(false);
+	let activeReplyDraftId = $state<string | null>(null);
 	let rsvping = $state(false);
+	const replyDraftComposerId = $derived(`session:${data.session.id}`);
+
+	$effect(() => {
+		if (!data.user?.id) return;
+
+		const nextDraftId = `${data.user.id}:${replyDraftComposerId}`;
+		if (activeReplyDraftId !== nextDraftId) {
+			replyBody = loadReplyDraft(data.user.id, replyDraftComposerId)?.body ?? '';
+			activeReplyDraftId = nextDraftId;
+			return;
+		}
+
+		saveReplyDraft(data.user.id, replyDraftComposerId, {
+			body: replyBody,
+			parentPostId: null
+		});
+	});
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 subject' : `${items.length} subjects`;
@@ -56,6 +75,7 @@
 			replying = false;
 			await update();
 			if (result.type === 'success') {
+				if (data.user?.id) removeReplyDraft(data.user.id, replyDraftComposerId);
 				replyBody = '';
 				toast.success('Reply posted.');
 			} else if (result.type === 'failure' && result.data?.error) {
