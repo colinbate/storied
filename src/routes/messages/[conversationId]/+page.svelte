@@ -5,7 +5,8 @@
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import PostComposer from '$lib/components/post-composer.svelte';
+	import PostImage from '$lib/components/post-image.svelte';
 	import { formatDate } from '$lib/date-format';
 	import { cn } from '$lib/utils.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -20,6 +21,7 @@
 	let { data, form } = $props();
 	let body = $state('');
 	let sending = $state(false);
+	let imageFiles = $state<FileList | undefined>();
 
 	const currentUserId = $derived(data.user?.id ?? null);
 	const isMuted = $derived(Boolean(data.membership.mutedAt));
@@ -87,6 +89,12 @@
 		{#if data.messages.length > 0}
 			{#each data.messages as entry (entry.message.id)}
 				{@const isOwn = entry.message.authorUserId === currentUserId}
+				{@const imageUrl = entry.hasImage
+					? resolve('/messages/[conversationId]/images/[messageId]', {
+							conversationId: data.conversation.id,
+							messageId: entry.message.id
+						})
+					: null}
 				<div class={cn('flex gap-3', isOwn && 'flex-row-reverse')}>
 					<Avatar.Root class="mt-1 h-8 w-8 shrink-0">
 						{#if entry.author.avatarUrl}
@@ -113,6 +121,15 @@
 								isOwn ? 'border-primary/30 bg-primary/10' : 'bg-card'
 							)}
 						>
+							{#if imageUrl}
+								<div class="not-prose mb-3">
+									<PostImage
+										src={imageUrl}
+										alt="Image attached by {entry.author.displayName}"
+										class="max-h-96"
+									/>
+								</div>
+							{/if}
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							{@html entry.message.bodyHtml}
 						</div>
@@ -137,6 +154,7 @@
 			<form
 				method="POST"
 				action="?/send"
+				enctype="multipart/form-data"
 				use:enhance={() => {
 					sending = true;
 					return async ({ result, update }) => {
@@ -144,6 +162,7 @@
 						await update();
 						if (result.type === 'success') {
 							body = '';
+							imageFiles = undefined;
 							toast.success('Message sent.');
 						} else if (result.type === 'failure' && result.data?.error) {
 							toast.error(String(result.data.error));
@@ -152,11 +171,12 @@
 				}}
 				class="space-y-3"
 			>
-				<Textarea
-					name="body"
+				<PostComposer
+					id="private-message"
 					placeholder="Write a private message..."
 					rows={4}
 					bind:value={body}
+					bind:files={imageFiles}
 					required
 				/>
 				{#if form?.error}

@@ -17,8 +17,9 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { createThreadReply } from '$lib/server/thread-replies';
 import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
+import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
@@ -199,7 +200,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
 		featuredSubjects: subjects.filter(({ link }) => link.status === 'featured'),
 		discussedSubjects: subjects.filter(({ link }) => link.status === 'discussed'),
-		offThemeSubjects: subjects.filter(({ link }) => link.status === 'mentioned_off_theme')
+		offThemeSubjects: subjects.filter(({ link }) => link.status === 'mentioned_off_theme'),
+		fileBaseUrl: platform?.env.FILE_BASE_URL ?? ''
 	};
 };
 
@@ -238,18 +240,30 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const bodySource = data.get('body')?.toString()?.trim();
+		const imageInput = readPostImage(data);
 		if (!bodySource) {
 			return fail(400, { error: 'Reply cannot be empty.' });
 		}
+		if (imageInput.error) {
+			return fail(400, { error: imageInput.error });
+		}
 
-		await createThreadReply({
-			db: locals.db,
-			platform,
-			thread,
-			authorUserId: locals.user.id,
-			bodySource,
-			baseUrl: url.origin
-		});
+		try {
+			await createThreadReply({
+				db: locals.db,
+				platform,
+				thread,
+				authorUserId: locals.user.id,
+				bodySource,
+				baseUrl: url.origin,
+				imageFile: imageInput.file
+			});
+		} catch (error) {
+			if (error instanceof PostImageUploadError) {
+				return fail(500, { error: 'The image could not be uploaded. Please try again.' });
+			}
+			throw error;
+		}
 
 		return { success: true };
 	},

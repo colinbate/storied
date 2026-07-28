@@ -7,6 +7,7 @@ import {
 	sendPrivateMessage,
 	setConversationMuted
 } from '$lib/server/private-messages';
+import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
@@ -20,14 +21,24 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const bodySource = data.get('body')?.toString() ?? '';
+		const imageInput = readPostImage(data);
+		if (imageInput.error) return fail(400, { error: imageInput.error });
 
-		return await sendPrivateMessage(locals.db, {
-			platform,
-			conversationId: params.conversationId,
-			authorUserId: locals.user.id,
-			bodySource,
-			baseUrl: url.origin
-		});
+		try {
+			return await sendPrivateMessage(locals.db, {
+				platform,
+				conversationId: params.conversationId,
+				authorUserId: locals.user.id,
+				bodySource,
+				baseUrl: url.origin,
+				imageFile: imageInput.file
+			});
+		} catch (error) {
+			if (error instanceof PostImageUploadError) {
+				return fail(500, { error: 'The image could not be uploaded. Please try again.' });
+			}
+			throw error;
+		}
 	},
 
 	mute: async ({ request, locals, params }) => {

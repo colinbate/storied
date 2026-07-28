@@ -7,6 +7,8 @@
 	import * as NativeSelect from '$lib/components/ui/native-select';
 	import * as Popover from '$lib/components/ui/popover';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import PostComposer from '$lib/components/post-composer.svelte';
+	import PostImage from '$lib/components/post-image.svelte';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
@@ -41,6 +43,7 @@
 	import { onDestroy, tick } from 'svelte';
 	import type { SubjectSourceType } from '$shared/worker-messages';
 	import MemberName from '$lib/components/member-name.svelte';
+	import { publicPostImageUrl } from '$lib/post-images';
 
 	type QueuedSubjectLink = {
 		sourceType: Extract<
@@ -72,6 +75,7 @@
 	let loading = $state(false);
 	let replyingTo = $state<string | null>(null);
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
+	let replyImageFiles = $state<FileList | undefined>();
 	let activeReplyDraftId = $state<string | null>(null);
 	let queuedSubjectLinks = $state<QueuedSubjectLink[]>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -89,6 +93,7 @@
 	const replyingToPost = $derived(replyingTo ? postsById.get(replyingTo) : null);
 	const threadSubjectsDependency = $derived(`app:thread-subjects:${data.thread.id}`);
 	const replyDraftComposerId = $derived(`thread:${data.thread.id}`);
+	const threadImageUrl = $derived(publicPostImageUrl(data.fileBaseUrl, data.thread.imageKey));
 
 	$effect(() => {
 		if (!currentUserId) return;
@@ -577,6 +582,11 @@
 								</button>
 							{/if}
 						</div>
+						{#if threadImageUrl}
+							<div class="mb-4">
+								<PostImage src={threadImageUrl} alt="Image attached by {data.author.displayName}" />
+							</div>
+						{/if}
 						{#if editingId === ''}
 							<form method="POST" action="?/editThread" use:enhance={editEnhance} class="space-y-2">
 								<Textarea name="body" rows={6} bind:value={editBody} required />
@@ -617,6 +627,7 @@
 
 			<div class="space-y-3">
 				{#each data.posts as { post, author } (post.id)}
+					{@const postImageUrl = publicPostImageUrl(data.fileBaseUrl, post.imageKey)}
 					<Card.Root
 						id="post-{post.id}"
 						class={cn(
@@ -666,6 +677,11 @@
 											</a>
 										{/if}
 									</div>
+									{#if postImageUrl}
+										<div class="mb-4">
+											<PostImage src={postImageUrl} alt="Image attached by {author.displayName}" />
+										</div>
+									{/if}
 									{#if editingId === post.id}
 										<form
 											method="POST"
@@ -767,6 +783,7 @@
 					<form
 						method="POST"
 						action="?/reply"
+						enctype="multipart/form-data"
 						use:enhance={() => {
 							loading = true;
 							return async ({ result, update }) => {
@@ -786,6 +803,7 @@
 										removeReplyDraft(currentUserId, replyDraftComposerId);
 									}
 									replyBody = '';
+									replyImageFiles = undefined;
 									replyingTo = null;
 									toast.success(
 										Array.isArray(queued) && queued.length > 0
@@ -800,12 +818,13 @@
 						{#if replyingTo}
 							<input type="hidden" name="parentPostId" value={replyingTo} />
 						{/if}
-						<Textarea
+						<PostComposer
+							id="thread-reply"
 							bind:ref={replyTextarea}
-							name="body"
 							placeholder="Write your reply… (Markdown supported)"
 							rows={4}
 							bind:value={replyBody}
+							bind:files={replyImageFiles}
 							required
 						/>
 						<p class="text-xs text-muted-foreground">

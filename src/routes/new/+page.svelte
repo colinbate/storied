@@ -4,13 +4,14 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import PostComposer from '$lib/components/post-composer.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 
 	let { data, form } = $props();
 	let loading = $state(false);
+	let imageFiles = $state<FileList | undefined>();
 	let categoryId = $derived(
 		form?.categoryId ??
 			data.categories.find((category) => category.slug === data.preselectedCategory)?.id ??
@@ -40,6 +41,7 @@
 		<Card.Content>
 			<form
 				method="POST"
+				enctype="multipart/form-data"
 				use:enhance={() => {
 					loading = true;
 					return async ({ update }) => {
@@ -77,17 +79,17 @@
 
 				<div class="space-y-2">
 					<Label for="body">Body</Label>
-					<Textarea
-						id="body"
-						name="body"
+					<PostComposer
+						id="new-thread-body"
 						placeholder="Write your post… (Markdown supported)"
 						rows={8}
 						required
 						value={form?.body ?? ''}
+						bind:files={imageFiles}
 					/>
 					<p class="text-xs text-muted-foreground">
-						Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover
-						and Goodreads book, series, and author URLs are linked to the thread after posting.
+						Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
+						Goodreads book, series, and author URLs are linked to the thread after posting.
 					</p>
 				</div>
 

@@ -24,6 +24,7 @@ import {
 	isAnnouncementsCategory,
 	isSessionDiscussionsCategory
 } from '$lib/server/discussions';
+import { readPostImage, removePostImage, uploadPostImage } from '$lib/server/post-images';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -64,6 +65,16 @@ export const actions: Actions = {
 		const bodySource = data.get('body')?.toString()?.trim();
 		const categoryId = data.get('categoryId')?.toString();
 		const notifyAllMembersByEmail = data.get('notifyAllMembersByEmail') === 'on';
+		const imageInput = readPostImage(data);
+
+		if (imageInput.error) {
+			return fail(400, {
+				error: imageInput.error,
+				title,
+				body: bodySource,
+				categoryId
+			});
+		}
 
 		if (!title || title.length < 3 || title.length > 200) {
 			return fail(400, {
@@ -130,17 +141,42 @@ export const actions: Actions = {
 		const slug = await createUniqueThreadSlug(locals.db, title);
 		const threadId = newId();
 		const now = new Date().toISOString();
+		let imageKey: string | null = null;
 
-		await locals.db.insert(threads).values({
-			id: threadId,
-			categoryId,
-			authorUserId: locals.user.id,
-			title,
-			slug,
-			bodySource,
-			bodyHtml,
-			lastPostAt: now
-		});
+		if (imageInput.file) {
+			try {
+				imageKey = await uploadPostImage({
+					platform,
+					file: imageInput.file,
+					scope: 'threads',
+					recordId: threadId
+				});
+			} catch {
+				return fail(500, {
+					error: 'The image could not be uploaded. Please try again.',
+					title,
+					body: bodySource,
+					categoryId
+				});
+			}
+		}
+
+		try {
+			await locals.db.insert(threads).values({
+				id: threadId,
+				categoryId,
+				authorUserId: locals.user.id,
+				title,
+				slug,
+				bodySource,
+				bodyHtml,
+				imageKey,
+				lastPostAt: now
+			});
+		} catch (error) {
+			await removePostImage(platform, imageKey);
+			throw error;
+		}
 
 		// Auto-subscribe the thread creator, honoring their preferences.
 		const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);

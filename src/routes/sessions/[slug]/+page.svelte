@@ -7,7 +7,8 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as NativeSelect from '$lib/components/ui/native-select';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import PostComposer from '$lib/components/post-composer.svelte';
+	import PostImage from '$lib/components/post-image.svelte';
 	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
@@ -22,14 +23,19 @@
 	import { formatDate } from '$lib/date-format';
 	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { toast } from 'svelte-sonner';
+	import { publicPostImageUrl } from '$lib/post-images';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
 	let replyBody = $state('');
+	let replyImageFiles = $state<FileList | undefined>();
 	let replying = $state(false);
 	let activeReplyDraftId = $state<string | null>(null);
 	let rsvping = $state(false);
 	const replyDraftComposerId = $derived(`session:${data.session.id}`);
+	const primaryThreadImageUrl = $derived(
+		publicPostImageUrl(data.fileBaseUrl, data.primaryThread?.thread.imageKey)
+	);
 
 	$effect(() => {
 		if (!data.user?.id) return;
@@ -77,6 +83,7 @@
 			if (result.type === 'success') {
 				if (data.user?.id) removeReplyDraft(data.user.id, replyDraftComposerId);
 				replyBody = '';
+				replyImageFiles = undefined;
 				toast.success('Reply posted.');
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
@@ -340,6 +347,14 @@
 									})}</span
 								>
 							</div>
+							{#if primaryThreadImageUrl}
+								<div class="mt-3">
+									<PostImage
+										src={primaryThreadImageUrl}
+										alt="Image attached by {data.primaryThread.author.displayName}"
+									/>
+								</div>
+							{/if}
 							<div class="prose mt-3 max-w-none wrap-anywhere dark:prose-invert">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html data.primaryThread.thread.bodyHtml}
@@ -350,6 +365,7 @@
 					{#if data.primaryPosts.length > 0}
 						<div class="space-y-4 border-t pt-5">
 							{#each data.primaryPosts as { post, author } (post.id)}
+								{@const postImageUrl = publicPostImageUrl(data.fileBaseUrl, post.imageKey)}
 								<div class="flex gap-3">
 									<Avatar.Root class="mt-0.5 h-9 w-9 shrink-0">
 										{#if author.avatarUrl}
@@ -363,6 +379,14 @@
 											<span>·</span>
 											<span>{formatDate(post.createdAt, { time: 'never', timeZone })}</span>
 										</div>
+										{#if postImageUrl}
+											<div class="mt-2">
+												<PostImage
+													src={postImageUrl}
+													alt="Image attached by {author.displayName}"
+												/>
+											</div>
+										{/if}
 										<div class="prose mt-2 max-w-none wrap-anywhere dark:prose-invert">
 											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											{@html post.bodyHtml}
@@ -376,15 +400,17 @@
 					<form
 						method="POST"
 						action="?/reply"
+						enctype="multipart/form-data"
 						use:enhance={replyEnhance}
 						class="space-y-3 border-t pt-5"
 					>
-						<Textarea
-							name="body"
+						<PostComposer
+							id="session-reply"
 							rows={4}
 							placeholder="Add your thoughts…"
 							required
 							bind:value={replyBody}
+							bind:files={replyImageFiles}
 						/>
 						<div class="flex justify-end">
 							<Button type="submit" disabled={replying}>

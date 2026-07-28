@@ -20,6 +20,7 @@ import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { listActiveMentionableUsers } from '$lib/server/mentions';
 import { createThreadReply } from '$lib/server/thread-replies';
+import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -37,7 +38,7 @@ function getSessionSubjectStatus(value: FormDataEntryValue | null): SessionSubje
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
 }
 
-export const load: PageServerLoad = async ({ params, locals, depends }) => {
+export const load: PageServerLoad = async ({ params, locals, depends, platform }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
@@ -237,7 +238,8 @@ export const load: PageServerLoad = async ({ params, locals, depends }) => {
 		canModerate,
 		canPromoteBooks,
 		allSessions,
-		postEditWindowMs: POST_EDIT_WINDOW_MS
+		postEditWindowMs: POST_EDIT_WINDOW_MS,
+		fileBaseUrl: platform?.env.FILE_BASE_URL ?? ''
 	};
 };
 
@@ -250,9 +252,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const bodySource = data.get('body')?.toString()?.trim();
 		const parentPostId = data.get('parentPostId')?.toString() || null;
+		const imageInput = readPostImage(data);
 
 		if (!bodySource || bodySource.length < 1) {
 			return fail(400, { error: 'Reply cannot be empty.' });
+		}
+		if (imageInput.error) {
+			return fail(400, { error: imageInput.error });
 		}
 
 		// Load thread
@@ -270,16 +276,25 @@ export const actions: Actions = {
 			return fail(403, { error: 'This thread is locked.' });
 		}
 
-		const { queuedSubjectLinks } = await createThreadReply({
-			db: locals.db,
-			platform,
-			thread,
-			authorUserId: locals.user.id,
-			bodySource,
-			parentPostId,
-			baseUrl: url.origin,
-			processSubjectLinks: true
-		});
+		let queuedSubjectLinks;
+		try {
+			({ queuedSubjectLinks } = await createThreadReply({
+				db: locals.db,
+				platform,
+				thread,
+				authorUserId: locals.user.id,
+				bodySource,
+				parentPostId,
+				baseUrl: url.origin,
+				processSubjectLinks: true,
+				imageFile: imageInput.file
+			}));
+		} catch (error) {
+			if (error instanceof PostImageUploadError) {
+				return fail(500, { error: 'The image could not be uploaded. Please try again.' });
+			}
+			throw error;
+		}
 
 		return { success: true, queuedSubjectLinks };
 	},

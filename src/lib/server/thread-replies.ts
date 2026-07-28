@@ -16,6 +16,7 @@ import { renderMarkdown } from '$lib/server/markdown';
 import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
+import { removePostImage, uploadPostImage } from '$lib/server/post-images';
 
 export type QueuedSubjectLink = {
 	sourceType: SubjectSourceType;
@@ -32,19 +33,36 @@ export async function createThreadReply(args: {
 	baseUrl: string;
 	parentPostId?: string | null;
 	processSubjectLinks?: boolean;
+	imageFile?: File | null;
 }) {
 	const postId = newId();
 	const now = new Date().toISOString();
 	const mentionableUsers = await listActiveMentionableUsers(args.db);
+	let imageKey: string | null = null;
 
-	await args.db.insert(posts).values({
-		id: postId,
-		threadId: args.thread.id,
-		authorUserId: args.authorUserId,
-		parentPostId: args.parentPostId ?? null,
-		bodySource: args.bodySource,
-		bodyHtml: renderMarkdown(args.bodySource, { mentionableUsers })
-	});
+	if (args.imageFile) {
+		imageKey = await uploadPostImage({
+			platform: args.platform,
+			file: args.imageFile,
+			scope: 'posts',
+			recordId: postId
+		});
+	}
+
+	try {
+		await args.db.insert(posts).values({
+			id: postId,
+			threadId: args.thread.id,
+			authorUserId: args.authorUserId,
+			parentPostId: args.parentPostId ?? null,
+			bodySource: args.bodySource,
+			bodyHtml: renderMarkdown(args.bodySource, { mentionableUsers }),
+			imageKey
+		});
+	} catch (error) {
+		await removePostImage(args.platform, imageKey);
+		throw error;
+	}
 
 	await args.db
 		.update(threads)

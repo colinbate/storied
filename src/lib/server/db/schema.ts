@@ -130,6 +130,7 @@ export const privateMessages = sqliteTable(
 			.references(() => users.id, { onDelete: 'restrict' }),
 		bodySource: text('body_source').notNull(),
 		bodyHtml: text('body_html').notNull(),
+		imageKey: text('image_key'),
 		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
@@ -283,6 +284,7 @@ export const threads = sqliteTable(
 		slug: text('slug').notNull().unique(),
 		bodySource: text('body_source').notNull(),
 		bodyHtml: text('body_html').notNull(),
+		imageKey: text('image_key'),
 		/** Allowed values: 'public' | 'members' | 'admins' */
 		visibility: text('visibility').notNull().default('members'),
 		/** 0 = unlocked, 1 = locked */
@@ -320,6 +322,7 @@ export const posts = sqliteTable(
 		parentPostId: text('parent_post_id'),
 		bodySource: text('body_source').notNull(),
 		bodyHtml: text('body_html').notNull(),
+		imageKey: text('image_key'),
 		editCount: integer('edit_count').notNull().default(0),
 		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),

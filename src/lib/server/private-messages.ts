@@ -12,6 +12,7 @@ import {
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
+import { removePostImage, uploadPostImage } from '$lib/server/post-images';
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
@@ -266,6 +267,15 @@ export async function loadConversation(db: ORM, conversationId: string, userId: 
 			);
 	}
 
+	const participantMessages = messages.map(({ message, author }) => {
+		const { imageKey, ...safeMessage } = message;
+		return {
+			message: safeMessage,
+			author,
+			hasImage: Boolean(imageKey)
+		};
+	});
+
 	return {
 		conversation,
 		membership: {
@@ -274,7 +284,7 @@ export async function loadConversation(db: ORM, conversationId: string, userId: 
 			lastReadAt: lastMessage ? new Date().toISOString() : membership.lastReadAt
 		},
 		otherMember,
-		messages
+		messages: participantMessages
 	};
 }
 
@@ -286,6 +296,7 @@ export async function sendPrivateMessage(
 		authorUserId: string;
 		bodySource: string;
 		baseUrl: string;
+		imageFile?: File | null;
 	}
 ) {
 	await requireActiveUser(db, args.authorUserId);
@@ -327,16 +338,32 @@ export async function sendPrivateMessage(
 
 	const now = new Date().toISOString();
 	const messageId = newId();
+	let imageKey: string | null = null;
 
-	await db.insert(privateMessages).values({
-		id: messageId,
-		conversationId: args.conversationId,
-		authorUserId: args.authorUserId,
-		bodySource,
-		bodyHtml: renderMarkdown(bodySource),
-		createdAt: now,
-		updatedAt: now
-	});
+	if (args.imageFile) {
+		imageKey = await uploadPostImage({
+			platform: args.platform,
+			file: args.imageFile,
+			scope: 'private-messages',
+			recordId: messageId
+		});
+	}
+
+	try {
+		await db.insert(privateMessages).values({
+			id: messageId,
+			conversationId: args.conversationId,
+			authorUserId: args.authorUserId,
+			bodySource,
+			bodyHtml: renderMarkdown(bodySource),
+			imageKey,
+			createdAt: now,
+			updatedAt: now
+		});
+	} catch (error) {
+		await removePostImage(args.platform, imageKey);
+		throw error;
+	}
 
 	await db
 		.update(conversations)
