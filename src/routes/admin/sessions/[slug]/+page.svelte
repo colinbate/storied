@@ -24,17 +24,14 @@
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { supportedTimeZones } from '$lib/timezone-options';
-	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 	let saving = $state(false);
+	let savingStatus = $state(false);
 	let selectedThemeId = $state('');
 	let sessionTimezone = $state('');
 	let allTimezones = $state<string[]>([]);
-
-	onMount(() => {
-		allTimezones = supportedTimeZones(data.session.timezone, sessionTimezone, data.user?.timezone);
-	});
+	let loadedSessionId = $state('');
 
 	type LinkKind = 'book' | 'series' | 'author';
 	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -81,11 +78,15 @@
 	);
 
 	$effect(() => {
-		if (!selectedThemeId && data.session.themeId) {
-			selectedThemeId = data.session.themeId;
-		}
-		if (!sessionTimezone) {
+		if (loadedSessionId !== data.session.id) {
+			loadedSessionId = data.session.id;
+			selectedThemeId = data.session.themeId ?? '';
 			sessionTimezone = data.session.timezone ?? 'Atlantic/Bermuda';
+			allTimezones = supportedTimeZones(
+				data.session.timezone,
+				sessionTimezone,
+				data.user?.timezone
+			);
 		}
 	});
 
@@ -149,125 +150,168 @@
 		</div>
 	{/if}
 
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base">Session Status</Card.Title>
+			<Card.Description>
+				Making a session current also marks earlier sessions as past.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/updateStatus"
+				use:enhance={() => {
+					savingStatus = true;
+					return async ({ result, update }) => {
+						savingStatus = false;
+						await update({ reset: false });
+						if (result.type === 'success' && result.data?.statusUpdated) {
+							const previousCount = Number(result.data.promotedPreviousCount ?? 0);
+							toast.success(
+								previousCount > 0
+									? `Session status updated; ${previousCount} earlier session${previousCount === 1 ? '' : 's'} marked past.`
+									: 'Session status updated.'
+							);
+						}
+					};
+				}}
+				class="flex flex-wrap items-end gap-3"
+			>
+				<input type="hidden" name="expectedUpdatedAt" value={data.session.updatedAt} />
+				<div class="min-w-48 space-y-2">
+					<Label for="status">Status</Label>
+					<NativeSelect id="status" name="status" value={data.session.status}>
+						<NativeSelectOption value="draft">draft</NativeSelectOption>
+						<NativeSelectOption value="current">current</NativeSelectOption>
+						<NativeSelectOption value="past">past</NativeSelectOption>
+					</NativeSelect>
+				</div>
+				<Button type="submit" disabled={savingStatus}>
+					{savingStatus ? 'Updating…' : 'Update Status'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
 	<!-- Session metadata -->
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="text-base">Session Details</Card.Title>
 			<Card.Description>Slug: <span class="font-mono">{data.session.slug}</span></Card.Description>
 		</Card.Header>
-		<Card.Content>
-			<form
-				method="POST"
-				action="?/updateSession"
-				use:enhance={() => {
-					saving = true;
-					return async ({ result, update }) => {
-						saving = false;
-						await update({ reset: false });
-						if (result.type === 'success') {
-							if (result.data?.updated) toast.success('Session updated.');
-							if (result.data?.error) toast.error(String(result.data.error));
-						}
-					};
-				}}
-				class="space-y-4"
-			>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div class="space-y-2">
-						<Label for="title">Title</Label>
-						<Input id="title" name="title" value={data.session.title} required />
+		{#key data.session.id}
+			<Card.Content>
+				<form
+					method="POST"
+					action="?/updateSession"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update({ reset: false });
+							if (result.type === 'success') {
+								if (result.data?.updated) toast.success('Session updated.');
+								if (result.data?.error) toast.error(String(result.data.error));
+							}
+						};
+					}}
+					class="space-y-4"
+				>
+					<input type="hidden" name="expectedUpdatedAt" value={data.session.updatedAt} />
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div class="space-y-2">
+							<Label for="title">Title</Label>
+							<Input id="title" name="title" value={data.session.title} required />
+						</div>
+						<div class="space-y-2">
+							<Label for="slug">Slug</Label>
+							<Input id="slug" disabled name="slug" value={data.session.slug} required />
+						</div>
+						<div class="space-y-2">
+							<Label for="startsAt">Starts At</Label>
+							<Input
+								id="startsAt"
+								name="startsAt"
+								type="datetime-local"
+								value={data.session.startsAt ?? ''}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="timezone">Timezone</Label>
+							<NativeSelect id="timezone" name="timezone" bind:value={sessionTimezone}>
+								{#each allTimezones as tz (tz)}
+									<NativeSelectOption value={tz}>{tz}</NativeSelectOption>
+								{/each}
+							</NativeSelect>
+						</div>
+						<div class="space-y-2">
+							<Label for="durationMinutes">Duration Minutes</Label>
+							<Input
+								id="durationMinutes"
+								name="durationMinutes"
+								type="number"
+								min="0"
+								value={data.session.durationMinutes ?? ''}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="locationName">Location</Label>
+							<Input
+								id="locationName"
+								name="locationName"
+								value={data.session.locationName ?? ''}
+							/>
+						</div>
+						<div class="sm:col-span-2">
+							<SessionThemePicker
+								themes={availableThemes}
+								bind:selectedId={selectedThemeId}
+								label="Theme"
+							/>
+						</div>
+						<div class="space-y-2 sm:col-span-2">
+							<Label for="themeSummary">Theme Summary</Label>
+							<Textarea
+								id="themeSummary"
+								name="themeSummary"
+								rows={2}
+								value={data.session.themeSummary ?? ''}
+							/>
+						</div>
+						<div class="space-y-2 sm:col-span-2">
+							<Label for="bodySource">Body</Label>
+							<Textarea
+								id="bodySource"
+								name="bodySource"
+								rows={8}
+								value={data.session.bodySource ?? ''}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="rsvpSlug">RSVP Slug</Label>
+							<Input id="rsvpSlug" name="rsvpSlug" value={data.session.rsvpSlug ?? ''} />
+						</div>
+						<div class="space-y-2">
+							<Label for="astroPath">Astro Path</Label>
+							<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
+						</div>
+						<label class="flex items-center gap-2 text-sm">
+							<input
+								name="isPublic"
+								type="checkbox"
+								checked={data.session.isPublic}
+								class="rounded border-input"
+							/>
+							Public
+						</label>
 					</div>
-					<div class="space-y-2">
-						<Label for="slug">Slug</Label>
-						<Input id="slug" disabled name="slug" value={data.session.slug} required />
-					</div>
-					<div class="space-y-2">
-						<Label for="status">Status</Label>
-						<NativeSelect id="status" name="status" value={data.session.status}>
-							<NativeSelectOption value="draft">draft</NativeSelectOption>
-							<NativeSelectOption value="current">current</NativeSelectOption>
-							<NativeSelectOption value="past">past</NativeSelectOption>
-						</NativeSelect>
-					</div>
-					<div class="space-y-2">
-						<Label for="startsAt">Starts At</Label>
-						<Input
-							id="startsAt"
-							name="startsAt"
-							type="datetime-local"
-							value={data.session.startsAt ?? ''}
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="timezone">Timezone</Label>
-						<NativeSelect id="timezone" name="timezone" bind:value={sessionTimezone}>
-							{#each allTimezones as tz (tz)}
-								<NativeSelectOption value={tz}>{tz}</NativeSelectOption>
-							{/each}
-						</NativeSelect>
-					</div>
-					<div class="space-y-2">
-						<Label for="durationMinutes">Duration Minutes</Label>
-						<Input
-							id="durationMinutes"
-							name="durationMinutes"
-							type="number"
-							min="0"
-							value={data.session.durationMinutes ?? ''}
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="locationName">Location</Label>
-						<Input id="locationName" name="locationName" value={data.session.locationName ?? ''} />
-					</div>
-					<div class="sm:col-span-2">
-						<SessionThemePicker
-							themes={availableThemes}
-							bind:selectedId={selectedThemeId}
-							label="Theme"
-						/>
-					</div>
-					<div class="space-y-2 sm:col-span-2">
-						<Label for="themeSummary">Theme Summary</Label>
-						<Textarea
-							id="themeSummary"
-							name="themeSummary"
-							rows={2}
-							value={data.session.themeSummary ?? ''}
-						/>
-					</div>
-					<div class="space-y-2 sm:col-span-2">
-						<Label for="bodySource">Body</Label>
-						<Textarea
-							id="bodySource"
-							name="bodySource"
-							rows={8}
-							value={data.session.bodySource ?? ''}
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label for="rsvpSlug">RSVP Slug</Label>
-						<Input id="rsvpSlug" name="rsvpSlug" value={data.session.rsvpSlug ?? ''} />
-					</div>
-					<div class="space-y-2">
-						<Label for="astroPath">Astro Path</Label>
-						<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
-					</div>
-					<label class="flex items-center gap-2 text-sm">
-						<input
-							name="isPublic"
-							type="checkbox"
-							checked={data.session.isPublic}
-							class="rounded border-input"
-						/>
-						Public
-					</label>
-				</div>
-				<Button type="submit" disabled={saving}>
-					{saving ? 'Saving…' : 'Save Session'}
-				</Button>
-			</form>
-		</Card.Content>
+					<Button type="submit" disabled={saving}>
+						{saving ? 'Saving…' : 'Save Session'}
+					</Button>
+				</form>
+			</Card.Content>
+		{/key}
 	</Card.Root>
 
 	<!-- Participants -->
@@ -967,8 +1011,8 @@
 		<Card.Header>
 			<Card.Title class="text-base">Link from URL</Card.Title>
 			<Card.Description>
-				Paste a Hardcover or Goodreads book, series, or author URL. If not already in our
-				library, it'll be queued for resolution and auto-linked to this session once resolved.
+				Paste a Hardcover or Goodreads book, series, or author URL. If not already in our library,
+				it'll be queued for resolution and auto-linked to this session once resolved.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>

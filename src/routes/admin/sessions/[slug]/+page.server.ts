@@ -30,6 +30,16 @@ const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'men
 const attendanceStatuses = new Set(['attending', 'not_attending', 'maybe', 'attended']);
 const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
 
+function rejectStaleSession(data: FormData, updatedAt: string) {
+	const expectedUpdatedAt = data.get('expectedUpdatedAt')?.toString();
+	if (expectedUpdatedAt === updatedAt) return null;
+
+	return fail(409, {
+		error: 'This session changed after the form was loaded. Reload the page and try again.',
+		staleSession: true
+	});
+}
+
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
 }
@@ -210,6 +220,9 @@ export const actions: Actions = {
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
+		const staleFailure = rejectStaleSession(data, row.updatedAt);
+		if (staleFailure) return staleFailure;
+
 		const title = data.get('title')?.toString()?.trim();
 		if (!title || title.length < 2)
 			return fail(400, { error: 'Title must be at least 2 characters.' });
@@ -238,7 +251,6 @@ export const actions: Actions = {
 		const updatedSession = {
 			...row,
 			title,
-			status: getSessionStatus(data),
 			themeId: sessionTheme.themeId,
 			theme: themeTitle,
 			themeTitle,
@@ -268,7 +280,6 @@ export const actions: Actions = {
 			.update(sessions)
 			.set({
 				title: updatedSession.title,
-				status: updatedSession.status,
 				themeId: updatedSession.themeId,
 				theme: updatedSession.theme,
 				themeTitle: updatedSession.themeTitle,
@@ -286,14 +297,84 @@ export const actions: Actions = {
 			})
 			.where(eq(sessions.id, row.id));
 
-		if (row.status !== 'current' && updatedSession.status === 'current') {
+		return { updated: true };
+	},
+
+	updateStatus: async ({ request, params, locals, platform }) => {
+		requirePermission(locals, 'sessions:edit');
+
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const staleFailure = rejectStaleSession(data, row.updatedAt);
+		if (staleFailure) return staleFailure;
+
+		const requestedStatus = data.get('status')?.toString();
+		if (!sessionStatuses.has(requestedStatus ?? '')) {
+			return fail(400, { error: 'Choose a valid session status.' });
+		}
+		const status = requestedStatus as 'draft' | 'current' | 'past';
+
+		const rsvpDb = platform?.env.RSVP_DB;
+		if (!rsvpDb) {
+			return fail(500, { error: 'RSVP database binding is not configured.' });
+		}
+
+		const allSessions =
+			status === 'current' ? await locals.db.select().from(sessions).all() : [row];
+		const statusChanges = allSessions
+			.map((session) => {
+				if (session.id === row.id) return { session, status };
+				const isEarlier = !!row.startsAt && !!session.startsAt && session.startsAt < row.startsAt;
+				if (session.status === 'current' || (isEarlier && session.status !== 'past')) {
+					return { session, status: 'past' as const };
+				}
+				return null;
+			})
+			.filter((change): change is NonNullable<typeof change> => change !== null)
+			.filter((change) => change.session.status !== change.status);
+
+		if (statusChanges.length === 0) {
+			return { statusUpdated: true, promotedPreviousCount: 0 };
+		}
+
+		for (const change of statusChanges) {
+			const rsvpEvent = await upsertRsvpEvent({
+				db: rsvpDb,
+				session: { ...change.session, status: change.status }
+			});
+			if (!rsvpEvent) {
+				return fail(400, {
+					error: `The RSVP event for ${change.session.title} could not be synced.`
+				});
+			}
+		}
+
+		const updatedAt = new Date().toISOString();
+		const statusUpdates = statusChanges.map((change) =>
+			locals.db
+				.update(sessions)
+				.set({ status: change.status, updatedAt })
+				.where(eq(sessions.id, change.session.id))
+		);
+		await locals.db.batch(
+			statusUpdates as [(typeof statusUpdates)[number], ...(typeof statusUpdates)[number][]]
+		);
+
+		if (row.status !== 'current' && status === 'current') {
 			const primaryThread = await getPrimaryThreadForSession(locals.db, row.id);
 			if (primaryThread) {
 				await subscribeActiveMembersToSessionThread(locals.db, primaryThread.id);
 			}
 		}
 
-		return { updated: true };
+		return {
+			statusUpdated: true,
+			promotedPreviousCount: statusChanges.filter(
+				(change) => change.session.id !== row.id && change.status === 'past'
+			).length
+		};
 	},
 
 	createTheme: async ({ request, locals }) => {

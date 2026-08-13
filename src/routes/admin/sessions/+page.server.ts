@@ -6,10 +6,7 @@ import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
 import { renderMarkdown } from '$lib/server/markdown';
-import {
-	createPrimarySessionThread,
-	subscribeActiveMembersToSessionThread
-} from '$lib/server/discussions';
+import { createPrimarySessionThread } from '$lib/server/discussions';
 import {
 	DEFAULT_TIMEZONE,
 	getOrCreateNotificationPreferences,
@@ -55,6 +52,11 @@ export const actions: Actions = {
 		const slug = slugify(getOptionalString(data, 'slug') ?? title);
 		const rsvpSlug = getOptionalString(data, 'rsvpSlug') ?? slug;
 		const status = getSessionStatus(data);
+		if (status === 'current') {
+			return fail(400, {
+				error: 'Create the session as a draft, then promote it from its session page.'
+			});
+		}
 		const startsAt = getOptionalString(data, 'startsAt');
 		const timezone = getOptionalString(data, 'timezone') ?? DEFAULT_TIMEZONE;
 		if (!isValidTimezone(timezone)) {
@@ -124,10 +126,6 @@ export const actions: Actions = {
 				mode: prefs.defaultSubMode
 			});
 		}
-		if (status === 'current') {
-			await subscribeActiveMembersToSessionThread(locals.db, primaryThread.id);
-		}
-
 		return { created: true };
 	},
 

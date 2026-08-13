@@ -113,7 +113,6 @@
 							<Label for="create-status">Status</Label>
 							<NativeSelect id="create-status" name="status" value="draft">
 								<NativeSelectOption value="draft">draft</NativeSelectOption>
-								<NativeSelectOption value="current">current</NativeSelectOption>
 								<NativeSelectOption value="past">past</NativeSelectOption>
 							</NativeSelect>
 						</div>
