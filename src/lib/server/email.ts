@@ -1,4 +1,9 @@
-import { APP_NAME, APP_SUBTITLE, NOTIFICATION_FROM_ADDRESS } from '$shared/brand';
+import {
+	APP_NAME,
+	APP_SUBTITLE,
+	NOTIFICATION_FROM_ADDRESS,
+	NOTIFICATION_FROM_NAME
+} from '$shared/brand';
 
 interface EmailOptions {
 	to: string;
@@ -8,7 +13,7 @@ interface EmailOptions {
 }
 
 const FROM_ADDRESS = NOTIFICATION_FROM_ADDRESS;
-const FROM_NAME = 'Bermuda Triangle Society';
+const FROM_NAME = NOTIFICATION_FROM_NAME;
 
 /**
  * Send an email using the Cloudflare Email Sending Workers API.

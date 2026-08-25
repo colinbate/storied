@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -16,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Signing in… — The Archive</title>
+	<title>{pageTitle('Signing in…')}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

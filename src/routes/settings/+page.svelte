@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_SHORT_NAME, pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -133,7 +134,7 @@
 </script>
 
 <svelte:head>
-	<title>Settings — The Archive</title>
+	<title>{pageTitle('Settings')}</title>
 </svelte:head>
 
 <div class="max-w-2xl space-y-6">
@@ -219,8 +220,8 @@
 				class="space-y-4"
 			>
 				<div class="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-					These fields are for your archive profile. Adding values here creates a public member
-					profile, unless you turn off profile visibility below.
+					These fields are for your {APP_SHORT_NAME.toLowerCase()} profile. Adding values here creates
+					a public member profile, unless you turn off profile visibility below.
 				</div>
 				<div class="space-y-2">
 					<Label for="headline">Title or Headline</Label>

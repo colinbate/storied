@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { APP_NAME } from '$shared/brand';
 	import TriangleIcon from '@lucide/svelte/icons/triangle';
 
 	let {
@@ -16,8 +17,8 @@
 	{#if recognized}
 		<span
 			class="inline-flex shrink-0 text-primary"
-			title="Recognized by the Archive · Access I"
-			aria-label="Recognized by the Archive, access level one"
+			title={`Recognized by ${APP_NAME} · Access I`}
+			aria-label={`Recognized by ${APP_NAME}, access level one`}
 		>
 			<TriangleIcon class="size-2.5 fill-current stroke-[1.5]" />
 		</span>

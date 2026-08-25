@@ -1,4 +1,11 @@
 <script lang="ts">
+	import {
+		APP_NAME,
+		APP_SHORT_NAME,
+		ORGANIZATION_NAME,
+		pageTitle,
+		RESTRICTED_ACCESS_LABEL
+	} from '$shared/brand';
 	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -10,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Restricted Catalog — The Archive</title>
+	<title>{pageTitle('Restricted Catalog')}</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
@@ -19,7 +26,7 @@
 		<header class="border-b border-foreground/20 pb-8 text-center">
 			<TriangleIcon class="mx-auto mb-5 h-8 w-8 fill-foreground stroke-[1.25]" />
 			<p class="font-mono text-xs tracking-[0.3em] text-muted-foreground uppercase">
-				Bermuda Triangle Society · Archive Access I
+				{ORGANIZATION_NAME} · {RESTRICTED_ACCESS_LABEL}
 			</p>
 			<h1 class="mt-5 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
 				Restricted Catalog
@@ -27,9 +34,9 @@
 		</header>
 
 		<section class="space-y-5 py-10 text-lg leading-8">
-			<p>If you are reading this, the Archive has accepted your application.</p>
+			<p>If you are reading this, {APP_NAME} has accepted your application.</p>
 			<p>
-				The public believes the Bermuda Triangle Society is a book club.<br />
+				The public believes {ORGANIZATION_NAME} is a book club.<br />
 				<strong>Please continue allowing them to believe that.</strong>
 			</p>
 			<p>
@@ -63,7 +70,7 @@
 			</div>
 			<p class="text-sm text-muted-foreground">
 				This terminal contains only the first layer of the catalog. Further records require a higher
-				designation. The Archive does not publish the requirements for advancement.
+				designation. {APP_NAME} does not publish the requirements for advancement.
 			</p>
 		</section>
 
@@ -71,12 +78,14 @@
 			<section class="rounded-lg border bg-muted/30 p-6 text-center">
 				<p class="font-medium">Recognition has not been attached to an identity.</p>
 				<p class="mt-2 text-sm text-muted-foreground">
-					Identify yourself within 30 days to preserve this clearance in the Archive.
+					Identify yourself within 30 days to preserve this clearance in {APP_NAME}.
 				</p>
 				<Button class="mt-5" href="/auth/login?redirect=/restricted">Identify yourself</Button>
 			</section>
 		{:else if data.newlyClaimed}
-			<p class="text-center text-sm text-muted-foreground">Your Archive record has been amended.</p>
+			<p class="text-center text-sm text-muted-foreground">
+				Your {APP_SHORT_NAME} record has been amended.
+			</p>
 		{/if}
 	</article>
 {:else}

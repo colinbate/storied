@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import LibraryList from '$lib/components/library-list.svelte';
 
 	let { data } = $props();
 </script>
 
 <svelte:head>
-	<title>Series — The Archive</title>
+	<title>{pageTitle('Series')}</title>
 </svelte:head>
 
 <LibraryList

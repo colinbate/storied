@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { resolve } from '$app/paths';
@@ -120,7 +121,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.session.title} — The Archive</title>
+	<title>{pageTitle(data.session.title)}</title>
 </svelte:head>
 
 <div class="space-y-8">

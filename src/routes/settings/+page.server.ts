@@ -19,7 +19,7 @@ import {
 } from '$lib/server/notification-preferences';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
-import { PRIMARY_ORIGIN } from '$shared/brand';
+import { APP_NAME, PRIMARY_ORIGIN } from '$shared/brand';
 
 type NotificationMode = 'off' | 'immediate' | 'daily_digest';
 type DefaultSubMode = 'immediate' | 'daily_digest';
@@ -565,10 +565,10 @@ export const actions: Actions = {
 			userId: locals.user.id,
 			userKey: preferences.pushoverUserKey,
 			device: preferences.pushoverDevice,
-			title: 'Welcome to the Archive',
+			title: `Welcome to ${APP_NAME}`,
 			message: `Hello ${locals.user.displayName}. Pushover notifications are connected.`,
 			url: PRIMARY_ORIGIN,
-			urlTitle: 'Open the Archive',
+			urlTitle: `Open ${APP_NAME}`,
 			priority: 0,
 			eventType: 'pushover_test'
 		});

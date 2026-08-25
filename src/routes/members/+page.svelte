@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { resolve } from '$app/paths';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -10,7 +11,7 @@
 </script>
 
 <svelte:head>
-	<title>Members — The Archive</title>
+	<title>{pageTitle('Members')}</title>
 </svelte:head>
 
 <div class="space-y-8">

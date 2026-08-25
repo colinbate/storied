@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
@@ -22,7 +23,7 @@
 </script>
 
 <svelte:head>
-	<title>Moderation — Admin — The Archive</title>
+	<title>{pageTitle('Moderation — Admin')}</title>
 </svelte:head>
 
 <div class="space-y-8">

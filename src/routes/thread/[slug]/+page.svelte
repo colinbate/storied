@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -322,7 +323,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.thread.title} — The Archive</title>
+	<title>{pageTitle(data.thread.title)}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-6 lg:flex-row">

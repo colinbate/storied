@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import UsersIcon from '@lucide/svelte/icons/users';
@@ -47,7 +48,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin Dashboard — The Archive</title>
+	<title>{pageTitle('Admin Dashboard')}</title>
 </svelte:head>
 
 <div class="space-y-6">

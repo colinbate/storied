@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -37,7 +38,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.book.title} — The Archive</title>
+	<title>{pageTitle(data.book.title)}</title>
 </svelte:head>
 
 <div class="space-y-6">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { tick } from 'svelte';
@@ -67,7 +68,7 @@
 </script>
 
 <svelte:head>
-	<title>Authors — Admin — The Archive</title>
+	<title>{pageTitle('Authors — Admin')}</title>
 </svelte:head>
 
 <div class="space-y-6">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -32,7 +33,7 @@
 </script>
 
 <svelte:head>
-	<title>Messages with {data.otherMember.displayName} — The Archive</title>
+	<title>{pageTitle(`Messages with ${data.otherMember.displayName}`)}</title>
 </svelte:head>
 
 <div class="space-y-6">

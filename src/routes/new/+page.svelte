@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -22,7 +23,7 @@
 </script>
 
 <svelte:head>
-	<title>New Thread — The Archive</title>
+	<title>{pageTitle('New Thread')}</title>
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl space-y-6">

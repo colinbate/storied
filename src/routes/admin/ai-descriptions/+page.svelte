@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -56,7 +57,7 @@ ${candidates
 </script>
 
 <svelte:head>
-	<title>AI Descriptions — Admin — The Archive</title>
+	<title>{pageTitle('AI Descriptions — Admin')}</title>
 </svelte:head>
 
 <div class="space-y-6">

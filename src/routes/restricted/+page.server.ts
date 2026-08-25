@@ -8,6 +8,7 @@ import {
 	RESTRICTED_CATALOG_ACHIEVEMENT
 } from '$lib/server/achievements';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
+import { APP_SHORT_NAME } from '$shared/brand';
 
 const CLAIM_COOKIE = 'storied-restricted-catalog';
 const CLAIM_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -72,8 +73,8 @@ async function notifyAdmins(
 					device: recipient.device,
 					title: 'Restricted catalog accessed',
 					message: memberName
-						? `${memberName} reached Archive access level one.`
-						: 'An unidentified visitor reached Archive access level one.',
+						? `${memberName} reached ${APP_SHORT_NAME} access level one.`
+						: `An unidentified visitor reached ${APP_SHORT_NAME} access level one.`,
 					url: url.toString(),
 					urlTitle: 'Open restricted catalog',
 					eventType: 'achievement'
