@@ -1073,6 +1073,104 @@ nav a:focus-visible,
 	line-height: 1.75;
 }
 
+.contact-section {
+	padding: 112px max(48px, calc((100% - 1120px) / 2));
+	background: var(--purple-pale);
+}
+
+.contact-inner {
+	display: grid;
+	grid-template-columns: minmax(0, 0.8fr) minmax(460px, 1.2fr);
+	align-items: center;
+	gap: 100px;
+}
+
+.contact-copy h2 {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: clamp(48px, 5vw, 68px);
+	font-weight: 500;
+	letter-spacing: -0.055em;
+	line-height: 0.97;
+}
+
+.contact-copy h2 em {
+	color: var(--purple);
+	font-weight: 400;
+}
+
+.contact-copy > p:not(.eyebrow) {
+	max-width: 470px;
+	margin: 25px 0 0;
+	color: var(--ink-soft);
+	font-family: var(--serif);
+	font-size: 17px;
+}
+
+.contact-options {
+	border-top: 1px solid rgba(32, 26, 40, 0.2);
+}
+
+.contact-option {
+	display: grid;
+	grid-template-columns: 34px 1fr auto;
+	align-items: center;
+	gap: 14px;
+	min-height: 94px;
+	padding: 18px 20px;
+	border-bottom: 1px solid rgba(32, 26, 40, 0.2);
+	transition:
+		padding 180ms ease,
+		background 180ms ease;
+}
+
+a.contact-option:hover {
+	padding-right: 14px;
+	padding-left: 26px;
+	background: rgba(255, 253, 248, 0.55);
+}
+
+.contact-option:focus-visible {
+	position: relative;
+	outline: 3px solid var(--gold);
+	outline-offset: 3px;
+}
+
+.contact-number {
+	color: var(--purple);
+	font-family: var(--serif);
+	font-size: 11px;
+	font-style: italic;
+}
+
+.contact-details strong,
+.contact-details small {
+	display: block;
+}
+
+.contact-details strong {
+	font-family: var(--serif);
+	font-size: 20px;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+}
+
+.contact-details small {
+	margin-top: 2px;
+	color: var(--ink-soft);
+	font-size: 10px;
+}
+
+.contact-option > svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: var(--purple);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.8;
+}
+
 .cta-section {
 	display: flex;
 	flex-direction: column;
@@ -1178,6 +1276,11 @@ footer > p {
 
 	.stack-section {
 		grid-template-columns: 1fr;
+	}
+
+	.contact-inner {
+		grid-template-columns: 1fr;
+		gap: 60px;
 	}
 
 	.code-panel {
@@ -1310,6 +1413,28 @@ footer > p {
 	.stack-section {
 		gap: 65px;
 		padding: 88px 16px;
+	}
+
+	.contact-section {
+		padding: 84px 16px;
+	}
+
+	.contact-inner {
+		gap: 48px;
+	}
+
+	.contact-copy h2 {
+		font-size: clamp(44px, 13vw, 58px);
+	}
+
+	.contact-option {
+		grid-template-columns: 28px 1fr auto;
+		padding: 16px 8px;
+	}
+
+	a.contact-option:hover {
+		padding-right: 4px;
+		padding-left: 12px;
 	}
 
 	.code-body {

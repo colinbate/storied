@@ -29,3 +29,6 @@ private
 src/routes/admin/debug
 pnpm-workspace.yaml
 .dev.vars
+
+# Local project notes
+/PROJECT_CONTEXT.local.md

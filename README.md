@@ -20,7 +20,7 @@ This is not a hosted SaaS or a one-click install—at least not yet. Storied is 
 ## What Storied does
 
 - **Thoughtful discussions.** Start threaded conversations, write in Markdown, mention other readers, attach images, and return to ideas later through search.
-- **Reading sessions.** Schedule upcoming reads or meetings, organize them around themes, collect RSVPs, and keep the main discussion connected to the session.
+- **Reading sessions.** Schedule upcoming reads or meetings, organize them around themes, collect RSVPs, and keep the main discussion connected to the session. It is worth noting that Storied was built around a theme-based club, not one that assigns specific books.
 - **A library with context.** Browse books, authors, series, and genres alongside the club history and conversations connected to them.
 - **A quieter community space.** Member profiles, private messages, notifications, and moderation tools support a focused, small-group experience.
 - **Reader-friendly choices.** Responsive layouts, dark mode, timezone-aware dates, and an optional OpenDyslexic typeface help members read comfortably.
@@ -80,7 +80,7 @@ pnpm launch:worker      # Run the companion Worker locally
 
 ## Project status
 
-Storied grew out of a real book-club installation called **The Archive**. The product is being separated from that first deployment, but some names, copy, domains, and Cloudflare resource identifiers are still specific to it. Treat the current repository as a working reference implementation rather than a generic installer.
+Storied grew out of a real book-club installation called **The Archive**, part of the [Bermuda Triangle Society](https://bermudatrianglesociety.com) book club. The product is being separated from that first deployment, but some names, copy, domains, and Cloudflare resource identifiers are still specific to it. Treat the current repository as a working reference implementation rather than a generic installer.
 
 Page titles, notification sender names, and other reusable identity strings read from `shared/brand.ts`. Files that run before the application or define Cloudflare infrastructure cannot import that module, so they still need a manual pass for each installation.
 
@@ -118,6 +118,12 @@ marketing/                 Separately hosted, framework-free marketing page
 ## AI-assisted development
 
 A substantial portion of the Storied codebase was developed with assistance from ChatGPT using OpenAI's GPT-5.5 and GPT-5.6 models. The resulting code has been reviewed, adapted, and maintained as part of the project rather than accepted as unreviewed generated output.
+
+## Contact and community
+
+- For private questions about setting up or adapting Storied, email [storied@bate.dev](mailto:storied@bate.dev).
+- For bugs and concrete fixes, [open a GitHub issue](https://github.com/colinbate/storied/issues/new).
+- For broader ideas, questions, and collaboration, [start or join a GitHub Discussion](https://github.com/colinbate/storied/discussions).
 
 ## License
 
