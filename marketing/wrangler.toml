@@ -1,0 +1,10 @@
+name = "story-marketing"
+compatibility_date = "2026-08-26"
+workers_dev = false
+
+[assets]
+directory = "./public"
+
+[[routes]]
+pattern = "storied.bate.dev"
+custom_domain = true
