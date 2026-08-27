@@ -60,6 +60,7 @@ export async function handleThreadReplyFanout(
 	if (!author) return;
 	const replyPreview = post.body_source.substring(0, 200);
 	const pushoverPreview = post.body_source.substring(0, 400);
+	const postUrl = `${baseUrl}/thread/${thread.slug}#post-${post.id}`;
 
 	// Respect per-user email_enabled. Users who haven't set a preferences row
 	// yet (LEFT JOIN returning NULL) are treated as enabled (matching the
@@ -166,8 +167,8 @@ export async function handleThreadReplyFanout(
 		await queuePushoverForRecipients(env, mentionRecipients.filter(hasPushoverKey), {
 			title: `Mention: ${thread.title}`,
 			message: `${author.display_name} mentioned you: ${pushoverPreview}`,
-			url: `${baseUrl}/thread/${thread.slug}`,
-			urlTitle: 'Open thread',
+			url: postUrl,
+			urlTitle: 'Open reply',
 			priority: 0,
 			eventType: 'mention',
 			threadId,
@@ -178,8 +179,8 @@ export async function handleThreadReplyFanout(
 	await queuePushoverForRecipients(env, replyPushoverRecipients, {
 		title: `New reply: ${thread.title}`,
 		message: `${author.display_name} replied: ${pushoverPreview}`,
-		url: `${baseUrl}/thread/${thread.slug}`,
-		urlTitle: 'Open thread',
+		url: postUrl,
+		urlTitle: 'Open reply',
 		priority: 0,
 		eventType: 'reply',
 		threadId,

@@ -632,7 +632,7 @@
 					<Card.Root
 						id="post-{post.id}"
 						class={cn(
-							'target:border-2 target:border-primary',
+							'scroll-mt-20 target:border-2 target:border-primary',
 							replyingTo === post.id && 'border-2 border-primary bg-primary/5'
 						)}
 					>
