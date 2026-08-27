@@ -25,17 +25,17 @@ import {
 	isSessionDiscussionsCategory
 } from '$lib/server/discussions';
 import { readPostImage, removePostImage, uploadPostImage } from '$lib/server/post-images';
+import { canAssignGroup, listAssignableGroups, threadViewer } from '$lib/server/thread-access';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const allCategories = await locals.db
-		.select()
-		.from(categories)
-		.orderBy(asc(categories.sortOrder))
-		.all();
+	const [allCategories, audienceGroups] = await Promise.all([
+		locals.db.select().from(categories).orderBy(asc(categories.sortOrder)).all(),
+		listAssignableGroups(locals.db, threadViewer(locals))
+	]);
 
 	const canPostAnnouncements = locals.permissions.has('moderate');
 	const availableCategories = allCategories.filter((category) => {
@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		categories: availableCategories,
+		audienceGroups,
 		preselectedCategory,
 		announcementCategoryId: ANNOUNCEMENTS_CATEGORY_ID,
 		canPostAnnouncements
@@ -64,6 +65,7 @@ export const actions: Actions = {
 		const title = data.get('title')?.toString()?.trim();
 		const bodySource = data.get('body')?.toString()?.trim();
 		const categoryId = data.get('categoryId')?.toString();
+		const audienceGroupId = data.get('audienceGroupId')?.toString() || null;
 		const notifyAllMembersByEmail = data.get('notifyAllMembersByEmail') === 'on';
 		const imageInput = readPostImage(data);
 
@@ -81,7 +83,8 @@ export const actions: Actions = {
 				error: 'Title must be between 3 and 200 characters.',
 				title,
 				body: bodySource,
-				categoryId
+				categoryId,
+				audienceGroupId
 			});
 		}
 		if (!bodySource || bodySource.length < 1) {
@@ -98,6 +101,27 @@ export const actions: Actions = {
 				title,
 				body: bodySource,
 				categoryId
+			});
+		}
+		if (
+			audienceGroupId &&
+			!(await canAssignGroup(locals.db, threadViewer(locals), audienceGroupId))
+		) {
+			return fail(403, {
+				error: 'You cannot create a thread for that group.',
+				title,
+				body: bodySource,
+				categoryId,
+				audienceGroupId
+			});
+		}
+		if (audienceGroupId && notifyAllMembersByEmail) {
+			return fail(400, {
+				error: 'Group threads cannot be emailed to all members.',
+				title,
+				body: bodySource,
+				categoryId,
+				audienceGroupId
 			});
 		}
 
@@ -136,7 +160,7 @@ export const actions: Actions = {
 		}
 
 		const bodyHtml = renderMarkdown(bodySource, {
-			mentionableUsers: await listActiveMentionableUsers(locals.db)
+			mentionableUsers: await listActiveMentionableUsers(locals.db, audienceGroupId)
 		});
 		const slug = await createUniqueThreadSlug(locals.db, title);
 		const threadId = newId();
@@ -166,6 +190,7 @@ export const actions: Actions = {
 				id: threadId,
 				categoryId,
 				authorUserId: locals.user.id,
+				audienceGroupId,
 				title,
 				slug,
 				bodySource,

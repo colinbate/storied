@@ -5,6 +5,12 @@ import { authors, books, sessions, series } from '$lib/server/db/schema';
 import { and, inArray, isNull } from 'drizzle-orm';
 import type { SubjectType } from '$shared/worker-messages';
 import { mapThreadListSqlRow, type ThreadListSqlRow } from '$lib/server/discussions';
+import {
+	threadAccessBindings,
+	threadAccessSql,
+	threadViewer,
+	type ThreadViewer
+} from '$lib/server/thread-access';
 
 const RESULT_LIMIT = 8;
 
@@ -24,20 +30,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	const [threadCandidates, sessionCandidates, subjectCandidates] = await Promise.all([
-		searchThreads(locals.db.$client, q, RESULT_LIMIT),
+		// Fetch extra candidates because group filtering happens during hydration.
+		searchThreads(locals.db.$client, q, RESULT_LIMIT * 5),
 		searchSessions(locals.db.$client, q, RESULT_LIMIT),
 		searchSubjects(locals.db.$client, q, RESULT_LIMIT + 4)
 	]);
 
 	const [threadResults, sessionResults, subjectResults] = await Promise.all([
-		loadThreadResults(locals.db, threadCandidates, locals.permissions.has('admin:view')),
+		loadThreadResults(locals.db, threadCandidates, threadViewer(locals)),
 		loadSessionResults(locals.db, sessionCandidates),
 		loadSubjectResults(locals.db, subjectCandidates)
 	]);
 
 	return {
 		q,
-		threads: threadResults,
+		threads: threadResults.slice(0, RESULT_LIMIT),
 		sessions: sessionResults,
 		subjects: subjectResults
 	};
@@ -46,7 +53,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 async function loadThreadResults(
 	db: App.Locals['db'],
 	candidates: { id: string; rank: number }[],
-	isAdmin: boolean
+	viewer: ThreadViewer
 ) {
 	if (candidates.length === 0) return [];
 
@@ -73,7 +80,7 @@ async function loadThreadResults(
 				FROM candidate_threads
 				INNER JOIN threads t ON t.id = candidate_threads.id
 				WHERE t.deleted_at IS NULL
-					AND (? = 1 OR t.visibility <> 'admins')
+					AND ${threadAccessSql('t')}
 			)
 			SELECT
 				t.id AS threadId,
@@ -120,7 +127,7 @@ async function loadThreadResults(
 			INNER JOIN categories category ON category.id = t.category_id
 			ORDER BY t.position`
 		)
-		.bind(candidateJson, isAdmin ? 1 : 0)
+		.bind(candidateJson, ...threadAccessBindings(viewer))
 		.all<SearchThreadSqlRow>();
 
 	return rows.map((row) => ({

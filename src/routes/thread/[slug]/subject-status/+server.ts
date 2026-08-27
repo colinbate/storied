@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { subjectSources, threadSubjects, threads, type SubjectType } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { SubjectSourceType } from '$shared/worker-messages';
+import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
 type SupportedSourceType = Extract<
 	SubjectSourceType,
@@ -53,7 +54,13 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const thread = await locals.db
 		.select({ id: threads.id })
 		.from(threads)
-		.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+		.where(
+			and(
+				eq(threads.slug, params.slug),
+				isNull(threads.deletedAt),
+				threadAccessCondition(locals.db, threadViewer(locals))
+			)
+		)
 		.get();
 
 	if (!thread) throw error(404, 'Thread not found');

@@ -33,6 +33,7 @@
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import LoaderCircleIcon from '@lucide/svelte/icons/loader-circle';
 	import UserIcon from '@lucide/svelte/icons/user';
+	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -360,6 +361,13 @@
 								{data.thread.replyCount === 1 ? 'reply' : 'replies'}</span
 							>
 						{/if}
+						{#if data.audienceGroup}
+							<span>·</span>
+							<Badge variant="outline" class="gap-1 px-2 py-0 text-xs">
+								<UsersIcon class="h-3 w-3" />
+								{data.audienceGroup.name}
+							</Badge>
+						{/if}
 						{#if data.session}
 							<span>·</span>
 							<a href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
@@ -503,6 +511,39 @@
 											Manually linked session threads are treated as related conversations.
 										</p>
 									{/if}
+								{/if}
+								{#if data.canManageGroups}
+									<form
+										method="POST"
+										action="?/setAudienceGroup"
+										use:enhance={modEnhance('Thread audience updated.')}
+										class="inline-flex items-center gap-2"
+									>
+										<label
+											for="audience-select"
+											class="flex items-center gap-1 text-muted-foreground"
+										>
+											<UsersIcon class="h-4 w-4" />
+											Audience
+										</label>
+										<NativeSelect.Root
+											id="audience-select"
+											name="audienceGroupId"
+											onchange={(e) =>
+												(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit()}
+										>
+											<NativeSelect.Option value="" selected={!data.thread.audienceGroupId}
+												>All members</NativeSelect.Option
+											>
+											{#each data.allAudienceGroups as group (group.id)}
+												<NativeSelect.Option
+													value={group.id}
+													selected={data.thread.audienceGroupId === group.id}
+													>{group.name}{group.archivedAt ? ' (archived)' : ''}</NativeSelect.Option
+												>
+											{/each}
+										</NativeSelect.Root>
+									</form>
 								{/if}
 							</Popover.Content>
 						</Popover.Root>

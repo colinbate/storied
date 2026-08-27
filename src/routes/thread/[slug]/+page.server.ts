@@ -12,15 +12,18 @@ import {
 	sessionSubjects,
 	sessions,
 	moderationEvents,
+	groups,
 	type SubjectType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc, not } from 'drizzle-orm';
+import { eq, and, isNull, asc, not, or } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { listActiveMentionableUsers } from '$lib/server/mentions';
 import { createThreadReply } from '$lib/server/thread-replies';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
+import { canAssignGroup, threadAccessCondition, threadViewer } from '$lib/server/thread-access';
+import { publishWorkerMessage } from '$lib/server/worker-queue';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -50,11 +53,19 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 				id: users.id,
 				displayName: users.displayName,
 				avatarUrl: users.avatarUrl
-			}
+			},
+			audienceGroup: { id: groups.id, name: groups.name }
 		})
 		.from(threads)
 		.innerJoin(users, eq(threads.authorUserId, users.id))
-		.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+		.leftJoin(groups, eq(threads.audienceGroupId, groups.id))
+		.where(
+			and(
+				eq(threads.slug, params.slug),
+				isNull(threads.deletedAt),
+				threadAccessCondition(locals.db, threadViewer(locals))
+			)
+		)
 		.get();
 
 	if (!thread) {
@@ -209,7 +220,9 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 
 	const canModerate = locals.permissions.has('moderate');
 	const canPromoteBooks = locals.permissions.has('book:promote');
+	const canManageGroups = locals.permissions.has('groups:edit');
 	let allSessions: { id: string; title: string }[] = [];
+	let allAudienceGroups: { id: string; name: string; archivedAt: string | null }[] = [];
 	if (canModerate) {
 		allSessions = await locals.db
 			.select({ id: sessions.id, title: sessions.title })
@@ -217,10 +230,24 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 			.orderBy(asc(sessions.title))
 			.all();
 	}
+	if (canManageGroups) {
+		allAudienceGroups = await locals.db
+			.select({ id: groups.id, name: groups.name, archivedAt: groups.archivedAt })
+			.from(groups)
+			.where(
+				or(
+					isNull(groups.archivedAt),
+					thread.thread.audienceGroupId ? eq(groups.id, thread.thread.audienceGroupId) : undefined
+				)
+			)
+			.orderBy(asc(groups.name))
+			.all();
+	}
 
 	return {
 		thread: thread.thread,
 		author: thread.author,
+		audienceGroup: thread.audienceGroup,
 		posts: threadPosts,
 		isSubscribed: !!subscription,
 		subscriptionMode: (subscription?.mode ?? 'none') as
@@ -237,7 +264,9 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 		session,
 		canModerate,
 		canPromoteBooks,
+		canManageGroups,
 		allSessions,
+		allAudienceGroups,
 		postEditWindowMs: POST_EDIT_WINDOW_MS,
 		fileBaseUrl: platform?.env.FILE_BASE_URL ?? ''
 	};
@@ -265,7 +294,13 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.where(
+				and(
+					eq(threads.slug, params.slug),
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
+				)
+			)
 			.get();
 
 		if (!thread) {
@@ -313,7 +348,9 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(eq(threads.slug, params.slug))
+			.where(
+				and(eq(threads.slug, params.slug), threadAccessCondition(locals.db, threadViewer(locals)))
+			)
 			.get();
 
 		if (!thread) {
@@ -431,6 +468,46 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
+	setAudienceGroup: async ({ request, locals, params, platform }) => {
+		if (!locals.permissions.has('groups:edit')) {
+			return fail(403, { error: 'Not allowed.' });
+		}
+		if (!locals.user) return fail(401, { error: 'Missing current user.' });
+
+		const data = await request.formData();
+		const audienceGroupId = data.get('audienceGroupId')?.toString() || null;
+		if (
+			audienceGroupId &&
+			!(await canAssignGroup(locals.db, threadViewer(locals), audienceGroupId))
+		) {
+			return fail(400, { error: 'That group is unavailable.' });
+		}
+
+		const now = new Date().toISOString();
+		const updated = await locals.db
+			.update(threads)
+			.set({ audienceGroupId, updatedAt: now })
+			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.returning({ id: threads.id, sessionId: threads.sessionId });
+		if (!updated.length) return fail(404, { error: 'Thread not found.' });
+
+		await locals.db.insert(moderationEvents).values({
+			id: newId(),
+			actorUserId: locals.user.id,
+			targetType: 'thread',
+			targetId: updated[0].id,
+			action: 'audience_update',
+			reason: audienceGroupId ?? 'all_members'
+		});
+		if (updated[0].sessionId) {
+			await publishWorkerMessage(platform?.env.STORIED_WORKER, 'search.session.reindex', {
+				sessionId: updated[0].sessionId
+			});
+		}
+
+		return { audienceUpdated: true };
+	},
+
 	promoteSessionSubject: async ({ request, locals, params }) => {
 		if (!locals.permissions.has('book:promote')) {
 			return fail(403, { error: 'Not allowed.' });
@@ -447,7 +524,13 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.where(
+				and(
+					eq(threads.slug, params.slug),
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
+				)
+			)
 			.get();
 		if (!thread) throw error(404, 'Thread not found');
 		if (!thread.sessionId) return fail(400, { error: 'This thread is not linked to a session.' });
@@ -517,7 +600,13 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.where(
+				and(
+					eq(threads.slug, params.slug),
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
+				)
+			)
 			.get();
 		if (!thread) throw error(404, 'Thread not found');
 		if (!thread.sessionId) return fail(400, { error: 'This thread is not linked to a session.' });
@@ -620,7 +709,13 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(and(eq(threads.slug, params.slug), isNull(threads.deletedAt)))
+			.where(
+				and(
+					eq(threads.slug, params.slug),
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
+				)
+			)
 			.get();
 		if (!thread) throw error(404, 'Thread not found');
 
@@ -629,7 +724,7 @@ export const actions: Actions = {
 		}
 
 		const bodyHtml = renderMarkdown(body, {
-			mentionableUsers: await listActiveMentionableUsers(locals.db)
+			mentionableUsers: await listActiveMentionableUsers(locals.db, thread.audienceGroupId)
 		});
 		const now = new Date().toISOString();
 		await locals.db
@@ -657,7 +752,9 @@ export const actions: Actions = {
 		const thread = await locals.db
 			.select()
 			.from(threads)
-			.where(eq(threads.id, post.threadId))
+			.where(
+				and(eq(threads.id, post.threadId), threadAccessCondition(locals.db, threadViewer(locals)))
+			)
 			.get();
 		if (!thread || thread.slug !== params.slug) return fail(404, { error: 'Post not found.' });
 
@@ -666,7 +763,7 @@ export const actions: Actions = {
 		}
 
 		const bodyHtml = renderMarkdown(body, {
-			mentionableUsers: await listActiveMentionableUsers(locals.db)
+			mentionableUsers: await listActiveMentionableUsers(locals.db, thread.audienceGroupId)
 		});
 		const now = new Date().toISOString();
 		await locals.db

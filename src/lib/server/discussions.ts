@@ -134,6 +134,13 @@ export async function subscribeUserToPrimaryCurrentSessionThreads(db: ORM, userI
 		INNER JOIN sessions se ON se.id = t.session_id
 		WHERE t.session_thread_role = 'primary'
 			AND t.deleted_at IS NULL
+			AND (
+				t.audience_group_id IS NULL
+				OR EXISTS (
+					SELECT 1 FROM group_memberships gm
+					WHERE gm.group_id = t.audience_group_id AND gm.user_id = ${userId}
+				)
+			)
 			AND se.status = 'current'
 	`);
 }
@@ -151,6 +158,7 @@ export type ThreadListSqlRow = {
 	threadAuthorUserId: string;
 	threadSessionId: string | null;
 	threadSessionThreadRole: string | null;
+	threadAudienceGroupId?: string | null;
 	threadTitle: string;
 	threadSlug: string;
 	threadBodySource: string;
@@ -177,6 +185,7 @@ export function mapThreadListSqlRow(row: ThreadListSqlRow) {
 			authorUserId: row.threadAuthorUserId,
 			sessionId: row.threadSessionId,
 			sessionThreadRole: row.threadSessionThreadRole,
+			audienceGroupId: row.threadAudienceGroupId ?? null,
 			title: row.threadTitle,
 			slug: row.threadSlug,
 			bodySource: row.threadBodySource,

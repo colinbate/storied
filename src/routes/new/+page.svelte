@@ -18,6 +18,9 @@
 			data.categories.find((category) => category.slug === data.preselectedCategory)?.id ??
 			''
 	);
+	let audienceGroupId = $derived(
+		form && 'audienceGroupId' in form ? String(form.audienceGroupId ?? '') : ''
+	);
 
 	const showAnnouncementBroadcast = $derived(categoryId === data.announcementCategoryId);
 </script>
@@ -63,6 +66,23 @@
 						{/each}
 					</NativeSelect>
 				</div>
+
+				{#if data.audienceGroups.length > 0}
+					<div class="space-y-2">
+						<Label for="audienceGroupId">Audience</Label>
+						<NativeSelect id="audienceGroupId" name="audienceGroupId" bind:value={audienceGroupId}>
+							<NativeSelectOption value="">All members</NativeSelectOption>
+							{#each data.audienceGroups as group (group.id)}
+								<NativeSelectOption value={group.id} selected={audienceGroupId === group.id}
+									>{group.name}</NativeSelectOption
+								>
+							{/each}
+						</NativeSelect>
+						<p class="text-xs text-muted-foreground">
+							Group threads are visible only to that group's members and site moderators.
+						</p>
+					</div>
+				{/if}
 
 				<div class="space-y-2">
 					<Label for="title">Title</Label>

@@ -23,6 +23,12 @@
 			show: data.permissions.has('members:edit')
 		},
 		{
+			href: '/admin/groups',
+			label: 'Groups',
+			icon: UsersIcon,
+			show: data.permissions.has('groups:edit')
+		},
+		{
 			href: '/admin/moderation',
 			label: 'Moderation',
 			icon: ShieldIcon,

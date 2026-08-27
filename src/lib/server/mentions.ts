@@ -1,7 +1,7 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import type { ORM } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import { groupMemberships, users } from '$lib/server/db/schema';
 
 export type MentionableUser = {
 	id: string;
@@ -17,7 +17,20 @@ function isMentionBoundary(value: string | undefined) {
 	return value === undefined || !/[A-Za-z0-9._%+-]/.test(value);
 }
 
-export async function listActiveMentionableUsers(db: ORM): Promise<MentionableUser[]> {
+export async function listActiveMentionableUsers(
+	db: ORM,
+	audienceGroupId?: string | null
+): Promise<MentionableUser[]> {
+	if (audienceGroupId) {
+		return db
+			.select({ id: users.id, email: users.email, displayName: users.displayName })
+			.from(users)
+			.innerJoin(groupMemberships, eq(groupMemberships.userId, users.id))
+			.where(and(eq(users.status, 'active'), eq(groupMemberships.groupId, audienceGroupId)))
+			.orderBy(asc(users.displayName))
+			.all();
+	}
+
 	return db
 		.select({
 			id: users.id,

@@ -20,6 +20,7 @@ This is not a hosted SaaS or a one-click install—at least not yet. Storied is 
 ## What Storied does
 
 - **Thoughtful discussions.** Start threaded conversations, write in Markdown, mention other readers, attach images, and return to ideas later through search.
+- **Focused group conversations.** Organize members into reusable groups and limit selected threads and their notifications to the people involved.
 - **Reading sessions.** Schedule upcoming reads or meetings, organize them around themes, collect RSVPs, and keep the main discussion connected to the session. It is worth noting that Storied was built around a theme-based club, not one that assigns specific books.
 - **A library with context.** Browse books, authors, series, and genres alongside the club history and conversations connected to them.
 - **A quieter community space.** Member profiles, private messages, notifications, and moderation tools support a focused, small-group experience.

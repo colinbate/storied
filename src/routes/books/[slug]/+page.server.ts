@@ -11,6 +11,7 @@ import {
 	users
 } from '$lib/server/db/schema';
 import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne } from 'drizzle-orm';
+import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
 const SUBJECT = 'book';
 
@@ -75,7 +76,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			and(
 				eq(threadSubjects.subjectType, SUBJECT),
 				eq(threadSubjects.subjectId, book.id),
-				isNull(threads.deletedAt)
+				isNull(threads.deletedAt),
+				threadAccessCondition(locals.db, threadViewer(locals))
 			)
 		)
 		.orderBy(desc(threads.createdAt))

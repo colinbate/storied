@@ -37,7 +37,7 @@ export async function createThreadReply(args: {
 }) {
 	const postId = newId();
 	const now = new Date().toISOString();
-	const mentionableUsers = await listActiveMentionableUsers(args.db);
+	const mentionableUsers = await listActiveMentionableUsers(args.db, args.thread.audienceGroupId);
 	let imageKey: string | null = null;
 
 	if (args.imageFile) {

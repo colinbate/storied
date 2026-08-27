@@ -3,6 +3,7 @@ import type { PageServerLoad } from './$types';
 import { userProfiles, userSubjects, users } from '$lib/server/db/schema';
 import { asc, count, eq, sql } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
+import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
 function hasProfileContent(profile: typeof userProfiles.$inferSelect | null) {
 	return Boolean(
@@ -16,6 +17,7 @@ function hasProfileContent(profile: typeof userProfiles.$inferSelect | null) {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
+	const accessCondition = threadAccessCondition(locals.db, threadViewer(locals));
 
 	const [members, countResult, relations] = await locals.db.batch([
 		locals.db
@@ -30,6 +32,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					FROM threads
 					WHERE threads.author_user_id = users.id
 						AND threads.deleted_at IS NULL
+						AND ${accessCondition}
 				)`,
 				postCount: sql<number>`(
 					SELECT count(*)
@@ -38,6 +41,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					WHERE posts.author_user_id = users.id
 						AND posts.deleted_at IS NULL
 						AND threads.deleted_at IS NULL
+						AND ${accessCondition}
 				)`
 			})
 			.from(users)

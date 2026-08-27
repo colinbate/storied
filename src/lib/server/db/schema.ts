@@ -48,6 +48,49 @@ export const users = sqliteTable(
 	(table) => [index('idx_users_status_last_activity').on(table.status, table.lastActivityAt)]
 );
 
+// ──────────────────────────────────────────────
+// groups  (optional discussion audiences)
+// ──────────────────────────────────────────────
+export const groups = sqliteTable(
+	'groups',
+	{
+		id: text('id').primaryKey(),
+		slug: text('slug').notNull().unique(),
+		name: text('name').notNull(),
+		description: text('description'),
+		createdByUserId: text('created_by_user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'restrict' }),
+		archivedAt: text('archived_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_groups_archived_name').on(table.archivedAt, table.name),
+		index('idx_groups_creator').on(table.createdByUserId)
+	]
+);
+
+export const groupMemberships = sqliteTable(
+	'group_memberships',
+	{
+		groupId: text('group_id')
+			.notNull()
+			.references(() => groups.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		addedByUserId: text('added_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.groupId, table.userId] }),
+		index('idx_group_memberships_user').on(table.userId, table.groupId)
+	]
+);
+
 // ─────────────────────────────────────────────
 // user_achievements
 // ─────────────────────────────────────────────
@@ -280,6 +323,9 @@ export const threads = sqliteTable(
 			.references(() => users.id, { onDelete: 'restrict' }),
 		sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
 		sessionThreadRole: text('session_thread_role').$type<SessionThreadRole>(),
+		audienceGroupId: text('audience_group_id').references(() => groups.id, {
+			onDelete: 'restrict'
+		}),
 		title: text('title').notNull(),
 		slug: text('slug').notNull().unique(),
 		bodySource: text('body_source').notNull(),
@@ -302,6 +348,11 @@ export const threads = sqliteTable(
 		index('idx_threads_author').on(table.authorUserId, table.createdAt),
 		index('idx_threads_session').on(table.sessionId, table.createdAt),
 		index('idx_threads_session_role').on(table.sessionId, table.sessionThreadRole, table.createdAt),
+		index('idx_threads_audience_group').on(
+			table.audienceGroupId,
+			table.deletedAt,
+			table.lastPostAt
+		),
 		index('idx_threads_visibility').on(table.visibility, table.deletedAt, table.lastPostAt)
 	]
 );

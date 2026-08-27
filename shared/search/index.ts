@@ -245,7 +245,9 @@ export async function reindexSession(db: D1Database, sessionId: string): Promise
 				COALESCE((
 					SELECT group_concat(t.title, ' ')
 					FROM threads t
-					WHERE t.session_id = s.id AND t.deleted_at IS NULL
+					WHERE t.session_id = s.id
+						AND t.deleted_at IS NULL
+						AND t.audience_group_id IS NULL
 				), '')
 			FROM sessions s
 			WHERE s.id = ?`

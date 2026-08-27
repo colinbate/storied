@@ -18,6 +18,7 @@ import { newId } from '$lib/server/ids';
 import { createThreadReply } from '$lib/server/thread-replies';
 import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
+import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
 export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	if (!locals.user) {
@@ -99,7 +100,13 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			})
 			.from(threads)
 			.innerJoin(users, eq(threads.authorUserId, users.id))
-			.where(and(eq(threads.sessionId, session.id), isNull(threads.deletedAt)))
+			.where(
+				and(
+					eq(threads.sessionId, session.id),
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
+				)
+			)
 			.orderBy(desc(threads.createdAt))
 			.all(),
 		locals.db
@@ -225,7 +232,8 @@ export const actions: Actions = {
 				and(
 					eq(threads.sessionId, session.id),
 					eq(threads.sessionThreadRole, 'primary'),
-					isNull(threads.deletedAt)
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
 				)
 			)
 			.get();
@@ -292,7 +300,8 @@ export const actions: Actions = {
 				and(
 					eq(threads.sessionId, session.id),
 					eq(threads.sessionThreadRole, 'primary'),
-					isNull(threads.deletedAt)
+					isNull(threads.deletedAt),
+					threadAccessCondition(locals.db, threadViewer(locals))
 				)
 			)
 			.get();

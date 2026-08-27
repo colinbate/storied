@@ -41,10 +41,17 @@ export async function handleThreadReplyFanout(
 	const mentionedUserIdsJson = JSON.stringify(mentionedUserIds);
 
 	const thread = await env.DB.prepare(
-		`SELECT id, slug, title FROM threads WHERE id = ? AND deleted_at IS NULL`
+		`SELECT id, slug, title, visibility, audience_group_id
+		 FROM threads WHERE id = ? AND deleted_at IS NULL`
 	)
 		.bind(threadId)
-		.first<{ id: string; slug: string; title: string }>();
+		.first<{
+			id: string;
+			slug: string;
+			title: string;
+			visibility: string;
+			audience_group_id: string | null;
+		}>();
 	if (!thread) return;
 
 	const post = await env.DB.prepare(
@@ -93,10 +100,25 @@ export async function handleThreadReplyFanout(
 		   AND s.mode = 'immediate'
 		   AND s.user_id != ?
 		   AND s.user_id NOT IN (SELECT value FROM json_each(?))
+		   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+		   AND (
+		     ? IS NULL
+		     OR EXISTS (
+		       SELECT 1 FROM group_memberships gm
+		       WHERE gm.group_id = ? AND gm.user_id = u.id
+		     )
+		   )
 		   AND u.status = 'active'
 		   AND u.last_login_at IS NOT NULL`
 	)
-		.bind(threadId, replyAuthorUserId, mentionedUserIdsJson)
+		.bind(
+			threadId,
+			replyAuthorUserId,
+			mentionedUserIdsJson,
+			thread.visibility,
+			thread.audience_group_id,
+			thread.audience_group_id
+		)
 		.all<ReplyRecipient>();
 
 	const replyRecipients = replyRecipientsResult.results ?? [];
@@ -135,10 +157,24 @@ export async function handleThreadReplyFanout(
 			 LEFT JOIN notification_preferences np ON np.user_id = u.id
 			 WHERE u.id IN (SELECT value FROM json_each(?))
 			   AND u.id != ?
+			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+			   AND (
+			     ? IS NULL
+			     OR EXISTS (
+			       SELECT 1 FROM group_memberships gm
+			       WHERE gm.group_id = ? AND gm.user_id = u.id
+			     )
+			   )
 			   AND u.status = 'active'
 			   AND u.last_login_at IS NOT NULL`
 		)
-			.bind(mentionedUserIdsJson, replyAuthorUserId)
+			.bind(
+				mentionedUserIdsJson,
+				replyAuthorUserId,
+				thread.visibility,
+				thread.audience_group_id,
+				thread.audience_group_id
+			)
 			.all<MentionRecipient>();
 		const mentionRecipients = mentionRecipientsResult.results ?? [];
 		const mentionEmailRecipients = mentionRecipients.filter(

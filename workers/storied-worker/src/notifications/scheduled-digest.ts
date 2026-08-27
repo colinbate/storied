@@ -17,6 +17,25 @@ const MAX_WINDOW_HOURS = 48;
 /** Preview length (chars) for post bodies embedded in the digest. */
 const POST_PREVIEW_CHARS = 200;
 
+// Moderators may open any group thread, but group notifications remain limited
+// to actual group members so moderation access does not create extra noise.
+const DIGEST_THREAD_ACCESS_SQL = `
+	AND (
+		t.visibility <> 'admins'
+		OR EXISTS (
+			SELECT 1 FROM users access_user
+			WHERE access_user.id = ? AND access_user.role IN ('admin', 'moderator')
+		)
+	)
+	AND (
+		t.audience_group_id IS NULL
+		OR EXISTS (
+			SELECT 1 FROM group_memberships access_membership
+			WHERE access_membership.group_id = t.audience_group_id
+				AND access_membership.user_id = ?
+		)
+	)`;
+
 interface CandidateUser {
 	user_id: string;
 	email: string;
@@ -103,9 +122,10 @@ async function loadFollowedThreadPosts(
 		    AND p.deleted_at IS NULL
 		    AND t.deleted_at IS NULL
 		    AND p.author_user_id != ?
+		    ${DIGEST_THREAD_ACCESS_SQL}
 		  ORDER BY t.id, p.created_at`
 	)
-		.bind(userId, windowStart, userId)
+		.bind(userId, windowStart, userId, userId, userId)
 		.all<{
 			thread_id: string;
 			thread_slug: string;
@@ -158,9 +178,10 @@ async function loadFollowedCategoryThreads(
 		  WHERE t.created_at >= ?
 		    AND t.deleted_at IS NULL
 		    AND t.author_user_id != ?
+		    ${DIGEST_THREAD_ACCESS_SQL}
 		  ORDER BY c.sort_order, c.name, t.created_at`
 	)
-		.bind(userId, windowStart, userId)
+		.bind(userId, windowStart, userId, userId, userId)
 		.all<{
 			category_id: string;
 			category_name: string;
@@ -203,16 +224,23 @@ async function loadSiteCounts(
 	windowStart: string
 ): Promise<{ newThreads: number; newPosts: number }> {
 	const threadsRow = await env.DB.prepare(
-		`SELECT COUNT(*) AS n FROM threads
-		  WHERE created_at >= ? AND deleted_at IS NULL AND author_user_id != ?`
+		`SELECT COUNT(*) AS n FROM threads t
+		  WHERE t.created_at >= ? AND t.deleted_at IS NULL AND t.author_user_id != ?
+		  ${DIGEST_THREAD_ACCESS_SQL}`
 	)
-		.bind(windowStart, userId)
+		.bind(windowStart, userId, userId, userId)
 		.first<{ n: number }>();
 	const postsRow = await env.DB.prepare(
-		`SELECT COUNT(*) AS n FROM posts
-		  WHERE created_at >= ? AND deleted_at IS NULL AND author_user_id != ?`
+		`SELECT COUNT(*) AS n
+		 FROM posts p
+		 INNER JOIN threads t ON t.id = p.thread_id
+		 WHERE p.created_at >= ?
+		   AND p.deleted_at IS NULL
+		   AND t.deleted_at IS NULL
+		   AND p.author_user_id != ?
+		   ${DIGEST_THREAD_ACCESS_SQL}`
 	)
-		.bind(windowStart, userId)
+		.bind(windowStart, userId, userId, userId)
 		.first<{ n: number }>();
 
 	return {

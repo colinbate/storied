@@ -8,8 +8,15 @@ import {
 	SESSION_DISCUSSIONS_CATEGORY_ID
 } from '$lib/server/discussions';
 import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
+import {
+	threadAccessBindings,
+	threadAccessCondition,
+	threadAccessSql,
+	threadViewer
+} from '$lib/server/thread-access';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	const viewer = threadViewer(locals);
 	// Load categories
 	const allCategories = await locals.db
 		.select({
@@ -20,7 +27,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			size: count(threads.id).as('size')
 		})
 		.from(categories)
-		.leftJoin(threads, and(eq(threads.categoryId, categories.id), isNull(threads.deletedAt)))
+		.leftJoin(
+			threads,
+			and(
+				eq(threads.categoryId, categories.id),
+				isNull(threads.deletedAt),
+				threadAccessCondition(locals.db, viewer)
+			)
+		)
 		.groupBy(categories.id, categories.name, categories.description, categories.slug)
 		.orderBy(asc(categories.sortOrder), asc(categories.name))
 		.where(eq(categories.isPrivate, false))
@@ -32,6 +46,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				SELECT *
 				FROM threads
 				WHERE deleted_at IS NULL
+					AND ${threadAccessSql('threads')}
 				ORDER BY last_post_at DESC, created_at DESC
 				LIMIT 20
 			)
@@ -76,6 +91,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			INNER JOIN users author ON author.id = t.author_user_id
 			ORDER BY t.last_post_at DESC, t.created_at DESC`
 		)
+		.bind(...threadAccessBindings(viewer))
 		.all<ThreadListSqlRow>();
 	const recentThreads = recentThreadRows.map(mapThreadListSqlRow);
 
@@ -100,6 +116,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 							AND session_thread_role = 'primary'
 							AND category_id = ?
 							AND deleted_at IS NULL
+							AND ${threadAccessSql('threads')}
 						LIMIT 1
 					)
 					SELECT
@@ -142,7 +159,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					FROM listed_threads t
 					INNER JOIN users author ON author.id = t.author_user_id`
 				)
-				.bind(featuredSession.id, SESSION_DISCUSSIONS_CATEGORY_ID)
+				.bind(featuredSession.id, SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer))
 				.all<ThreadListSqlRow>()
 		: { results: [] };
 	const [featuredDiscussion = null] = featuredDiscussionRows.map(mapThreadListSqlRow);

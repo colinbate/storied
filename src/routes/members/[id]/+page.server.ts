@@ -1,19 +1,14 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import {
-	authors,
-	books,
-	series,
-	userProfiles,
-	userSubjects,
-	users
-} from '$lib/server/db/schema';
+import { authors, books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 import { getOrCreateDirectConversation } from '$lib/server/private-messages';
+import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
+	const accessCondition = threadAccessCondition(locals.db, threadViewer(locals));
 
 	const member = await locals.db
 		.select({
@@ -26,6 +21,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				FROM threads
 				WHERE threads.author_user_id = users.id
 					AND threads.deleted_at IS NULL
+					AND ${accessCondition}
 			)`,
 			postCount: sql<number>`(
 				SELECT count(*)
@@ -34,6 +30,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				WHERE posts.author_user_id = users.id
 					AND posts.deleted_at IS NULL
 					AND threads.deleted_at IS NULL
+					AND ${accessCondition}
 			)`
 		})
 		.from(users)

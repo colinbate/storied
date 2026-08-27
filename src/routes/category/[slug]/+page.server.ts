@@ -11,11 +11,13 @@ import {
 	isAnnouncementsCategory,
 	isSessionDiscussionsCategory
 } from '$lib/server/discussions';
+import { threadAccessBindings, threadAccessSql, threadViewer } from '$lib/server/thread-access';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
+	const viewer = threadViewer(locals);
 
 	const category = await locals.db
 		.select()
@@ -33,6 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				SELECT *
 				FROM threads
 				WHERE category_id = ? AND deleted_at IS NULL
+					AND ${threadAccessSql('threads')}
 				ORDER BY is_pinned DESC, last_post_at DESC, created_at DESC
 			)
 			SELECT
@@ -76,7 +79,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			INNER JOIN users author ON author.id = t.author_user_id
 			ORDER BY t.is_pinned DESC, t.last_post_at DESC, t.created_at DESC`
 		)
-		.bind(category.id)
+		.bind(category.id, ...threadAccessBindings(viewer))
 		.all<ThreadListSqlRow>();
 	const categoryThreads = categoryThreadRows.map(mapThreadListSqlRow);
 

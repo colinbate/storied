@@ -16,7 +16,8 @@ export async function handleNewThreadFanout(
 	const { threadId, threadAuthorUserId, baseUrl, broadcastToAllMembers } = payload;
 
 	const thread = await env.DB.prepare(
-		`SELECT t.id, t.slug, t.title, t.body_source, t.category_id, c.name AS category_name
+		`SELECT t.id, t.slug, t.title, t.body_source, t.category_id,
+		        t.visibility, t.audience_group_id, c.name AS category_name
 		 FROM threads t
 		 INNER JOIN categories c ON c.id = t.category_id
 		 WHERE t.id = ? AND t.deleted_at IS NULL`
@@ -28,6 +29,8 @@ export async function handleNewThreadFanout(
 			title: string;
 			body_source: string;
 			category_id: string;
+			visibility: string;
+			audience_group_id: string | null;
 			category_name: string;
 		}>();
 	if (!thread) return;
@@ -44,9 +47,22 @@ export async function handleNewThreadFanout(
 			 LEFT JOIN notification_preferences np ON np.user_id = u.id
 			 WHERE u.status = 'active'
 			   AND u.id != ?
+			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+			   AND (
+			     ? IS NULL
+			     OR EXISTS (
+			       SELECT 1 FROM group_memberships gm
+			       WHERE gm.group_id = ? AND gm.user_id = u.id
+			     )
+			   )
 			   AND (np.email_enabled IS NULL OR np.email_enabled = 1)`
 		)
-			.bind(threadAuthorUserId)
+			.bind(
+				threadAuthorUserId,
+				thread.visibility,
+				thread.audience_group_id,
+				thread.audience_group_id
+			)
 			.all<{ user_id: string; email: string }>();
 
 		const recipients = recipientsResult.results ?? [];
@@ -65,11 +81,24 @@ export async function handleNewThreadFanout(
 			 WHERE u.status = 'active'
 			   AND u.role = 'admin'
 			   AND u.id != ?
+			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+			   AND (
+			     ? IS NULL
+			     OR EXISTS (
+			       SELECT 1 FROM group_memberships gm
+			       WHERE gm.group_id = ? AND gm.user_id = u.id
+			     )
+			   )
 			   AND np.pushover_enabled = 1
 			   AND np.pushover_user_key IS NOT NULL
 			   AND np.pushover_user_key != ''`
 		)
-			.bind(threadAuthorUserId)
+			.bind(
+				threadAuthorUserId,
+				thread.visibility,
+				thread.audience_group_id,
+				thread.audience_group_id
+			)
 			.all<{ user_id: string; pushover_user_key: string; pushover_device: string | null }>();
 
 		await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
@@ -112,9 +141,24 @@ export async function handleNewThreadFanout(
 		 WHERE s.category_id = ?
 		   AND s.mode = 'immediate'
 		   AND s.user_id != ?
+		   AND u.status = 'active'
+		   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+		   AND (
+		     ? IS NULL
+		     OR EXISTS (
+		       SELECT 1 FROM group_memberships gm
+		       WHERE gm.group_id = ? AND gm.user_id = u.id
+		     )
+		   )
 		   AND (np.email_enabled IS NULL OR np.email_enabled = 1)`
 	)
-		.bind(thread.category_id, threadAuthorUserId)
+		.bind(
+			thread.category_id,
+			threadAuthorUserId,
+			thread.visibility,
+			thread.audience_group_id,
+			thread.audience_group_id
+		)
 		.all<{ user_id: string; email: string }>();
 
 	const recipients = recipientsResult.results ?? [];
@@ -135,13 +179,28 @@ export async function handleNewThreadFanout(
 		 WHERE s.category_id = ?
 		   AND s.mode = 'immediate'
 		   AND s.user_id != ?
+		   AND u.status = 'active'
+		   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
+		   AND (
+		     ? IS NULL
+		     OR EXISTS (
+		       SELECT 1 FROM group_memberships gm
+		       WHERE gm.group_id = ? AND gm.user_id = u.id
+		     )
+		   )
 		   AND u.role = 'admin'
 		   AND u.status = 'active'
 		   AND np.pushover_enabled = 1
 		   AND np.pushover_user_key IS NOT NULL
 		   AND np.pushover_user_key != ''`
 	)
-		.bind(thread.category_id, threadAuthorUserId)
+		.bind(
+			thread.category_id,
+			threadAuthorUserId,
+			thread.visibility,
+			thread.audience_group_id,
+			thread.audience_group_id
+		)
 		.all<{ user_id: string; pushover_user_key: string; pushover_device: string | null }>();
 
 	await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
