@@ -6,6 +6,7 @@ import {
 	genres,
 	notificationPreferences,
 	series,
+	userProfileLinks,
 	userProfiles,
 	userSubjects,
 	users
@@ -20,6 +21,12 @@ import {
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { APP_NAME, PRIMARY_ORIGIN } from '$shared/brand';
+import {
+	MAX_PROFILE_LINKS,
+	PROFILE_LINK_LABEL_MAX_LENGTH,
+	PROFILE_LINK_URL_MAX_LENGTH
+} from '$lib/profile-links';
+import { newId } from '$lib/server/ids';
 
 type NotificationMode = 'off' | 'immediate' | 'daily_digest';
 type DefaultSubMode = 'immediate' | 'daily_digest';
@@ -44,6 +51,58 @@ function normalizePushoverDevice(value: FormDataEntryValue | null): string | nul
 	return /^[A-Za-z0-9_-]{1,25}$/.test(device) ? device : '';
 }
 
+function parseProfileLinks(data: FormData) {
+	const labels = data.getAll('profileLinkLabel').map((value) => value.toString().trim());
+	const rawUrls = data.getAll('profileLinkUrl').map((value) => value.toString().trim());
+
+	if (labels.length !== rawUrls.length || labels.length > MAX_PROFILE_LINKS) {
+		return { error: `You can add up to ${MAX_PROFILE_LINKS} profile links.` } as const;
+	}
+
+	const links: { label: string; url: string }[] = [];
+	const seenUrls = new Set<string>();
+	for (let index = 0; index < labels.length; index += 1) {
+		const label = labels[index];
+		const rawUrl = rawUrls[index];
+		if (!label && !rawUrl) continue;
+		if (!label || !rawUrl) {
+			return { error: 'Each profile link needs both a label and a URL.' } as const;
+		}
+		if (label.length > PROFILE_LINK_LABEL_MAX_LENGTH) {
+			return {
+				error: `Profile link labels must be ${PROFILE_LINK_LABEL_MAX_LENGTH} characters or fewer.`
+			} as const;
+		}
+		if (rawUrl.length > PROFILE_LINK_URL_MAX_LENGTH) {
+			return { error: 'One of the profile link URLs is too long.' } as const;
+		}
+
+		let parsedUrl: URL;
+		try {
+			parsedUrl = new URL(rawUrl);
+		} catch {
+			return { error: `Enter a complete URL for ${label}, including https://.` } as const;
+		}
+		if (
+			(parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') ||
+			parsedUrl.username ||
+			parsedUrl.password
+		) {
+			return { error: `Enter a safe web URL for ${label}.` } as const;
+		}
+
+		const url = parsedUrl.toString();
+		const urlKey = url.toLocaleLowerCase();
+		if (seenUrls.has(urlKey)) {
+			return { error: 'Each profile link URL can only be added once.' } as const;
+		}
+		seenUrls.add(urlKey);
+		links.push({ label, url });
+	}
+
+	return { links } as const;
+}
+
 async function ensureUserProfile(locals: App.Locals) {
 	if (!locals.user) return;
 	await locals.db
@@ -63,7 +122,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		allBooks,
 		allSeries,
 		allAuthors,
-		allGenres
+		allGenres,
+		profileLinks
 	] = await Promise.all([
 		locals.db.select().from(userProfiles).where(eq(userProfiles.userId, locals.user.id)).all(),
 		locals.db
@@ -149,7 +209,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.from(authors)
 			.orderBy(asc(authors.name))
 			.all(),
-		locals.db.select().from(genres).orderBy(asc(genres.name)).all()
+		locals.db.select().from(genres).orderBy(asc(genres.name)).all(),
+		locals.db
+			.select()
+			.from(userProfileLinks)
+			.where(eq(userProfileLinks.userId, locals.user.id))
+			.orderBy(asc(userProfileLinks.displayOrder), asc(userProfileLinks.createdAt))
+			.all()
 	]);
 	const profile = profileRows[0] ?? null;
 	const featuredSubjects = [
@@ -179,6 +245,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		allSeries,
 		allAuthors,
 		allGenres,
+		profileLinks,
 		preferences,
 		defaultTimezone: DEFAULT_TIMEZONE
 	};
@@ -207,8 +274,13 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(302, '/auth/login');
 
 		const data = await request.formData();
+		const profileLinksResult = parseProfileLinks(data);
+		if ('error' in profileLinksResult) {
+			return fail(400, { profileError: profileLinksResult.error });
+		}
+		const now = new Date().toISOString();
 
-		await locals.db
+		const profileUpdate = locals.db
 			.insert(userProfiles)
 			.values({
 				userId: locals.user.id,
@@ -236,9 +308,25 @@ export const actions: Actions = {
 					showReadBooks: data.get('showReadBooks') === 'on',
 					showRecommendations: data.get('showRecommendations') === 'on',
 					showProfile: data.get('showProfile') === 'on',
-					updatedAt: new Date().toISOString()
+					updatedAt: now
 				}
 			});
+
+		await locals.db.batch([
+			profileUpdate,
+			locals.db.delete(userProfileLinks).where(eq(userProfileLinks.userId, locals.user.id)),
+			...profileLinksResult.links.map((link, displayOrder) =>
+				locals.db.insert(userProfileLinks).values({
+					id: newId(),
+					userId: locals.user!.id,
+					label: link.label,
+					url: link.url,
+					displayOrder,
+					createdAt: now,
+					updatedAt: now
+				})
+			)
+		]);
 
 		return { success: true };
 	},

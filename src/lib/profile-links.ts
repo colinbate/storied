@@ -1,0 +1,3 @@
+export const MAX_PROFILE_LINKS = 8;
+export const PROFILE_LINK_LABEL_MAX_LENGTH = 40;
+export const PROFILE_LINK_URL_MAX_LENGTH = 2048;

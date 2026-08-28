@@ -67,6 +67,17 @@
 						Website
 					</a>
 				{/if}
+				{#each data.profileLinks as link (link.id)}
+					<a
+						href={link.url}
+						target="_blank"
+						rel="noopener noreferrer external"
+						class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+					>
+						<ExternalLinkIcon class="h-3.5 w-3.5" />
+						{link.label}
+					</a>
+				{/each}
 			</div>
 			{#if data.profile?.bio}
 				<p class="max-w-3xl leading-7 whitespace-pre-wrap">{data.profile.bio}</p>

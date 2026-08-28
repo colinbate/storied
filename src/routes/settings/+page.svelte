@@ -20,11 +20,13 @@
 	import StarIcon from '@lucide/svelte/icons/star';
 	import UserIcon from '@lucide/svelte/icons/user';
 	import XIcon from '@lucide/svelte/icons/x';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
 	import { detectedTimeZone, supportedTimeZones } from '$lib/timezone-options';
 	import { onMount } from 'svelte';
+	import { MAX_PROFILE_LINKS, PROFILE_LINK_LABEL_MAX_LENGTH } from '$lib/profile-links';
 
 	let { data, form } = $props();
 	let accountLoading = $state(false);
@@ -44,6 +46,14 @@
 	let featureAuthorId = $state<string | undefined>(undefined);
 	let featureUrl = $state<string | undefined>(undefined);
 	let profileGenres = $derived([...(data.profileGenres ?? [])]);
+	let nextProfileLinkId = 0;
+	let profileLinks = $derived(
+		data.profileLinks.map((link: (typeof data.profileLinks)[number]) => ({
+			id: link.id,
+			label: link.label,
+			url: link.url
+		}))
+	);
 
 	let dyslexicFont = $derived(!!data.user.dyslexicFont);
 
@@ -130,6 +140,25 @@
 		} else {
 			avatarPreview = null;
 		}
+	}
+
+	function addProfileLink(label = '') {
+		if (profileLinks.length >= MAX_PROFILE_LINKS) return;
+		profileLinks = [...profileLinks, { id: `new-${nextProfileLinkId++}`, label, url: '' }];
+	}
+
+	function removeProfileLink(id: string) {
+		profileLinks = profileLinks.filter((link) => link.id !== id);
+	}
+
+	function updateProfileLink(id: string, field: 'label' | 'url', value: string) {
+		profileLinks = profileLinks.map((link) =>
+			link.id === id ? { ...link, [field]: value } : link
+		);
+	}
+
+	function hasProfileLink(label: string) {
+		return profileLinks.some((link) => link.label.trim().toLowerCase() === label.toLowerCase());
 	}
 </script>
 
@@ -255,6 +284,94 @@
 						value={data.profile?.websiteUrl ?? ''}
 					/>
 				</div>
+				<div class="space-y-3">
+					<div>
+						<Label>Book and community profiles</Label>
+						<p class="text-xs text-muted-foreground">
+							Help other members find you on Goodreads, Hardcover, or another community.
+						</p>
+					</div>
+					{#if profileLinks.length > 0}
+						<div class="space-y-3">
+							{#each profileLinks as link (link.id)}
+								<div
+									class="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)_auto] sm:items-end"
+								>
+									<div class="space-y-1.5">
+										<Label for={`profile-link-label-${link.id}`}>Label</Label>
+										<Input
+											id={`profile-link-label-${link.id}`}
+											name="profileLinkLabel"
+											value={link.label}
+											oninput={(event) =>
+												updateProfileLink(link.id, 'label', event.currentTarget.value)}
+											maxlength={PROFILE_LINK_LABEL_MAX_LENGTH}
+											placeholder="e.g. StoryGraph"
+											required
+										/>
+									</div>
+									<div class="space-y-1.5">
+										<Label for={`profile-link-url-${link.id}`}>Profile URL</Label>
+										<Input
+											id={`profile-link-url-${link.id}`}
+											name="profileLinkUrl"
+											type="url"
+											value={link.url}
+											oninput={(event) =>
+												updateProfileLink(link.id, 'url', event.currentTarget.value)}
+											placeholder="https://…"
+											required
+										/>
+									</div>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										onclick={() => removeProfileLink(link.id)}
+										aria-label={`Remove ${link.label || 'profile'} link`}
+									>
+										<Trash2Icon class="h-4 w-4" />
+									</Button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+					<div class="flex flex-wrap gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onclick={() => addProfileLink('Goodreads')}
+							disabled={profileLinks.length >= MAX_PROFILE_LINKS || hasProfileLink('Goodreads')}
+						>
+							<PlusIcon class="h-4 w-4" />
+							Goodreads
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onclick={() => addProfileLink('Hardcover')}
+							disabled={profileLinks.length >= MAX_PROFILE_LINKS || hasProfileLink('Hardcover')}
+						>
+							<PlusIcon class="h-4 w-4" />
+							Hardcover
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onclick={() => addProfileLink()}
+							disabled={profileLinks.length >= MAX_PROFILE_LINKS}
+						>
+							<PlusIcon class="h-4 w-4" />
+							Other profile
+						</Button>
+						<span class="self-center text-xs text-muted-foreground">
+							{profileLinks.length}/{MAX_PROFILE_LINKS}
+						</span>
+					</div>
+				</div>
 				<div class="grid gap-3 sm:grid-cols-3">
 					<label class="flex items-center gap-2 text-sm">
 						<input
@@ -284,6 +401,9 @@
 						Show read books
 					</label>
 				</div>
+				{#if form?.profileError}
+					<p class="text-sm text-destructive">{form.profileError}</p>
+				{/if}
 				<Button type="submit" disabled={profileLoading}>
 					{profileLoading ? 'Saving…' : 'Save Profile'}
 				</Button>

@@ -228,6 +228,28 @@ export const userProfiles = sqliteTable('user_profiles', {
 });
 
 // ──────────────────────────────────────────────
+// user_profile_links  (external member profiles)
+// ──────────────────────────────────────────────
+export const userProfileLinks = sqliteTable(
+	'user_profile_links',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		url: text('url').notNull(),
+		displayOrder: integer('display_order').notNull().default(0),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_user_profile_links_user_order').on(table.userId, table.displayOrder),
+		uniqueIndex('user_profile_links_user_url_unique').on(table.userId, table.url)
+	]
+);
+
+// ──────────────────────────────────────────────
 // themes  (book-club theme library)
 // ──────────────────────────────────────────────
 export const themes = sqliteTable(

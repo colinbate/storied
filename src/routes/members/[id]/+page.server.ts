@@ -1,6 +1,14 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { authors, books, series, userProfiles, userSubjects, users } from '$lib/server/db/schema';
+import {
+	authors,
+	books,
+	series,
+	userProfileLinks,
+	userProfiles,
+	userSubjects,
+	users
+} from '$lib/server/db/schema';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 import { getOrCreateDirectConversation } from '$lib/server/private-messages';
@@ -39,69 +47,76 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	if (!member || member.status !== 'active') throw error(404, 'Member not found');
 
-	const [profileRows, bookSubjectRows, seriesSubjectRows, authorSubjectRows] = await Promise.all([
-		locals.db.select().from(userProfiles).where(eq(userProfiles.userId, member.id)).all(),
-		locals.db
-			.select({
-				relation: userSubjects,
-				book: books
-			})
-			.from(userSubjects)
-			.innerJoin(books, eq(userSubjects.subjectId, books.id))
-			.where(
-				and(
-					eq(userSubjects.userId, member.id),
-					eq(userSubjects.subjectType, 'book'),
-					isNull(books.deletedAt)
+	const [profileRows, profileLinks, bookSubjectRows, seriesSubjectRows, authorSubjectRows] =
+		await Promise.all([
+			locals.db.select().from(userProfiles).where(eq(userProfiles.userId, member.id)).all(),
+			locals.db
+				.select()
+				.from(userProfileLinks)
+				.where(eq(userProfileLinks.userId, member.id))
+				.orderBy(asc(userProfileLinks.displayOrder), asc(userProfileLinks.createdAt))
+				.all(),
+			locals.db
+				.select({
+					relation: userSubjects,
+					book: books
+				})
+				.from(userSubjects)
+				.innerJoin(books, eq(userSubjects.subjectId, books.id))
+				.where(
+					and(
+						eq(userSubjects.userId, member.id),
+						eq(userSubjects.subjectType, 'book'),
+						isNull(books.deletedAt)
+					)
 				)
-			)
-			.orderBy(
-				desc(userSubjects.featuredOnProfile),
-				asc(userSubjects.featuredOrder),
-				desc(userSubjects.updatedAt)
-			)
-			.all(),
-		locals.db
-			.select({
-				relation: userSubjects,
-				series
-			})
-			.from(userSubjects)
-			.innerJoin(series, eq(userSubjects.subjectId, series.id))
-			.where(
-				and(
-					eq(userSubjects.userId, member.id),
-					eq(userSubjects.subjectType, 'series'),
-					isNull(series.deletedAt)
+				.orderBy(
+					desc(userSubjects.featuredOnProfile),
+					asc(userSubjects.featuredOrder),
+					desc(userSubjects.updatedAt)
 				)
-			)
-			.orderBy(
-				desc(userSubjects.featuredOnProfile),
-				asc(userSubjects.featuredOrder),
-				desc(userSubjects.updatedAt)
-			)
-			.all(),
-		locals.db
-			.select({
-				relation: userSubjects,
-				author: authors
-			})
-			.from(userSubjects)
-			.innerJoin(authors, eq(userSubjects.subjectId, authors.id))
-			.where(
-				and(
-					eq(userSubjects.userId, member.id),
-					eq(userSubjects.subjectType, 'author'),
-					isNull(authors.deletedAt)
+				.all(),
+			locals.db
+				.select({
+					relation: userSubjects,
+					series
+				})
+				.from(userSubjects)
+				.innerJoin(series, eq(userSubjects.subjectId, series.id))
+				.where(
+					and(
+						eq(userSubjects.userId, member.id),
+						eq(userSubjects.subjectType, 'series'),
+						isNull(series.deletedAt)
+					)
 				)
-			)
-			.orderBy(
-				desc(userSubjects.featuredOnProfile),
-				asc(userSubjects.featuredOrder),
-				desc(userSubjects.updatedAt)
-			)
-			.all()
-	]);
+				.orderBy(
+					desc(userSubjects.featuredOnProfile),
+					asc(userSubjects.featuredOrder),
+					desc(userSubjects.updatedAt)
+				)
+				.all(),
+			locals.db
+				.select({
+					relation: userSubjects,
+					author: authors
+				})
+				.from(userSubjects)
+				.innerJoin(authors, eq(userSubjects.subjectId, authors.id))
+				.where(
+					and(
+						eq(userSubjects.userId, member.id),
+						eq(userSubjects.subjectType, 'author'),
+						isNull(authors.deletedAt)
+					)
+				)
+				.orderBy(
+					desc(userSubjects.featuredOnProfile),
+					asc(userSubjects.featuredOrder),
+					desc(userSubjects.updatedAt)
+				)
+				.all()
+		]);
 	const profile = profileRows[0] ?? null;
 	const hasPostedOrReplied = member.threadCount > 0 || member.postCount > 0;
 
@@ -134,6 +149,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		member,
 		profile,
+		profileLinks,
 		profileGenres: parseProfileGenres(profile?.favoriteGenresText),
 		isOwnProfile: locals.user.id === member.id,
 		featuredSubjects: subjects.filter(({ relation }) => relation.featuredOnProfile),
