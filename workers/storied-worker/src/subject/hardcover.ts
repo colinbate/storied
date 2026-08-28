@@ -116,7 +116,12 @@ function searchRecords(results: unknown): Record<string, unknown>[] {
 	if (!isRecord(results)) return [];
 
 	const nestedResults =
-		results.results ?? results.items ?? results.hits ?? results.books ?? results.authors ?? results.series;
+		results.results ??
+		results.items ??
+		results.hits ??
+		results.books ??
+		results.authors ??
+		results.series;
 	if (Array.isArray(nestedResults)) {
 		return nestedResults
 			.map((result) => (isRecord(result) && isRecord(result.document) ? result.document : result))
@@ -381,8 +386,10 @@ export async function fetchHardcoverSeries(
 						!isRecord(seriesBook.book) || stringValue(seriesBook.book.state) === 'normalized'
 				)
 				.sort((a, b) => {
-					const aPosition = numericValue(a.position) ?? numericValue(a.details) ?? Number.MAX_SAFE_INTEGER;
-					const bPosition = numericValue(b.position) ?? numericValue(b.details) ?? Number.MAX_SAFE_INTEGER;
+					const aPosition =
+						numericValue(a.position) ?? numericValue(a.details) ?? Number.MAX_SAFE_INTEGER;
+					const bPosition =
+						numericValue(b.position) ?? numericValue(b.details) ?? Number.MAX_SAFE_INTEGER;
 					return aPosition - bPosition;
 				})
 		: [];

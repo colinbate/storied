@@ -4,8 +4,8 @@ export const POST_IMAGE_ACCEPTED_TYPES = [
 	'image/jpeg',
 	'image/png',
 	'image/webp',
-  'image/gif',
-	'image/avif',
+	'image/gif',
+	'image/avif'
 ] as const;
 
 export const POST_IMAGE_ACCEPT = POST_IMAGE_ACCEPTED_TYPES.join(',');

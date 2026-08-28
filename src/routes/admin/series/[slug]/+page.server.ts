@@ -179,7 +179,8 @@ export const actions: Actions = {
 		if (mode === 'url') {
 			const url = data.get('url')?.toString()?.trim() || '';
 			const link = detectFirstSubjectLinkOfKind(url, 'book');
-			if (!link) return fail(400, { error: 'Only Goodreads or Hardcover book URLs are supported.' });
+			if (!link)
+				return fail(400, { error: 'Only Goodreads or Hardcover book URLs are supported.' });
 
 			const result = await ensureSubjectSource(locals.db, link, platform?.env, {
 				seriesBookLink: {

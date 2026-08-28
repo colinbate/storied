@@ -5,8 +5,8 @@ const EXTENSIONS_BY_TYPE: Record<string, string> = {
 	'image/jpeg': 'jpg',
 	'image/png': 'png',
 	'image/webp': 'webp',
-  'image/gif': 'gif',
-	'image/avif': 'avif',
+	'image/gif': 'gif',
+	'image/avif': 'avif'
 };
 
 export class PostImageUploadError extends Error {

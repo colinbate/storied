@@ -153,7 +153,7 @@
 								</div>
 							</div>
 							{#if participants.length > 0}
-								<ThreadParticipants participants={participants} class="max-w-48 shrink-0 pt-1" />
+								<ThreadParticipants {participants} class="max-w-48 shrink-0 pt-1" />
 							{/if}
 						</Card.Content>
 					</Card.Root>

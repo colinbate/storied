@@ -44,11 +44,6 @@ function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
 }
 
-function getSessionStatus(data: FormData) {
-	const status = data.get('status')?.toString();
-	return sessionStatuses.has(status ?? '') ? (status as 'draft' | 'current' | 'past') : 'draft';
-}
-
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	const status = data.get('status')?.toString();
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
