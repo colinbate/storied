@@ -13,6 +13,7 @@
 	import SessionThemePicker from '$lib/components/admin/session-theme-picker.svelte';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { formatDate } from '$lib/date-format';
 	import { supportedTimeZones } from '$lib/timezone-options';
@@ -204,7 +205,7 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root>
+	<Card.Root class="py-1">
 		<Card.Content class="p-0">
 			<div class="divide-y">
 				{#each data.sessions as session (session.id)}
@@ -239,14 +240,26 @@
 								<span class="font-mono text-xs text-muted-foreground/60">{session.slug}</span>
 							</div>
 						</div>
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							href={resolve('/admin/sessions/[slug]', { slug: session.slug })}
-							title="Edit"
-						>
-							<PencilIcon class="h-4 w-4" />
-						</Button>
+						<div class="flex items-center gap-1">
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								href={resolve('/admin/sessions/[slug]/attendees', { slug: session.slug })}
+								title="Manage attendees"
+								aria-label={`Manage attendees for ${session.title}`}
+							>
+								<UsersIcon class="h-4 w-4" />
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								href={resolve('/admin/sessions/[slug]', { slug: session.slug })}
+								title="Edit"
+								aria-label={`Edit ${session.title}`}
+							>
+								<PencilIcon class="h-4 w-4" />
+							</Button>
+						</div>
 					</div>
 				{:else}
 					<div class="py-12 text-center text-muted-foreground">

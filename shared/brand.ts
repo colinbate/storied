@@ -1,4 +1,5 @@
 export const PRODUCT_NAME = 'Storied';
+export const PRODUCT_URL = 'https://storied.bate.dev';
 export const ORGANIZATION_NAME = 'Bermuda Triangle Society';
 export const APP_NAME = 'The Archive';
 export const APP_SHORT_NAME = 'Archive';

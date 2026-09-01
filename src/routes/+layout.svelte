@@ -23,7 +23,7 @@
 	import UserIcon from '@lucide/svelte/icons/user';
 	import MemberName from '$lib/components/member-name.svelte';
 	import { resolve } from '$app/paths';
-	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME } from '$shared/brand';
+	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME, PRODUCT_URL } from '$shared/brand';
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
@@ -240,7 +240,7 @@
 
 	<footer class="border-t py-6 text-center text-sm text-muted-foreground">
 		<div class="mx-auto max-w-5xl px-4">
-			<p>{APP_NAME} &mdash; Powered by {PRODUCT_NAME}</p>
+			<p>{APP_NAME} &mdash; Powered by {#if PRODUCT_URL}<a class="text-primary hover:underline" href={PRODUCT_URL}>{PRODUCT_NAME}</a>{:else}{PRODUCT_NAME}{/if}</p>
 		</div>
 	</footer>
 </div>
