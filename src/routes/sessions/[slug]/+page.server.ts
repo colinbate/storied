@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
 	authors,
+	attendeeIdentities,
 	posts,
 	series,
 	sessionParticipantSubjects,
@@ -13,10 +14,10 @@ import {
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { createThreadReply } from '$lib/server/thread-replies';
-import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
+import { canAcceptSessionRsvps, getCurrentUserSessionRsvp, setMemberRsvp } from '$lib/server/rsvp';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 
@@ -119,8 +120,14 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 				}
 			})
 			.from(sessionParticipants)
-			.innerJoin(users, eq(sessionParticipants.userId, users.id))
-			.where(eq(sessionParticipants.sessionId, session.id))
+			.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
+			.innerJoin(users, eq(attendeeIdentities.userId, users.id))
+			.where(
+				and(
+					eq(sessionParticipants.sessionId, session.id),
+					inArray(sessionParticipants.attendanceStatus, ['attending', 'maybe', 'attended'])
+				)
+			)
 			.orderBy(asc(users.displayName))
 			.all(),
 		locals.db
@@ -133,8 +140,13 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 				}
 			})
 			.from(sessionParticipantSubjects)
-			.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
-			.where(eq(sessionParticipantSubjects.sessionId, session.id))
+			.innerJoin(
+				sessionParticipants,
+				eq(sessionParticipantSubjects.participantId, sessionParticipants.id)
+			)
+			.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
+			.innerJoin(users, eq(attendeeIdentities.userId, users.id))
+			.where(eq(sessionParticipants.sessionId, session.id))
 			.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
 			.all()
 	]);
@@ -201,7 +213,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			| 'none',
 		relatedThreads: sessionThreads.filter(({ thread }) => thread.id !== primaryThread?.thread.id),
 		participants,
-		canRsvp: isFutureSession(session),
+		canRsvp: canAcceptSessionRsvps(session),
 		currentUserRsvp: await getCurrentUserSessionRsvp(locals.db, session.id, locals.user.id),
 		subjectReaders: Object.fromEntries(subjectReaders),
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),

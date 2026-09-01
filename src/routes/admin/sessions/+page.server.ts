@@ -12,7 +12,6 @@ import {
 	getOrCreateNotificationPreferences,
 	isValidTimezone
 } from '$lib/server/notification-preferences';
-import { upsertRsvpEvent } from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
@@ -37,7 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals, platform }) => {
+	create: async ({ request, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 
 		const data = await request.formData();
@@ -63,11 +62,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
 		}
 		if (!startsAt) {
-			return fail(400, { error: 'Starts At is required to create an RSVP event.' });
-		}
-		const rsvpDb = platform?.env.RSVP_DB;
-		if (!rsvpDb) {
-			return fail(500, { error: 'RSVP database binding is not configured.' });
+			return fail(400, { error: 'Starts At is required to create a session.' });
 		}
 		const sessionTheme = await resolveSessionTheme(locals.db, {
 			themeId: getOptionalString(data, 'themeId')
@@ -93,23 +88,17 @@ export const actions: Actions = {
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
 			locationName: getOptionalString(data, 'locationName'),
 			rsvpSlug,
+			rsvpCapacity: Math.max(
+				1,
+				Number.parseInt(data.get('rsvpCapacity')?.toString() ?? '12', 10) || 12
+			),
+			rsvpWaitlistEnabled: data.get('rsvpWaitlistEnabled') === 'on',
 			isPublic: data.get('isPublic') === 'on',
 			astroPath: getOptionalString(data, 'astroPath'),
 			externalUrl: getOptionalString(data, 'externalUrl')
 		};
 
-		const rsvpEvent = await upsertRsvpEvent({
-			db: rsvpDb,
-			session: newSession
-		});
-		if (!rsvpEvent) {
-			return fail(400, { error: 'Starts At must be a valid date for the RSVP event.' });
-		}
-
-		await locals.db.insert(sessions).values({
-			...newSession,
-			rsvpSlug: rsvpEvent.slug
-		});
+		await locals.db.insert(sessions).values(newSession);
 
 		const primaryThread = await createPrimarySessionThread({
 			db: locals.db,

@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sessions } from '$lib/server/db/schema';
 import { asc, desc, eq } from 'drizzle-orm';
+import { canAcceptSessionRsvps } from '$lib/server/rsvp';
 
 const publicApiHeaders = {
 	'Access-Control-Allow-Origin': '*',
@@ -43,7 +44,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.all();
 
 	return json(
-		rows.map((r) => ({ ...r, date: r.date?.split('T')[0], start: r.start?.split('T')[1] })),
+		rows.map((r) => ({
+			...r,
+			date: r.date?.split('T')[0],
+			start: r.start?.split('T')[1],
+			rsvpSlug: canAcceptSessionRsvps({
+				status: r.status,
+				startsAt: r.start,
+				timezone: r.timezone
+			})
+				? (r.rsvpSlug ?? r.slug)
+				: null
+		})),
 		{ headers: publicApiHeaders }
 	);
 };

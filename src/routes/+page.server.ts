@@ -7,7 +7,7 @@ import {
 	type ThreadListSqlRow,
 	SESSION_DISCUSSIONS_CATEGORY_ID
 } from '$lib/server/discussions';
-import { getCurrentUserSessionRsvp, isFutureSession, setMemberRsvp } from '$lib/server/rsvp';
+import { canAcceptSessionRsvps, getCurrentUserSessionRsvp, setMemberRsvp } from '$lib/server/rsvp';
 import {
 	threadAccessBindings,
 	threadAccessCondition,
@@ -168,7 +168,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		categories: allCategories,
 		recentThreads,
 		currentSession: featuredSession,
-		canRsvpToCurrentSession: featuredSession ? isFutureSession(featuredSession) : false,
+		canRsvpToCurrentSession: featuredSession ? canAcceptSessionRsvps(featuredSession) : false,
 		currentSessionRsvp:
 			featuredSession && locals.user
 				? await getCurrentUserSessionRsvp(locals.db, featuredSession.id, locals.user.id)

@@ -32,7 +32,13 @@
 			await update();
 			if (result.type === 'success') {
 				const status = result.data?.status;
-				toast.success(status === 'declined' ? 'RSVP saved as declined.' : 'RSVP saved.');
+				toast.success(
+					status === 'declined'
+						? 'RSVP saved as declined.'
+						: status === 'waitlisted'
+							? 'The session is full, so you are on the waitlist.'
+							: 'RSVP saved.'
+				);
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
@@ -110,7 +116,8 @@
 									type="submit"
 									name="status"
 									value="registered"
-									variant={data.currentSessionRsvp?.attendanceStatus === 'attending'
+									variant={data.currentSessionRsvp?.attendanceStatus === 'attending' ||
+									data.currentSessionRsvp?.attendanceStatus === 'waitlisted'
 										? 'default'
 										: 'outline'}
 									disabled={rsvping}
@@ -122,7 +129,7 @@
 									type="submit"
 									name="status"
 									value="declined"
-									variant={data.currentSessionRsvp?.attendanceStatus === 'not_attending'
+									variant={data.currentSessionRsvp?.attendanceStatus === 'declined'
 										? 'default'
 										: 'outline'}
 									disabled={rsvping}

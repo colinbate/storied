@@ -158,6 +158,25 @@
 							<Input id="create-rsvpSlug" name="rsvpSlug" />
 						</div>
 						<div class="space-y-2">
+							<Label for="create-rsvpCapacity">RSVP Capacity</Label>
+							<Input
+								id="create-rsvpCapacity"
+								name="rsvpCapacity"
+								type="number"
+								min="1"
+								value="12"
+							/>
+						</div>
+						<label class="flex items-center gap-2 text-sm">
+							<input
+								name="rsvpWaitlistEnabled"
+								type="checkbox"
+								class="rounded border-input"
+								checked
+							/>
+							Enable RSVP waitlist
+						</label>
+						<div class="space-y-2">
 							<Label for="create-astroPath">Astro Path</Label>
 							<Input id="create-astroPath" name="astroPath" placeholder="/sessions/jan-2025" />
 						</div>

@@ -10,6 +10,7 @@
 	import PenLineIcon from '@lucide/svelte/icons/pen-line';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import TagIcon from '@lucide/svelte/icons/tag';
+	import ImportIcon from '@lucide/svelte/icons/import';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
@@ -44,6 +45,12 @@
 			href: '/admin/themes',
 			label: 'Themes',
 			icon: LightbulbIcon,
+			show: data.permissions.has('sessions:edit')
+		},
+		{
+			href: '/admin/rsvp-import',
+			label: 'RSVP Import',
+			icon: ImportIcon,
 			show: data.permissions.has('sessions:edit')
 		},
 		{

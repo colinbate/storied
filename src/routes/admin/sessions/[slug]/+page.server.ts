@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
 	authors,
+	attendeeIdentities,
 	series,
 	sessionParticipantSubjects,
 	sessionParticipants,
@@ -12,6 +13,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
+import { newId } from '$lib/server/ids';
 import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
 import { renderMarkdown } from '$lib/server/markdown';
 import { DEFAULT_TIMEZONE, isValidTimezone } from '$lib/server/notification-preferences';
@@ -19,7 +21,11 @@ import {
 	getPrimaryThreadForSession,
 	subscribeActiveMembersToSessionThread
 } from '$lib/server/discussions';
-import { getSessionRsvpSlug, upsertRsvpEvent } from '$lib/server/rsvp';
+import {
+	getOrCreateMemberAttendee,
+	getParticipantForAttendee,
+	getSessionRsvpSlug
+} from '$lib/server/rsvp';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
 type SubjectKind = 'book' | 'series' | 'author';
@@ -27,7 +33,6 @@ type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_of
 
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
-const attendanceStatuses = new Set(['attending', 'not_attending', 'maybe', 'attended']);
 const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
 
 function rejectStaleSession(data: FormData, updatedAt: string) {
@@ -47,13 +52,6 @@ function getOptionalString(data: FormData, key: string) {
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	const status = data.get('status')?.toString();
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
-}
-
-function getAttendanceStatus(data: FormData) {
-	const status = data.get('attendanceStatus')?.toString();
-	return attendanceStatuses.has(status ?? '')
-		? (status as 'attending' | 'not_attending' | 'maybe' | 'attended')
-		: 'attending';
 }
 
 function getParticipantSubjectRelation(data: FormData) {
@@ -116,24 +114,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})
 		.filter((x): x is NonNullable<typeof x> => x !== null);
 
-	const [allThemes, participants] = await Promise.all([
-		listThemes(locals.db),
-		locals.db
-			.select({
-				participant: sessionParticipants,
-				user: {
-					id: users.id,
-					displayName: users.displayName,
-					email: users.email,
-					avatarUrl: users.avatarUrl
-				}
-			})
-			.from(sessionParticipants)
-			.innerJoin(users, eq(sessionParticipants.userId, users.id))
-			.where(eq(sessionParticipants.sessionId, session.id))
-			.orderBy(asc(users.displayName))
-			.all()
-	]);
+	const allThemes = await listThemes(locals.db);
 
 	const participantReads = await locals.db
 		.select({
@@ -144,8 +125,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			}
 		})
 		.from(sessionParticipantSubjects)
-		.innerJoin(users, eq(sessionParticipantSubjects.userId, users.id))
-		.where(eq(sessionParticipantSubjects.sessionId, session.id))
+		.innerJoin(
+			sessionParticipants,
+			eq(sessionParticipantSubjects.participantId, sessionParticipants.id)
+		)
+		.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
+		.innerJoin(users, eq(attendeeIdentities.userId, users.id))
+		.where(eq(sessionParticipants.sessionId, session.id))
 		.orderBy(asc(users.displayName), desc(sessionParticipantSubjects.isPrimaryPick))
 		.all();
 
@@ -198,7 +184,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		session,
 		themes: allThemes,
 		linkedSubjects,
-		participants,
 		participantReads,
 		allBooks,
 		allSeries,
@@ -208,7 +193,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	updateSession: async ({ request, params, locals, platform }) => {
+	updateSession: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 
 		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
@@ -230,11 +215,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
 		}
 		if (!startsAt) {
-			return fail(400, { error: 'Starts At is required to sync an RSVP event.' });
-		}
-		const rsvpDb = platform?.env.RSVP_DB;
-		if (!rsvpDb) {
-			return fail(500, { error: 'RSVP database binding is not configured.' });
+			return fail(400, { error: 'Starts At is required for a session.' });
 		}
 		const sessionTheme = await resolveSessionTheme(locals.db, {
 			themeId: getOptionalString(data, 'themeId')
@@ -257,19 +238,16 @@ export const actions: Actions = {
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
 			locationName: getOptionalString(data, 'locationName'),
 			rsvpSlug: getOptionalString(data, 'rsvpSlug') ?? getSessionRsvpSlug(row),
+			rsvpCapacity: Math.max(
+				1,
+				Number.parseInt(data.get('rsvpCapacity')?.toString() ?? '12', 10) || 12
+			),
+			rsvpWaitlistEnabled: data.get('rsvpWaitlistEnabled') === 'on',
 			isPublic: data.get('isPublic') === 'on',
 			astroPath: getOptionalString(data, 'astroPath'),
 			externalUrl: getOptionalString(data, 'externalUrl'),
 			updatedAt: new Date().toISOString()
 		};
-
-		const rsvpEvent = await upsertRsvpEvent({
-			db: rsvpDb,
-			session: updatedSession
-		});
-		if (!rsvpEvent) {
-			return fail(400, { error: 'Starts At must be a valid date for the RSVP event.' });
-		}
 
 		await locals.db
 			.update(sessions)
@@ -285,7 +263,9 @@ export const actions: Actions = {
 				timezone: updatedSession.timezone,
 				durationMinutes: updatedSession.durationMinutes,
 				locationName: updatedSession.locationName,
-				rsvpSlug: rsvpEvent.slug,
+				rsvpSlug: updatedSession.rsvpSlug,
+				rsvpCapacity: updatedSession.rsvpCapacity,
+				rsvpWaitlistEnabled: updatedSession.rsvpWaitlistEnabled,
 				isPublic: updatedSession.isPublic,
 				astroPath: updatedSession.astroPath,
 				updatedAt: updatedSession.updatedAt
@@ -295,7 +275,7 @@ export const actions: Actions = {
 		return { updated: true };
 	},
 
-	updateStatus: async ({ request, params, locals, platform }) => {
+	updateStatus: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 
 		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
@@ -310,11 +290,6 @@ export const actions: Actions = {
 			return fail(400, { error: 'Choose a valid session status.' });
 		}
 		const status = requestedStatus as 'draft' | 'current' | 'past';
-
-		const rsvpDb = platform?.env.RSVP_DB;
-		if (!rsvpDb) {
-			return fail(500, { error: 'RSVP database binding is not configured.' });
-		}
 
 		const allSessions =
 			status === 'current' ? await locals.db.select().from(sessions).all() : [row];
@@ -332,18 +307,6 @@ export const actions: Actions = {
 
 		if (statusChanges.length === 0) {
 			return { statusUpdated: true, promotedPreviousCount: 0 };
-		}
-
-		for (const change of statusChanges) {
-			const rsvpEvent = await upsertRsvpEvent({
-				db: rsvpDb,
-				session: { ...change.session, status: change.status }
-			});
-			if (!rsvpEvent) {
-				return fail(400, {
-					error: `The RSVP event for ${change.session.title} could not be synced.`
-				});
-			}
 		}
 
 		const updatedAt = new Date().toISOString();
@@ -501,55 +464,6 @@ export const actions: Actions = {
 		return { linkRemoved: true };
 	},
 
-	upsertParticipant: async ({ request, params, locals }) => {
-		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
-		if (!row) return fail(404, { error: 'Session not found' });
-
-		const data = await request.formData();
-		const userId = data.get('userId')?.toString();
-		if (!userId) return fail(400, { error: 'Select a member.' });
-
-		await locals.db
-			.insert(sessionParticipants)
-			.values({
-				sessionId: row.id,
-				userId,
-				attendanceStatus: getAttendanceStatus(data),
-				rsvpSource: 'admin',
-				note: getOptionalString(data, 'note')
-			})
-			.onConflictDoUpdate({
-				target: [sessionParticipants.sessionId, sessionParticipants.userId],
-				set: {
-					attendanceStatus: getAttendanceStatus(data),
-					rsvpSource: 'admin',
-					note: getOptionalString(data, 'note'),
-					updatedAt: new Date().toISOString()
-				}
-			});
-
-		return { participantSaved: true };
-	},
-
-	removeParticipant: async ({ request, params, locals }) => {
-		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
-		if (!row) return fail(404, { error: 'Session not found' });
-
-		const data = await request.formData();
-		const userId = data.get('userId')?.toString();
-		if (!userId) return fail(400, { error: 'Missing member reference.' });
-
-		await locals.db
-			.delete(sessionParticipants)
-			.where(
-				and(eq(sessionParticipants.sessionId, row.id), eq(sessionParticipants.userId, userId))
-			);
-
-		return { participantRemoved: true };
-	},
-
 	upsertParticipantSubject: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
@@ -563,22 +477,29 @@ export const actions: Actions = {
 		if (!kind || (kind !== 'book' && kind !== 'series'))
 			return fail(400, { error: 'Invalid subject kind.' });
 		if (!subjectId) return fail(400, { error: 'Select a subject.' });
+		const user = await locals.db.select().from(users).where(eq(users.id, userId)).get();
+		if (!user) return fail(404, { error: 'Member not found.' });
+		const attendee = await getOrCreateMemberAttendee(locals.db, user);
 
 		await locals.db
 			.insert(sessionParticipants)
 			.values({
+				id: newId(),
 				sessionId: row.id,
-				userId,
+				attendeeId: attendee.id,
+				nameSnapshot: attendee.name,
+				emailSnapshot: attendee.email,
 				attendanceStatus: 'attended',
 				rsvpSource: 'admin'
 			})
 			.onConflictDoNothing();
+		const participant = await getParticipantForAttendee(locals.db, row.id, attendee.id);
+		if (!participant) return fail(500, { error: 'Could not create participant.' });
 
 		await locals.db
 			.insert(sessionParticipantSubjects)
 			.values({
-				sessionId: row.id,
-				userId,
+				participantId: participant.id,
 				subjectType: kind,
 				subjectId,
 				relationType: getParticipantSubjectRelation(data),
@@ -588,8 +509,7 @@ export const actions: Actions = {
 			})
 			.onConflictDoUpdate({
 				target: [
-					sessionParticipantSubjects.sessionId,
-					sessionParticipantSubjects.userId,
+					sessionParticipantSubjects.participantId,
 					sessionParticipantSubjects.subjectType,
 					sessionParticipantSubjects.subjectId
 				],
@@ -618,13 +538,20 @@ export const actions: Actions = {
 		if (kind !== 'book' && kind !== 'series') {
 			return fail(400, { error: 'Invalid subject kind.' });
 		}
+		const attendee = await locals.db
+			.select()
+			.from(attendeeIdentities)
+			.where(eq(attendeeIdentities.userId, userId))
+			.get();
+		if (!attendee) return fail(404, { error: 'Participant not found.' });
+		const participant = await getParticipantForAttendee(locals.db, row.id, attendee.id);
+		if (!participant) return fail(404, { error: 'Participant not found.' });
 
 		await locals.db
 			.delete(sessionParticipantSubjects)
 			.where(
 				and(
-					eq(sessionParticipantSubjects.sessionId, row.id),
-					eq(sessionParticipantSubjects.userId, userId),
+					eq(sessionParticipantSubjects.participantId, participant.id),
 					eq(sessionParticipantSubjects.subjectType, kind),
 					eq(sessionParticipantSubjects.subjectId, subjectId)
 				)

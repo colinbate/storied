@@ -6,8 +6,7 @@ import {
 	uniqueIndex,
 	index,
 	unique,
-	primaryKey,
-	foreignKey
+	primaryKey
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
@@ -17,8 +16,15 @@ export type SubjectType = 'book' | 'series' | 'author';
 export type SessionStatus = 'draft' | 'current' | 'past';
 export type SessionThreadRole = 'primary' | 'related';
 export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
-export type SessionAttendanceStatus = 'attending' | 'not_attending' | 'maybe' | 'attended';
-export type SessionParticipantSource = 'member' | 'public_form' | 'admin';
+export type SessionAttendanceStatus =
+	| 'attending'
+	| 'waitlisted'
+	| 'maybe'
+	| 'declined'
+	| 'cancelled'
+	| 'attended'
+	| 'no_show';
+export type SessionParticipantSource = 'member' | 'public_form' | 'admin' | 'legacy_import';
 export type SessionParticipantSubjectRelation = 'read_for_session' | 'considered' | 'mentioned';
 export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 
@@ -297,6 +303,10 @@ export const sessions = sqliteTable(
 		durationMinutes: integer('duration_minutes'),
 		locationName: text('location_name'),
 		rsvpSlug: text('rsvp_slug'),
+		rsvpCapacity: integer('rsvp_capacity').notNull().default(12),
+		rsvpWaitlistEnabled: integer('rsvp_waitlist_enabled', { mode: 'boolean' })
+			.notNull()
+			.default(true),
 		isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
 		astroPath: text('astro_path'),
 		externalUrl: text('external_url'),
@@ -307,6 +317,7 @@ export const sessions = sqliteTable(
 		index('idx_sessions_slug').on(table.slug),
 		index('idx_sessions_status_starts_at').on(table.status, table.startsAt),
 		index('idx_sessions_is_public_starts_at').on(table.isPublic, table.startsAt),
+		uniqueIndex('sessions_rsvp_slug_unique').on(table.rsvpSlug),
 		index('idx_sessions_theme_id').on(table.themeId)
 	]
 );
@@ -884,29 +895,64 @@ export const sessionSubjects = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
-// session_participants  (member relationship to a session)
+// attendee_identities  (members and public/administrative guests)
+// ──────────────────────────────────────────────
+export const attendeeIdentities = sqliteTable(
+	'attendee_identities',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+		name: text('name').notNull(),
+		email: text('email'),
+		emailNormalized: text('email_normalized'),
+		legacyRsvpPersonId: integer('legacy_rsvp_person_id'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('attendee_identities_user_unique').on(table.userId),
+		uniqueIndex('attendee_identities_email_normalized_unique').on(table.emailNormalized),
+		uniqueIndex('attendee_identities_legacy_rsvp_person_unique').on(table.legacyRsvpPersonId),
+		index('idx_attendee_identities_name').on(table.name)
+	]
+);
+
+// ──────────────────────────────────────────────
+// session_participants  (one RSVP/attendance record per person and session)
 // ──────────────────────────────────────────────
 export const sessionParticipants = sqliteTable(
 	'session_participants',
 	{
+		id: text('id').primaryKey(),
 		sessionId: text('session_id')
 			.notNull()
 			.references(() => sessions.id, { onDelete: 'cascade' }),
-		userId: text('user_id')
+		attendeeId: text('attendee_id')
 			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
+			.references(() => attendeeIdentities.id, { onDelete: 'cascade' }),
+		nameSnapshot: text('name_snapshot').notNull(),
+		emailSnapshot: text('email_snapshot'),
 		attendanceStatus: text('attendance_status')
 			.notNull()
 			.default('attending')
 			.$type<SessionAttendanceStatus>(),
 		rsvpSource: text('rsvp_source').$type<SessionParticipantSource>(),
+		confirmationToken: text('confirmation_token'),
+		legacyRsvpRegistrationId: integer('legacy_rsvp_registration_id'),
 		note: text('note'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		primaryKey({ columns: [table.sessionId, table.userId] }),
-		index('idx_session_participants_user').on(table.userId, table.updatedAt),
+		uniqueIndex('session_participants_session_attendee_unique').on(
+			table.sessionId,
+			table.attendeeId
+		),
+		uniqueIndex('session_participants_confirmation_token_unique').on(table.confirmationToken),
+		uniqueIndex('session_participants_legacy_rsvp_registration_unique').on(
+			table.legacyRsvpRegistrationId
+		),
+		index('idx_session_participants_attendee').on(table.attendeeId, table.updatedAt),
 		index('idx_session_participants_session_status').on(
 			table.sessionId,
 			table.attendanceStatus,
@@ -918,8 +964,9 @@ export const sessionParticipants = sqliteTable(
 export const sessionParticipantSubjects = sqliteTable(
 	'session_participant_subjects',
 	{
-		sessionId: text('session_id').notNull(),
-		userId: text('user_id').notNull(),
+		participantId: text('participant_id')
+			.notNull()
+			.references(() => sessionParticipants.id, { onDelete: 'cascade' }),
 		subjectType: text('subject_type').notNull().$type<Extract<SubjectType, 'book' | 'series'>>(),
 		subjectId: text('subject_id').notNull(),
 		relationType: text('relation_type')
@@ -933,16 +980,12 @@ export const sessionParticipantSubjects = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		primaryKey({ columns: [table.sessionId, table.userId, table.subjectType, table.subjectId] }),
-		foreignKey({
-			columns: [table.sessionId, table.userId],
-			foreignColumns: [sessionParticipants.sessionId, sessionParticipants.userId]
-		}).onDelete('cascade'),
+		primaryKey({ columns: [table.participantId, table.subjectType, table.subjectId] }),
 		index('idx_session_participant_subjects_session_subject').on(
-			table.sessionId,
+			table.participantId,
 			table.subjectType,
 			table.subjectId
 		),
-		index('idx_session_participant_subjects_user').on(table.userId, table.createdAt)
+		index('idx_session_participant_subjects_participant').on(table.participantId, table.createdAt)
 	]
 );
