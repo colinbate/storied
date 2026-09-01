@@ -44,18 +44,21 @@ export const GET: RequestHandler = async ({ locals }) => {
 		.all();
 
 	return json(
-		rows.map((r) => ({
-			...r,
-			date: r.date?.split('T')[0],
-			start: r.start?.split('T')[1],
-			rsvpSlug: canAcceptSessionRsvps({
+		rows.map((r) => {
+			const { rsvpSlug, ...session } = r;
+			const acceptsRsvps = canAcceptSessionRsvps({
 				status: r.status,
 				startsAt: r.start,
 				timezone: r.timezone
-			})
-				? (r.rsvpSlug ?? r.slug)
-				: null
-		})),
+			});
+
+			return {
+				...session,
+				date: r.date?.split('T')[0],
+				start: r.start?.split('T')[1],
+				...(acceptsRsvps ? { rsvpSlug: rsvpSlug ?? r.slug } : {})
+			};
+		}),
 		{ headers: publicApiHeaders }
 	);
 };

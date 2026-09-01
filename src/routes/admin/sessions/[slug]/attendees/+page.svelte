@@ -23,6 +23,7 @@
 		'attended',
 		'no_show'
 	] as const;
+	const confirmationStatuses = new Set(['attending', 'waitlisted', 'attended']);
 	const enhanceAction: SubmitFunction =
 		() =>
 		async ({ result, update }) => {
@@ -31,8 +32,19 @@
 			else if (result.type === 'failure' && result.data?.error)
 				toast.error(String(result.data.error));
 		};
+	const enhanceResend: SubmitFunction =
+		() =>
+		async ({ result, update }) => {
+			await update({ reset: false });
+			if (result.type === 'success') toast.success('Confirmation email sent.');
+			else if (result.type === 'failure' && result.data?.error)
+				toast.error(String(result.data.error));
+		};
 	function label(status: string) {
 		return status.replace('_', ' ');
+	}
+	function confirmationLabel(status: string) {
+		return status === 'waitlisted' ? 'Resend waitlist confirmation' : 'Resend RSVP confirmation';
 	}
 </script>
 
@@ -115,7 +127,11 @@
 						<Label for="new-name">Name</Label><Input id="new-name" name="name" required />
 					</div>
 					<div class="space-y-1">
-						<Label for="new-email">Email (optional)</Label><Input id="new-email" name="email" type="email" />
+						<Label for="new-email">Email (optional)</Label><Input
+							id="new-email"
+							name="email"
+							type="email"
+						/>
 					</div>
 					<div class="space-y-1">
 						<Label for="new-status">Status</Label><NativeSelect
@@ -150,9 +166,9 @@
 					No RSVPs or attendance records yet.
 				</p>{:else}<div class="divide-y">
 					{#each data.participants as row (row.participant.id)}<div class="space-y-3 p-4">
-							<div class="flex flex-wrap items-start gap-3">
+							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
 								<div class="min-w-48 flex-1">
-									<div class="flex items-center gap-2">
+									<div class="flex flex-wrap items-center gap-2">
 										<p class="font-medium">{row.participant.nameSnapshot}</p>
 										<Badge variant="outline">{row.user ? 'member' : 'guest'}</Badge><Badge
 											variant="secondary">{row.participant.rsvpSource ?? 'unknown'}</Badge
@@ -162,44 +178,74 @@
 										{row.participant.emailSnapshot ?? 'No email address'}
 									</p>
 								</div>
-								<form
-									method="POST"
-									action="?/update"
-									use:enhance={enhanceAction}
-									class="flex flex-1 flex-wrap items-end gap-2"
-								>
-									<input type="hidden" name="participantId" value={row.participant.id} />
-									<div class="space-y-1">
-										<Label for={`status-${row.participant.id}`} class="text-xs">Status</Label
-										><NativeSelect
-											id={`status-${row.participant.id}`}
-											name="status"
-											value={row.participant.attendanceStatus}
-											>{#each statusOptions as status (status)}<NativeSelectOption value={status}
-													>{label(status)}</NativeSelectOption
-												>{/each}</NativeSelect
+								<div class="space-y-2">
+									<div class="flex flex-wrap items-end gap-2">
+										<form
+											method="POST"
+											action="?/update"
+											use:enhance={enhanceAction}
+											class="flex flex-wrap items-end gap-2"
 										>
+											<input type="hidden" name="participantId" value={row.participant.id} />
+											<input type="hidden" name="note" value={row.participant.note ?? ''} />
+											<div class="space-y-1">
+												<Label for={`status-${row.participant.id}`} class="text-xs">Status</Label
+												><NativeSelect
+													id={`status-${row.participant.id}`}
+													name="status"
+													value={row.participant.attendanceStatus}
+													>{#each statusOptions as status (status)}<NativeSelectOption
+															value={status}>{label(status)}</NativeSelectOption
+														>{/each}</NativeSelect
+												>
+											</div>
+											<Button type="submit" size="sm">Update status</Button>
+										</form>
+										{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<form
+												method="POST"
+												action="?/resend"
+												use:enhance={enhanceResend}
+											>
+												<input
+													type="hidden"
+													name="participantId"
+													value={row.participant.id}
+												/><Button
+													type="submit"
+													size="sm"
+													variant="outline"
+													title="Sends the attendee another copy of their confirmation email."
+													>{confirmationLabel(row.participant.attendanceStatus)}</Button
+												>
+											</form>{/if}
 									</div>
-									<div class="min-w-40 flex-1 space-y-1">
-										<Label for={`note-${row.participant.id}`} class="text-xs">Note</Label><Input
-											id={`note-${row.participant.id}`}
-											name="note"
-											value={row.participant.note ?? ''}
-										/>
-									</div>
-									<Button type="submit" size="sm" variant="outline">Save</Button>
-								</form>
-								{#if row.participant.emailSnapshot}<form
-										method="POST"
-										action="?/resend"
-										use:enhance={enhanceAction}
-									>
-										<input type="hidden" name="participantId" value={row.participant.id} /><Button
-											type="submit"
-											size="sm"
-											variant="ghost">Resend email</Button
+									<details>
+										<summary
+											class="w-fit cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground"
 										>
-									</form>{/if}
+											{row.participant.note ? 'Edit note' : 'Add note'}
+										</summary>
+										<form
+											method="POST"
+											action="?/update"
+											use:enhance={enhanceAction}
+											class="mt-2 flex flex-wrap items-end gap-2"
+										>
+											<input type="hidden" name="participantId" value={row.participant.id} />
+											<input type="hidden" name="status" value={row.participant.attendanceStatus} />
+											<div class="min-w-64 flex-1 space-y-1">
+												<Label for={`note-${row.participant.id}`} class="text-xs"
+													>Internal note</Label
+												><Input
+													id={`note-${row.participant.id}`}
+													name="note"
+													value={row.participant.note ?? ''}
+												/>
+											</div>
+											<Button type="submit" size="sm" variant="outline">Save note</Button>
+										</form>
+									</details>
+								</div>
 							</div>
 							{#if !row.user}<form
 									method="POST"
