@@ -26,6 +26,7 @@ export type SessionAttendanceStatus =
 	| 'no_show';
 export type SessionParticipantSource = 'member' | 'public_form' | 'admin' | 'legacy_import';
 export type SessionParticipantSubjectRelation = 'read_for_session' | 'considered' | 'mentioned';
+export type SessionReminderDeliveryStatus = 'sending' | 'sent' | 'failed';
 export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 
 // ──────────────────────────────────────────────
@@ -957,6 +958,41 @@ export const sessionParticipants = sqliteTable(
 			table.sessionId,
 			table.attendanceStatus,
 			table.updatedAt
+		)
+	]
+);
+
+// ──────────────────────────────────────────────
+// session_reminder_deliveries  (at-most-once RSVP reminders)
+// ──────────────────────────────────────────────
+export const sessionReminderDeliveries = sqliteTable(
+	'session_reminder_deliveries',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		// These IDs are snapshots rather than foreign keys so the delivery audit remains
+		// even if an attendee identity or individual session record is later reconciled.
+		attendeeId: text('attendee_id').notNull(),
+		participantId: text('participant_id').notNull(),
+		recipientEmail: text('recipient_email').notNull(),
+		status: text('status').notNull().default('sending').$type<SessionReminderDeliveryStatus>(),
+		failureReason: text('failure_reason'),
+		attemptedAt: text('attempted_at').notNull().default(timestampDefault),
+		sentAt: text('sent_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('session_reminder_deliveries_session_attendee_unique').on(
+			table.sessionId,
+			table.attendeeId
+		),
+		index('idx_session_reminder_deliveries_session_status').on(
+			table.sessionId,
+			table.status,
+			table.attemptedAt
 		)
 	]
 );

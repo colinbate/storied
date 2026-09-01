@@ -44,4 +44,4 @@ allowed_sender_addresses = ["notify@archive.bermudatrianglesociety.com"]
 
 # Cron triggers — handlers wired in src/dispatch.ts#dispatchScheduled
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "0 21 * * *"]

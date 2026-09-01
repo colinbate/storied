@@ -7,6 +7,7 @@ import { handlePrivateMessageNotification } from './notifications/queue-private-
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
 import { handlePushoverNotification } from './notifications/pushover';
 import { runDailyDigest } from './notifications/scheduled-digest';
+import { runSessionReminders } from './notifications/scheduled-session-reminders';
 import {
 	handleSearchRebuild,
 	handleSearchSessionReindex,
@@ -69,6 +70,10 @@ export async function dispatchScheduled(cron: string, context: HandlerContext): 
 	// the digest code.
 	if (cron === '0 * * * *') {
 		await runDailyDigest(context);
+		return;
+	}
+	if (cron === '0 21 * * *') {
+		await runSessionReminders(context);
 		return;
 	}
 	console.log(`[SCHEDULED] No handler registered for cron: ${cron}`);
