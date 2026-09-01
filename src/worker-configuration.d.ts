@@ -8,7 +8,6 @@ declare namespace Cloudflare {
 	interface Env {
 		FILES: R2Bucket;
 		DB: D1Database;
-		RSVP_DB: D1Database;
 		EMAIL: SendEmail;
 		STORIED_WORKER: {
 			send(message: import('../shared/worker-messages').WorkerMessage): Promise<void>;

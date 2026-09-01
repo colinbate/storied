@@ -42,15 +42,15 @@
 			show: data.permissions.has('sessions:edit')
 		},
 		{
-			href: '/admin/themes',
-			label: 'Themes',
-			icon: LightbulbIcon,
+			href: '/admin/attendees',
+			label: 'Attendees',
+			icon: UsersIcon,
 			show: data.permissions.has('sessions:edit')
 		},
 		{
-			href: '/admin/rsvp-import',
-			label: 'RSVP Import',
-			icon: ImportIcon,
+			href: '/admin/themes',
+			label: 'Themes',
+			icon: LightbulbIcon,
 			show: data.permissions.has('sessions:edit')
 		},
 		{

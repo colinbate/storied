@@ -12,6 +12,7 @@
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import DownloadIcon from '@lucide/svelte/icons/download';
 	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
+	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
 	import { toast } from 'svelte-sonner';
 	import { pageTitle } from '$shared/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -19,15 +20,15 @@
 	let { data } = $props();
 	const statusOptions = [
 		'attending',
+		'attended',
 		'waitlisted',
 		'maybe',
 		'declined',
 		'cancelled',
-		'attended',
 		'no_show'
 	] as const;
 	const confirmationStatuses = new Set(['attending', 'waitlisted', 'attended']);
-	type RecordAction = 'note' | 'reconcile';
+	type RecordAction = 'note' | 'reconcile' | 'delete';
 	let recordActionOpen = $state(false);
 	let recordAction = $state<{ kind: RecordAction; participantId: string } | null>(null);
 	let selectedRecord = $derived(
@@ -35,6 +36,14 @@
 			? (data.participants.find((row) => row.participant.id === recordAction?.participantId) ??
 					null)
 			: null
+	);
+	const participantGroups = $derived(
+		statusOptions
+			.map((status) => ({
+				status,
+				rows: data.participants.filter((row) => row.participant.attendanceStatus === status)
+			}))
+			.filter((group) => group.rows.length > 0)
 	);
 	const enhanceAction: SubmitFunction =
 		() =>
@@ -52,17 +61,18 @@
 			else if (result.type === 'failure' && result.data?.error)
 				toast.error(String(result.data.error));
 		};
-	const enhanceRecordAction: SubmitFunction =
-		() =>
-		async ({ result, update }) => {
+	const enhanceRecordAction: SubmitFunction = () => {
+		const kind = recordAction?.kind;
+		return async ({ result, update }) => {
 			await update({ reset: result.type === 'success' });
 			if (result.type === 'success') {
-				toast.success('Attendee record saved.');
+				toast.success(kind === 'delete' ? 'Session record deleted.' : 'Attendee record saved.');
 				recordActionOpen = false;
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
 		};
+	};
 	function label(status: string) {
 		return status.replace('_', ' ');
 	}
@@ -92,11 +102,16 @@
 			<h1 class="text-2xl font-bold">Attendees</h1>
 			<p class="text-sm text-muted-foreground">{data.session.title}</p>
 		</div>
-		<Button
-			variant="outline"
-			href={resolve('/admin/sessions/[slug]/attendees/export.csv', { slug: data.session.slug })}
-			><DownloadIcon class="h-4 w-4" /> Export CSV</Button
-		>
+		<div class="flex flex-wrap gap-2">
+			<Button variant="outline" href={resolve('/admin/attendees')}>
+				<UsersRoundIcon class="h-4 w-4" /> Manage attendees
+			</Button>
+			<Button
+				variant="outline"
+				href={resolve('/admin/sessions/[slug]/attendees/export.csv', { slug: data.session.slug })}
+				><DownloadIcon class="h-4 w-4" /> Export CSV</Button
+			>
+		</div>
 	</div>
 
 	<Card.Root size="sm">
@@ -198,96 +213,120 @@
 		>
 	</div>
 
-	<Card.Root
-		><Card.Header
-			><Card.Title class="text-base">Session records ({data.participants.length})</Card.Title
-			><Card.Description>Contact information is visible only to administrators.</Card.Description
-			></Card.Header
-		><Card.Content class="p-0">
-			{#if data.participants.length === 0}<p class="p-6 text-sm text-muted-foreground">
+	<div class="space-y-4">
+		<div>
+			<h2 class="text-base font-semibold">Session records ({data.participants.length})</h2>
+			<p class="text-sm text-muted-foreground">
+				Records are separated by status. Contact information is visible only to administrators.
+			</p>
+		</div>
+		{#if data.participants.length === 0}
+			<Card.Root>
+				<Card.Content class="p-6 text-sm text-muted-foreground">
 					No RSVPs or attendance records yet.
-				</p>{:else}<div class="divide-y">
-					{#each data.participants as row (row.participant.id)}<div class="p-4">
-							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-								<div class="min-w-48 flex-1">
-									<div class="flex flex-wrap items-center gap-2">
-										<p class="font-medium">{row.participant.nameSnapshot}</p>
-										<Badge variant="outline">{row.user ? 'member' : 'guest'}</Badge><Badge
-											variant="secondary">{row.participant.rsvpSource ?? 'unknown'}</Badge
-										>
-									</div>
-									<p class="text-sm text-muted-foreground">
-										{row.participant.emailSnapshot ?? 'No email address'}
-									</p>
-								</div>
-								<div class="flex items-center gap-2">
-									<form
-										method="POST"
-										action="?/update"
-										use:enhance={enhanceAction}
-										class="flex items-center gap-2"
-									>
-										<input type="hidden" name="participantId" value={row.participant.id} />
-										<input type="hidden" name="note" value={row.participant.note ?? ''} />
-										<Label for={`status-${row.participant.id}`} class="sr-only">Status</Label
-										><NativeSelect
-											id={`status-${row.participant.id}`}
-											name="status"
-											aria-label={`Status for ${row.participant.nameSnapshot}`}
-											value={row.participant.attendanceStatus}
-											>{#each statusOptions as status (status)}<NativeSelectOption value={status}
-													>{label(status)}</NativeSelectOption
-												>{/each}</NativeSelect
-										>
-										<Button type="submit" class="h-10">Update status</Button>
-									</form>
-									<DropdownMenu.Root>
-										<DropdownMenu.Trigger>
-											{#snippet child({ props })}
-												<Button
-													variant="ghost"
-													size="icon"
-													class="size-10"
-													aria-label={`Actions for ${row.participant.nameSnapshot}`}
-													{...props}
+				</Card.Content>
+			</Card.Root>
+		{:else}
+			{#each participantGroups as group (group.status)}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title class="text-base capitalize">
+							{label(group.status)} ({group.rows.length})
+						</Card.Title>
+					</Card.Header>
+					<Card.Content class="p-0">
+						<div class="divide-y">
+							{#each group.rows as row (row.participant.id)}<div class="p-4">
+									<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+										<div class="min-w-48 flex-1">
+											<div class="flex flex-wrap items-center gap-2">
+												<p class="font-medium">{row.participant.nameSnapshot}</p>
+												<Badge variant="outline">{row.user ? 'member' : 'guest'}</Badge><Badge
+													variant="secondary">{row.participant.rsvpSource ?? 'unknown'}</Badge
 												>
-													<EllipsisIcon class="size-4" />
-												</Button>
-											{/snippet}
-										</DropdownMenu.Trigger>
-										<DropdownMenu.Content align="end" class="w-56">
-											<DropdownMenu.Item
-												onSelect={() => openRecordAction('note', row.participant.id)}
+											</div>
+											<p class="text-sm text-muted-foreground">
+												{row.participant.emailSnapshot ?? 'No email address'}
+											</p>
+										</div>
+										<div class="flex items-center gap-2">
+											<form
+												method="POST"
+												action="?/update"
+												use:enhance={enhanceAction}
+												class="flex items-center gap-2"
 											>
-												{row.participant.note ? 'Edit note' : 'Add note'}
-											</DropdownMenu.Item>
-											{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<DropdownMenu.Item
-													onSelect={() => submitForm(`resend-${row.participant.id}`)}
+												<input type="hidden" name="participantId" value={row.participant.id} />
+												<input type="hidden" name="note" value={row.participant.note ?? ''} />
+												<Label for={`status-${row.participant.id}`} class="sr-only">Status</Label
+												><NativeSelect
+													id={`status-${row.participant.id}`}
+													name="status"
+													aria-label={`Status for ${row.participant.nameSnapshot}`}
+													value={row.participant.attendanceStatus}
+													>{#each statusOptions as status (status)}<NativeSelectOption
+															value={status}>{label(status)}</NativeSelectOption
+														>{/each}</NativeSelect
 												>
-													{confirmationLabel(row.participant.attendanceStatus)}
-												</DropdownMenu.Item>{/if}
-											{#if !row.user}<DropdownMenu.Item
-													onSelect={() => openRecordAction('reconcile', row.participant.id)}
+												<Button type="submit" class="h-10">Update status</Button>
+											</form>
+											<DropdownMenu.Root>
+												<DropdownMenu.Trigger>
+													{#snippet child({ props })}
+														<Button
+															variant="ghost"
+															size="icon"
+															class="size-10"
+															aria-label={`Actions for ${row.participant.nameSnapshot}`}
+															{...props}
+														>
+															<EllipsisIcon class="size-4" />
+														</Button>
+													{/snippet}
+												</DropdownMenu.Trigger>
+												<DropdownMenu.Content align="end" class="w-56">
+													<DropdownMenu.Item
+														onSelect={() => openRecordAction('note', row.participant.id)}
+													>
+														{row.participant.note ? 'Edit note' : 'Add note'}
+													</DropdownMenu.Item>
+													{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<DropdownMenu.Item
+															onSelect={() => submitForm(`resend-${row.participant.id}`)}
+														>
+															{confirmationLabel(row.participant.attendanceStatus)}
+														</DropdownMenu.Item>{/if}
+													{#if !row.user}<DropdownMenu.Item
+															onSelect={() => openRecordAction('reconcile', row.participant.id)}
+														>
+															Reconcile with member
+														</DropdownMenu.Item>{/if}
+													<DropdownMenu.Separator />
+													<DropdownMenu.Item
+														class="text-destructive focus:text-destructive"
+														onSelect={() => openRecordAction('delete', row.participant.id)}
+													>
+														Delete session record
+													</DropdownMenu.Item>
+												</DropdownMenu.Content>
+											</DropdownMenu.Root>
+											{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<form
+													id={`resend-${row.participant.id}`}
+													method="POST"
+													action="?/resend"
+													use:enhance={enhanceResend}
+													class="hidden"
 												>
-													Reconcile with member
-												</DropdownMenu.Item>{/if}
-										</DropdownMenu.Content>
-									</DropdownMenu.Root>
-									{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<form
-											id={`resend-${row.participant.id}`}
-											method="POST"
-											action="?/resend"
-											use:enhance={enhanceResend}
-											class="hidden"
-										>
-											<input type="hidden" name="participantId" value={row.participant.id} />
-										</form>{/if}
-								</div>
-							</div>
-						</div>{/each}
-				</div>{/if}
-		</Card.Content></Card.Root
-	>
+													<input type="hidden" name="participantId" value={row.participant.id} />
+												</form>{/if}
+										</div>
+									</div>
+								</div>{/each}
+						</div>
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		{/if}
+	</div>
 </div>
 
 <Dialog.Root bind:open={recordActionOpen}>
@@ -340,6 +379,23 @@
 						Cancel
 					</Button>
 					<Button type="submit">Link and merge history</Button>
+				</Dialog.Footer>
+			</form>
+		{:else if selectedRecord && recordAction?.kind === 'delete'}
+			<Dialog.Header>
+				<Dialog.Title>Delete session record?</Dialog.Title>
+				<Dialog.Description>
+					Remove {selectedRecord.participant.nameSnapshot} from {data.session.title}. This deletes
+					only this session record; their previous-guest identity and other history are kept.
+				</Dialog.Description>
+			</Dialog.Header>
+			<form method="POST" action="?/delete" use:enhance={enhanceRecordAction}>
+				<input type="hidden" name="participantId" value={selectedRecord.participant.id} />
+				<Dialog.Footer>
+					<Button type="button" variant="ghost" onclick={() => (recordActionOpen = false)}>
+						Cancel
+					</Button>
+					<Button type="submit" variant="destructive">Delete record</Button>
 				</Dialog.Footer>
 			</form>
 		{/if}

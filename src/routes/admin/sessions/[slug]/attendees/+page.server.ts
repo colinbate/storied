@@ -4,7 +4,6 @@ import { and, asc, eq } from 'drizzle-orm';
 import {
 	attendeeIdentities,
 	sessionParticipants,
-	sessionParticipantSubjects,
 	sessions,
 	type SessionAttendanceStatus,
 	users
@@ -17,9 +16,12 @@ import {
 	getOrCreateMemberAttendee,
 	isValidRsvpEmail,
 	RsvpIdentityConflictError,
+	canAcceptSessionRsvps,
+	promoteNextWaitlisted,
 	updateParticipantStatus,
 	upsertAdminParticipation
 } from '$lib/server/rsvp';
+import { mergeGuestIdentity } from '$lib/server/attendee-management';
 import {
 	sendRegistrationConfirmationEmail,
 	sendWaitlistConfirmationEmail,
@@ -40,19 +42,6 @@ const statuses = new Set<SessionAttendanceStatus>([
 function parseStatus(value: FormDataEntryValue | null): SessionAttendanceStatus {
 	const status = value?.toString() as SessionAttendanceStatus | undefined;
 	return status && statuses.has(status) ? status : 'attended';
-}
-
-function mergedStatus(a: SessionAttendanceStatus, b: SessionAttendanceStatus) {
-	const rank: Record<SessionAttendanceStatus, number> = {
-		attended: 70,
-		no_show: 60,
-		attending: 50,
-		waitlisted: 40,
-		maybe: 30,
-		declined: 20,
-		cancelled: 10
-	};
-	return rank[a] >= rank[b] ? a : b;
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -236,6 +225,37 @@ export const actions = {
 		return { resent: true };
 	},
 
+	delete: async ({ request, params, locals, platform }) => {
+		requirePermission(locals, 'sessions:edit');
+		const participantId = (await request.formData()).get('participantId')?.toString();
+		if (!participantId) return fail(400, { error: 'Missing participant.' });
+
+		const row = await locals.db
+			.select({ participant: sessionParticipants, session: sessions })
+			.from(sessionParticipants)
+			.innerJoin(sessions, eq(sessionParticipants.sessionId, sessions.id))
+			.where(and(eq(sessionParticipants.id, participantId), eq(sessions.slug, params.slug)))
+			.get();
+		if (!row) return fail(404, { error: 'Participant not found.' });
+
+		await locals.db
+			.delete(sessionParticipants)
+			.where(eq(sessionParticipants.id, row.participant.id));
+		const promoted =
+			row.participant.attendanceStatus === 'attending' && canAcceptSessionRsvps(row.session)
+				? await promoteNextWaitlisted(locals.db, row.session.id)
+				: null;
+		if (promoted?.attendee.email)
+			await sendWaitlistPromotionEmail(
+				platform,
+				row.session,
+				promoted.participant,
+				promoted.attendee,
+				PRIMARY_ORIGIN
+			);
+		return { deleted: true };
+	},
+
 	reconcile: async ({ request, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 		const data = await request.formData();
@@ -256,82 +276,8 @@ export const actions = {
 			if (cause instanceof RsvpIdentityConflictError) return fail(409, { error: cause.message });
 			throw cause;
 		}
-		if (memberIdentity.id === guest.id) return { reconciled: true };
-
-		const guestParticipations = await locals.db
-			.select()
-			.from(sessionParticipants)
-			.where(eq(sessionParticipants.attendeeId, guest.id))
-			.all();
-		for (const guestParticipant of guestParticipations) {
-			const memberParticipant = await locals.db
-				.select()
-				.from(sessionParticipants)
-				.where(
-					and(
-						eq(sessionParticipants.sessionId, guestParticipant.sessionId),
-						eq(sessionParticipants.attendeeId, memberIdentity.id)
-					)
-				)
-				.get();
-			if (!memberParticipant) {
-				await locals.db
-					.update(sessionParticipants)
-					.set({
-						attendeeId: memberIdentity.id,
-						nameSnapshot: memberIdentity.name,
-						emailSnapshot: memberIdentity.email,
-						updatedAt: new Date().toISOString()
-					})
-					.where(eq(sessionParticipants.id, guestParticipant.id));
-				continue;
-			}
-			const guestSubjects = await locals.db
-				.select()
-				.from(sessionParticipantSubjects)
-				.where(eq(sessionParticipantSubjects.participantId, guestParticipant.id))
-				.all();
-			for (const subject of guestSubjects)
-				await locals.db
-					.insert(sessionParticipantSubjects)
-					.values({ ...subject, participantId: memberParticipant.id })
-					.onConflictDoNothing();
-			const takeGuestToken =
-				!memberParticipant.confirmationToken && !!guestParticipant.confirmationToken;
-			const takeGuestLegacyId =
-				memberParticipant.legacyRsvpRegistrationId === null &&
-				guestParticipant.legacyRsvpRegistrationId !== null;
-			if (takeGuestToken || takeGuestLegacyId) {
-				await locals.db
-					.update(sessionParticipants)
-					.set({
-						confirmationToken: takeGuestToken ? null : guestParticipant.confirmationToken,
-						legacyRsvpRegistrationId: takeGuestLegacyId
-							? null
-							: guestParticipant.legacyRsvpRegistrationId
-					})
-					.where(eq(sessionParticipants.id, guestParticipant.id));
-			}
-			await locals.db
-				.update(sessionParticipants)
-				.set({
-					attendanceStatus: mergedStatus(
-						memberParticipant.attendanceStatus,
-						guestParticipant.attendanceStatus
-					),
-					note: memberParticipant.note ?? guestParticipant.note,
-					confirmationToken:
-						memberParticipant.confirmationToken ?? guestParticipant.confirmationToken,
-					legacyRsvpRegistrationId:
-						memberParticipant.legacyRsvpRegistrationId ?? guestParticipant.legacyRsvpRegistrationId,
-					updatedAt: new Date().toISOString()
-				})
-				.where(eq(sessionParticipants.id, memberParticipant.id));
-			await locals.db
-				.delete(sessionParticipants)
-				.where(eq(sessionParticipants.id, guestParticipant.id));
-		}
-		await locals.db.delete(attendeeIdentities).where(eq(attendeeIdentities.id, guest.id));
+		if (memberIdentity.id !== guest.id)
+			await mergeGuestIdentity(locals.db, guest.id, memberIdentity.id);
 		return { reconciled: true };
 	}
 } satisfies Actions;
