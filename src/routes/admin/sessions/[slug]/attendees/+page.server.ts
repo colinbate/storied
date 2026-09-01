@@ -120,7 +120,7 @@ export const actions = {
 		if (!session) return fail(404, { error: 'Session not found.' });
 		const data = await request.formData();
 		const selection = data.get('identity')?.toString() ?? '';
-		const name = data.get('name')?.toString().trim() ?? '';
+		const name = (data.get('guestName') ?? data.get('name'))?.toString().trim() ?? '';
 		const email = data.get('email')?.toString().trim() || null;
 		const note = data.get('note')?.toString().trim() || null;
 		let attendee;

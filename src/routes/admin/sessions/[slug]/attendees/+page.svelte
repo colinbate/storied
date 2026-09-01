@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -9,6 +11,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import DownloadIcon from '@lucide/svelte/icons/download';
+	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
 	import { toast } from 'svelte-sonner';
 	import { pageTitle } from '$shared/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -24,6 +27,15 @@
 		'no_show'
 	] as const;
 	const confirmationStatuses = new Set(['attending', 'waitlisted', 'attended']);
+	type RecordAction = 'note' | 'reconcile';
+	let recordActionOpen = $state(false);
+	let recordAction = $state<{ kind: RecordAction; participantId: string } | null>(null);
+	let selectedRecord = $derived(
+		recordAction
+			? (data.participants.find((row) => row.participant.id === recordAction?.participantId) ??
+					null)
+			: null
+	);
 	const enhanceAction: SubmitFunction =
 		() =>
 		async ({ result, update }) => {
@@ -40,11 +52,29 @@
 			else if (result.type === 'failure' && result.data?.error)
 				toast.error(String(result.data.error));
 		};
+	const enhanceRecordAction: SubmitFunction =
+		() =>
+		async ({ result, update }) => {
+			await update({ reset: result.type === 'success' });
+			if (result.type === 'success') {
+				toast.success('Attendee record saved.');
+				recordActionOpen = false;
+			} else if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+		};
 	function label(status: string) {
 		return status.replace('_', ' ');
 	}
 	function confirmationLabel(status: string) {
 		return status === 'waitlisted' ? 'Resend waitlist confirmation' : 'Resend RSVP confirmation';
+	}
+	function openRecordAction(kind: RecordAction, participantId: string) {
+		recordAction = { kind, participantId };
+		recordActionOpen = true;
+	}
+	function submitForm(id: string) {
+		(document.getElementById(id) as HTMLFormElement | null)?.requestSubmit();
 	}
 </script>
 
@@ -122,15 +152,27 @@
 			><Card.Header
 				><Card.Title class="text-base">Add a new guest or walk-in</Card.Title></Card.Header
 			><Card.Content>
-				<form method="POST" action="?/add" use:enhance={enhanceAction} class="space-y-3">
+				<form
+					method="POST"
+					action="?/add"
+					use:enhance={enhanceAction}
+					class="space-y-3"
+					autocomplete="off"
+				>
 					<div class="space-y-1">
-						<Label for="new-name">Name</Label><Input id="new-name" name="name" required />
+						<Label for="new-name">Name</Label><Input
+							id="new-name"
+							name="guestName"
+							autocomplete="off"
+							required
+						/>
 					</div>
 					<div class="space-y-1">
 						<Label for="new-email">Email (optional)</Label><Input
 							id="new-email"
 							name="email"
 							type="email"
+							autocomplete="off"
 						/>
 					</div>
 					<div class="space-y-1">
@@ -165,8 +207,8 @@
 			{#if data.participants.length === 0}<p class="p-6 text-sm text-muted-foreground">
 					No RSVPs or attendance records yet.
 				</p>{:else}<div class="divide-y">
-					{#each data.participants as row (row.participant.id)}<div class="space-y-3 p-4">
-							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+					{#each data.participants as row (row.participant.id)}<div class="p-4">
+							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
 								<div class="min-w-48 flex-1">
 									<div class="flex flex-wrap items-center gap-2">
 										<p class="font-medium">{row.participant.nameSnapshot}</p>
@@ -178,96 +220,128 @@
 										{row.participant.emailSnapshot ?? 'No email address'}
 									</p>
 								</div>
-								<div class="space-y-2">
-									<div class="flex flex-wrap items-end gap-2">
-										<form
-											method="POST"
-											action="?/update"
-											use:enhance={enhanceAction}
-											class="flex flex-wrap items-end gap-2"
-										>
-											<input type="hidden" name="participantId" value={row.participant.id} />
-											<input type="hidden" name="note" value={row.participant.note ?? ''} />
-											<div class="space-y-1">
-												<Label for={`status-${row.participant.id}`} class="text-xs">Status</Label
-												><NativeSelect
-													id={`status-${row.participant.id}`}
-													name="status"
-													value={row.participant.attendanceStatus}
-													>{#each statusOptions as status (status)}<NativeSelectOption
-															value={status}>{label(status)}</NativeSelectOption
-														>{/each}</NativeSelect
-												>
-											</div>
-											<Button type="submit" size="sm">Update status</Button>
-										</form>
-										{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<form
-												method="POST"
-												action="?/resend"
-												use:enhance={enhanceResend}
-											>
-												<input
-													type="hidden"
-													name="participantId"
-													value={row.participant.id}
-												/><Button
-													type="submit"
-													size="sm"
-													variant="outline"
-													title="Sends the attendee another copy of their confirmation email."
-													>{confirmationLabel(row.participant.attendanceStatus)}</Button
-												>
-											</form>{/if}
-									</div>
-									<details>
-										<summary
-											class="w-fit cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground"
-										>
-											{row.participant.note ? 'Edit note' : 'Add note'}
-										</summary>
-										<form
-											method="POST"
-											action="?/update"
-											use:enhance={enhanceAction}
-											class="mt-2 flex flex-wrap items-end gap-2"
-										>
-											<input type="hidden" name="participantId" value={row.participant.id} />
-											<input type="hidden" name="status" value={row.participant.attendanceStatus} />
-											<div class="min-w-64 flex-1 space-y-1">
-												<Label for={`note-${row.participant.id}`} class="text-xs"
-													>Internal note</Label
-												><Input
-													id={`note-${row.participant.id}`}
-													name="note"
-													value={row.participant.note ?? ''}
-												/>
-											</div>
-											<Button type="submit" size="sm" variant="outline">Save note</Button>
-										</form>
-									</details>
-								</div>
-							</div>
-							{#if !row.user}<form
-									method="POST"
-									action="?/reconcile"
-									use:enhance={enhanceAction}
-									class="flex flex-wrap items-end gap-2 rounded-md bg-muted/50 p-3"
-								>
-									<input type="hidden" name="attendeeId" value={row.attendee.id} />
-									<div class="min-w-64 flex-1 space-y-1">
-										<Label for={`member-${row.attendee.id}`} class="text-xs"
-											>Reconcile with member</Label
-										><NativeSelect id={`member-${row.attendee.id}`} name="userId" required
-											><NativeSelectOption value="">Choose a member</NativeSelectOption
-											>{#each data.users as user (user.id)}<NativeSelectOption value={user.id}
-													>{user.displayName} — {user.email}</NativeSelectOption
+								<div class="flex items-center gap-2">
+									<form
+										method="POST"
+										action="?/update"
+										use:enhance={enhanceAction}
+										class="flex items-center gap-2"
+									>
+										<input type="hidden" name="participantId" value={row.participant.id} />
+										<input type="hidden" name="note" value={row.participant.note ?? ''} />
+										<Label for={`status-${row.participant.id}`} class="sr-only">Status</Label
+										><NativeSelect
+											id={`status-${row.participant.id}`}
+											name="status"
+											aria-label={`Status for ${row.participant.nameSnapshot}`}
+											value={row.participant.attendanceStatus}
+											>{#each statusOptions as status (status)}<NativeSelectOption value={status}
+													>{label(status)}</NativeSelectOption
 												>{/each}</NativeSelect
 										>
-									</div>
-									<Button type="submit" size="sm" variant="outline">Link and merge history</Button>
-								</form>{/if}
+										<Button type="submit" class="h-10">Update status</Button>
+									</form>
+									<DropdownMenu.Root>
+										<DropdownMenu.Trigger>
+											{#snippet child({ props })}
+												<Button
+													variant="ghost"
+													size="icon"
+													class="size-10"
+													aria-label={`Actions for ${row.participant.nameSnapshot}`}
+													{...props}
+												>
+													<EllipsisIcon class="size-4" />
+												</Button>
+											{/snippet}
+										</DropdownMenu.Trigger>
+										<DropdownMenu.Content align="end" class="w-56">
+											<DropdownMenu.Item
+												onSelect={() => openRecordAction('note', row.participant.id)}
+											>
+												{row.participant.note ? 'Edit note' : 'Add note'}
+											</DropdownMenu.Item>
+											{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<DropdownMenu.Item
+													onSelect={() => submitForm(`resend-${row.participant.id}`)}
+												>
+													{confirmationLabel(row.participant.attendanceStatus)}
+												</DropdownMenu.Item>{/if}
+											{#if !row.user}<DropdownMenu.Item
+													onSelect={() => openRecordAction('reconcile', row.participant.id)}
+												>
+													Reconcile with member
+												</DropdownMenu.Item>{/if}
+										</DropdownMenu.Content>
+									</DropdownMenu.Root>
+									{#if row.attendee.email && confirmationStatuses.has(row.participant.attendanceStatus)}<form
+											id={`resend-${row.participant.id}`}
+											method="POST"
+											action="?/resend"
+											use:enhance={enhanceResend}
+											class="hidden"
+										>
+											<input type="hidden" name="participantId" value={row.participant.id} />
+										</form>{/if}
+								</div>
+							</div>
 						</div>{/each}
 				</div>{/if}
 		</Card.Content></Card.Root
 	>
 </div>
+
+<Dialog.Root bind:open={recordActionOpen}>
+	<Dialog.Content>
+		{#if selectedRecord && recordAction?.kind === 'note'}
+			<Dialog.Header>
+				<Dialog.Title>{selectedRecord.participant.note ? 'Edit note' : 'Add note'}</Dialog.Title>
+				<Dialog.Description>
+					Add an internal note for {selectedRecord.participant.nameSnapshot}. Notes are visible only
+					to administrators.
+				</Dialog.Description>
+			</Dialog.Header>
+			<form method="POST" action="?/update" use:enhance={enhanceRecordAction} class="space-y-4">
+				<input type="hidden" name="participantId" value={selectedRecord.participant.id} />
+				<input type="hidden" name="status" value={selectedRecord.participant.attendanceStatus} />
+				<div class="space-y-2">
+					<Label for="record-note">Internal note</Label>
+					<Input id="record-note" name="note" value={selectedRecord.participant.note ?? ''} />
+				</div>
+				<Dialog.Footer>
+					<Button type="button" variant="ghost" onclick={() => (recordActionOpen = false)}>
+						Cancel
+					</Button>
+					<Button type="submit">Save note</Button>
+				</Dialog.Footer>
+			</form>
+		{:else if selectedRecord && recordAction?.kind === 'reconcile' && !selectedRecord.user}
+			<Dialog.Header>
+				<Dialog.Title>Reconcile with member</Dialog.Title>
+				<Dialog.Description>
+					Link {selectedRecord.participant.nameSnapshot} to an existing member and merge their attendance
+					history.
+				</Dialog.Description>
+			</Dialog.Header>
+			<form method="POST" action="?/reconcile" use:enhance={enhanceRecordAction} class="space-y-4">
+				<input type="hidden" name="attendeeId" value={selectedRecord.attendee.id} />
+				<div class="space-y-2">
+					<Label for="reconcile-member">Member</Label>
+					<NativeSelect id="reconcile-member" name="userId" class="w-full" required>
+						<NativeSelectOption value="">Choose a member</NativeSelectOption>
+						{#each data.users as user (user.id)}
+							<NativeSelectOption value={user.id}
+								>{user.displayName} — {user.email}</NativeSelectOption
+							>
+						{/each}
+					</NativeSelect>
+				</div>
+				<Dialog.Footer>
+					<Button type="button" variant="ghost" onclick={() => (recordActionOpen = false)}>
+						Cancel
+					</Button>
+					<Button type="submit">Link and merge history</Button>
+				</Dialog.Footer>
+			</form>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>
