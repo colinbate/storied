@@ -9,6 +9,14 @@
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import UserIcon from '@lucide/svelte/icons/user';
+	import ClassificationBadges from '$lib/components/classification-badges.svelte';
+
+	type Classification = {
+		slug: string;
+		name: string;
+		description?: string | null;
+		icon?: string | null;
+	};
 
 	type Book = {
 		id: string;
@@ -19,6 +27,7 @@
 		coverUrl: string | null;
 		firstPublishYear: number | null;
 		description: string | null;
+		classifications?: Classification[];
 	};
 
 	type Series = {
@@ -30,6 +39,7 @@
 		bookCount: number | null;
 		isComplete: boolean;
 		description: string | null;
+		classifications?: Classification[];
 	};
 
 	type Author = {
@@ -181,7 +191,10 @@
 								{/if}
 								<div class="min-w-0 space-y-2">
 									<div>
-										<h3 class="line-clamp-2 font-semibold">{book.title}</h3>
+										<div class="flex items-start gap-2">
+											<h3 class="line-clamp-2 min-w-0 flex-1 font-semibold">{book.title}</h3>
+											<ClassificationBadges classifications={book.classifications} compact />
+										</div>
 										{#if book.subtitle}
 											<p class="line-clamp-1 text-sm text-muted-foreground">{book.subtitle}</p>
 										{/if}
@@ -230,7 +243,10 @@
 								{/if}
 								<div class="min-w-0 space-y-2">
 									<div>
-										<h3 class="line-clamp-2 font-semibold">{item.title}</h3>
+										<div class="flex items-start gap-2">
+											<h3 class="line-clamp-2 min-w-0 flex-1 font-semibold">{item.title}</h3>
+											<ClassificationBadges classifications={item.classifications} compact />
+										</div>
 										{#if item.authorText}
 											<p class="line-clamp-1 text-sm text-muted-foreground">by {item.authorText}</p>
 										{/if}

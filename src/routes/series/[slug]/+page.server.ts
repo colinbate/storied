@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 import {
 	series,
 	seriesBooks,
@@ -30,6 +31,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!seriesRecord || seriesRecord.deletedAt) {
 		throw error(404, 'Series not found');
 	}
+	const seriesClassifications = await loadClassificationsBySubject(locals.db, 'series', [
+		seriesRecord.id
+	]);
 
 	const seriesGenres = await locals.db
 		.select({
@@ -130,13 +134,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.where(and(eq(seriesBooks.seriesId, seriesRecord.id), isNull(books.deletedAt)))
 		.orderBy(asc(seriesBooks.positionSort), asc(books.title))
 		.all();
+	const bookClassifications = await loadClassificationsBySubject(
+		locals.db,
+		'book',
+		seriesEntries.map(({ book }) => book.id)
+	);
 
 	return {
 		series: seriesRecord,
+		classifications: seriesClassifications[seriesRecord.id] ?? [],
 		seriesGenres,
 		mySeriesRelation: mySeriesRelation ?? null,
 		relatedThreads: uniqueThreads,
-		seriesEntries,
+		seriesEntries: seriesEntries.map(({ book, entry }) => ({
+			book: { ...book, classifications: bookClassifications[book.id] ?? [] },
+			entry
+		})),
 		stats: {
 			recommendations: recommendCount,
 			readers: readCount

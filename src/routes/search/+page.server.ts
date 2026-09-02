@@ -5,6 +5,7 @@ import { authors, books, sessions, series } from '$lib/server/db/schema';
 import { and, inArray, isNull } from 'drizzle-orm';
 import type { SubjectType } from '$shared/worker-messages';
 import { mapThreadListSqlRow, type ThreadListSqlRow } from '$lib/server/discussions';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 import {
 	threadAccessBindings,
 	threadAccessSql,
@@ -196,10 +197,28 @@ async function loadSubjectResults(
 					.all()
 			: []
 	]);
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			db,
+			'book',
+			bookRows.map((book) => book.id)
+		),
+		loadClassificationsBySubject(
+			db,
+			'series',
+			seriesRows.map((entry) => entry.id)
+		)
+	]);
 
 	return [
-		...bookRows.map((subject) => ({ type: 'book' as const, subject })),
-		...seriesRows.map((subject) => ({ type: 'series' as const, subject })),
+		...bookRows.map((subject) => ({
+			type: 'book' as const,
+			subject: { ...subject, classifications: bookClassifications[subject.id] ?? [] }
+		})),
+		...seriesRows.map((subject) => ({
+			type: 'series' as const,
+			subject: { ...subject, classifications: seriesClassifications[subject.id] ?? [] }
+		})),
 		...authorRows.map((subject) => ({ type: 'author' as const, subject }))
 	].sort(
 		(a, b) =>

@@ -63,6 +63,56 @@ export const actions: Actions = {
 		return { groupCreated: true };
 	},
 
+	save: async ({ locals, request }) => {
+		requirePermission(locals, 'groups:edit');
+		if (!locals.user) return fail(401, { error: 'Missing current user.' });
+
+		const data = await request.formData();
+		const groupId = data.get('groupId')?.toString();
+		const name = data.get('name')?.toString().trim();
+		const description = data.get('description')?.toString().trim() || null;
+		if (!groupId || !name || name.length < 2 || name.length > 80) {
+			return fail(400, { error: 'Invalid group details.' });
+		}
+		if (description && description.length > 500) {
+			return fail(400, { error: 'Group description must be 500 characters or fewer.' });
+		}
+
+		const group = await locals.db
+			.select({ id: groups.id })
+			.from(groups)
+			.where(eq(groups.id, groupId))
+			.get();
+		if (!group) return fail(404, { error: 'Group not found.' });
+
+		const requestedIds = [...new Set(data.getAll('memberIds').map((value) => value.toString()))];
+		const validMembers = requestedIds.length
+			? await locals.db
+					.select({ id: users.id })
+					.from(users)
+					.where(and(inArray(users.id, requestedIds), eq(users.status, 'active')))
+					.all()
+			: [];
+		const now = new Date().toISOString();
+
+		await locals.db.batch([
+			locals.db
+				.update(groups)
+				.set({ name, description, updatedAt: now })
+				.where(eq(groups.id, groupId)),
+			locals.db.delete(groupMemberships).where(eq(groupMemberships.groupId, groupId)),
+			...validMembers.map((member) =>
+				locals.db.insert(groupMemberships).values({
+					groupId,
+					userId: member.id,
+					addedByUserId: locals.user!.id
+				})
+			)
+		]);
+
+		return { groupSaved: true };
+	},
+
 	update: async ({ locals, request }) => {
 		requirePermission(locals, 'groups:edit');
 		const data = await request.formData();

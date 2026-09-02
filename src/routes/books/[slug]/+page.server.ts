@@ -12,6 +12,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne } from 'drizzle-orm';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 const SUBJECT = 'book';
 
@@ -27,6 +28,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	const viewerId = locals.user.id;
+	const bookClassifications = await loadClassificationsBySubject(locals.db, 'book', [book.id]);
 
 	const bookGenres = await locals.db
 		.select({
@@ -148,6 +150,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		book,
+		classifications: bookClassifications[book.id] ?? [],
 		bookGenres,
 		myBookRelation: myBookRelation ?? null,
 		memberConnections: memberConnections.map((entry) => ({

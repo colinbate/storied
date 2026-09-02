@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { authors, bookAuthors, books, series, seriesAuthors } from '$lib/server/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const author = await locals.db
@@ -46,6 +47,28 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			.orderBy(asc(seriesAuthors.displayOrder), asc(series.title))
 			.all()
 	]);
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			locals.db,
+			'book',
+			relatedBooks.map((book) => book.id)
+		),
+		loadClassificationsBySubject(
+			locals.db,
+			'series',
+			relatedSeries.map((entry) => entry.id)
+		)
+	]);
 
-	return { author, relatedBooks, relatedSeries };
+	return {
+		author,
+		relatedBooks: relatedBooks.map((book) => ({
+			...book,
+			classifications: bookClassifications[book.id] ?? []
+		})),
+		relatedSeries: relatedSeries.map((entry) => ({
+			...entry,
+			classifications: seriesClassifications[entry.id] ?? []
+		}))
+	};
 };

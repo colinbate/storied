@@ -9,6 +9,8 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import GenreMultiPicker from '$lib/components/admin/genre-multi-picker.svelte';
+	import ClassificationPicker from '$lib/components/admin/classification-picker.svelte';
+	import ClassificationBadges from '$lib/components/classification-badges.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
 	import SessionPicker from '$lib/components/admin/session-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
@@ -76,6 +78,11 @@
 		{#if data.book.deletedAt}
 			<Badge variant="outline">deleted</Badge>
 		{/if}
+		<ClassificationBadges
+			classifications={data.allClassifications.filter((classification) =>
+				data.assignedClassificationIds.includes(classification.id)
+			)}
+		/>
 		{#if !data.book.deletedAt}
 			<Button
 				variant="outline"
@@ -197,6 +204,39 @@
 						{saving ? 'Saving…' : 'Save Metadata'}
 					</Button>
 				</div>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base">Classifications</Card.Title>
+			<Card.Description>
+				Cross-genre advisories and labels that can be expanded over time.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/saveClassifications"
+				use:enhance={() => {
+					saving = true;
+					return async ({ result, update }) => {
+						saving = false;
+						await update({ reset: false });
+						if (result.type === 'success') toast.success('Classifications updated.');
+						if (result.type === 'failure') {
+							toast.error(String(result.data?.error ?? 'Something went wrong.'));
+						}
+					};
+				}}
+				class="space-y-4"
+			>
+				<ClassificationPicker
+					classifications={data.allClassifications}
+					selectedIds={data.assignedClassificationIds}
+				/>
+				<Button type="submit" disabled={saving}>Save classifications</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>

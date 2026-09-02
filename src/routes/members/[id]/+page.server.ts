@@ -13,6 +13,7 @@ import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 import { getOrCreateDirectConversation } from '$lib/server/private-messages';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
@@ -117,6 +118,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				)
 				.all()
 		]);
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			locals.db,
+			'book',
+			bookSubjectRows.map(({ book }) => book.id)
+		),
+		loadClassificationsBySubject(
+			locals.db,
+			'series',
+			seriesSubjectRows.map(({ series }) => series.id)
+		)
+	]);
 	const profile = profileRows[0] ?? null;
 	const hasPostedOrReplied = member.threadCount > 0 || member.postCount > 0;
 
@@ -125,11 +138,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	const subjects = [
-		...bookSubjectRows.map(({ relation, book }) => ({ kind: 'book' as const, relation, book })),
+		...bookSubjectRows.map(({ relation, book }) => ({
+			kind: 'book' as const,
+			relation,
+			book: { ...book, classifications: bookClassifications[book.id] ?? [] }
+		})),
 		...seriesSubjectRows.map(({ relation, series }) => ({
 			kind: 'series' as const,
 			relation,
-			series
+			series: { ...series, classifications: seriesClassifications[series.id] ?? [] }
 		})),
 		...authorSubjectRows.map(({ relation, author }) => ({
 			kind: 'author' as const,

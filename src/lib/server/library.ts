@@ -1,5 +1,6 @@
 import { authors, books, series } from '$lib/server/db/schema';
 import { asc, isNull } from 'drizzle-orm';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 export async function loadLibrarySubjects(db: App.Locals['db']) {
 	const [bookRows, seriesRows, authorRows] = await Promise.all([
@@ -53,9 +54,28 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 			.all()
 	]);
 
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			db,
+			'book',
+			bookRows.map((book) => book.id)
+		),
+		loadClassificationsBySubject(
+			db,
+			'series',
+			seriesRows.map((entry) => entry.id)
+		)
+	]);
+
 	return {
-		books: bookRows,
-		series: seriesRows,
+		books: bookRows.map((book) => ({
+			...book,
+			classifications: bookClassifications[book.id] ?? []
+		})),
+		series: seriesRows.map((entry) => ({
+			...entry,
+			classifications: seriesClassifications[entry.id] ?? []
+		})),
 		authors: authorRows
 	};
 }

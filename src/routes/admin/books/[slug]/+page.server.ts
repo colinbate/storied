@@ -16,6 +16,11 @@ import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
+import {
+	classificationIdsFromForm,
+	loadClassificationEditor,
+	replaceSubjectClassifications
+} from '$lib/server/classifications';
 
 const SUBJECT = 'book' as const;
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
@@ -30,6 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
 	if (!book) throw error(404, 'Book not found');
+	const classificationEditor = await loadClassificationEditor(locals.db, SUBJECT, book.id);
 
 	// Genres linked to this book
 	const genreRows = await locals.db
@@ -96,6 +102,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		book,
+		...classificationEditor,
 		genreLinks: genreRows,
 		allGenres,
 		seriesMemberships: seriesRows,
@@ -143,6 +150,21 @@ export const actions: Actions = {
 			.where(eq(books.id, book.id));
 
 		return { updated: true };
+	},
+
+	saveClassifications: async ({ request, params, locals }) => {
+		requirePermission(locals, 'book:edit');
+		const book = await locals.db.select().from(books).where(eq(books.slug, params.slug)).get();
+		if (!book) return fail(404, { error: 'Book not found' });
+
+		const data = await request.formData();
+		await replaceSubjectClassifications(
+			locals.db,
+			SUBJECT,
+			book.id,
+			classificationIdsFromForm(data)
+		);
+		return { classificationsUpdated: true };
 	},
 
 	saveGenres: async ({ request, params, locals }) => {

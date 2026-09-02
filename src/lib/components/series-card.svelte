@@ -7,6 +7,7 @@
 	import CircleDashedIcon from '@lucide/svelte/icons/circle-dashed';
 	import Layers3Icon from '@lucide/svelte/icons/layers-3';
 	import { resolve } from '$app/paths';
+	import ClassificationBadges from '$lib/components/classification-badges.svelte';
 
 	interface SeriesData {
 		id: string;
@@ -19,6 +20,12 @@
 		isComplete?: boolean | null;
 		bookCount?: number | null;
 		description?: string | null;
+		classifications?: Array<{
+			slug: string;
+			name: string;
+			description?: string | null;
+			icon?: string | null;
+		}>;
 	}
 
 	let { series, compact = false }: { series: SeriesData; compact?: boolean } = $props();
@@ -52,7 +59,10 @@
 		{/if}
 
 		<div class="min-w-0 flex-1">
-			<p class="text-sm leading-tight font-medium">{series.title}</p>
+			<div class="flex items-start gap-1.5">
+				<p class="min-w-0 flex-1 text-sm leading-tight font-medium">{series.title}</p>
+				<ClassificationBadges classifications={series.classifications} compact />
+			</div>
 
 			{#if series.authorText}
 				<p class="mt-0.5 text-xs text-muted-foreground">{series.authorText}</p>
@@ -106,6 +116,7 @@
 						<Layers3Icon class="h-3 w-3" />
 						Series
 					</Badge>
+					<ClassificationBadges classifications={series.classifications} />
 					{#if series.bookCount != null}
 						<Badge variant="secondary">
 							{series.bookCount}

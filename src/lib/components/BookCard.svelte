@@ -4,6 +4,7 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
+	import ClassificationBadges from '$lib/components/classification-badges.svelte';
 	import { resolve } from '$app/paths';
 
 	interface BookData {
@@ -17,6 +18,12 @@
 		hardcoverUrl?: string | null;
 		firstPublishYear?: number | null;
 		description?: string | null;
+		classifications?: Array<{
+			slug: string;
+			name: string;
+			description?: string | null;
+			icon?: string | null;
+		}>;
 	}
 
 	let { book, compact = false }: { book: BookData; compact?: boolean } = $props();
@@ -49,7 +56,10 @@
 			</div>
 		{/if}
 		<div class="min-w-0 flex-1">
-			<p class="text-sm leading-tight font-medium">{book.title}</p>
+			<div class="flex items-start gap-1.5">
+				<p class="min-w-0 flex-1 text-sm leading-tight font-medium">{book.title}</p>
+				<ClassificationBadges classifications={book.classifications} compact />
+			</div>
 			{#if book.authorText}
 				<p class="mt-0.5 text-xs text-muted-foreground">{book.authorText}</p>
 			{/if}
@@ -83,6 +93,7 @@
 						<SparklesIcon class="h-3 w-3" />
 						Book
 					</Badge>
+					<ClassificationBadges classifications={book.classifications} />
 					{#if book.firstPublishYear}
 						<Badge variant="secondary">{book.firstPublishYear}</Badge>
 					{/if}

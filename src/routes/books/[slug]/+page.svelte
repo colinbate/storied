@@ -17,6 +17,7 @@
 	import { formatDate } from '$lib/date-format';
 	import LibraryNav from '$lib/components/library-nav.svelte';
 	import LibraryBreadcrumb from '$lib/components/library-breadcrumb.svelte';
+	import ClassificationBadges from '$lib/components/classification-badges.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -75,6 +76,7 @@
 
 			<div class="space-y-2">
 				<div class="flex flex-wrap items-center gap-2">
+					<ClassificationBadges classifications={data.classifications} />
 					{#if data.book.firstPublishYear}
 						<Badge variant="outline">{data.book.firstPublishYear}</Badge>
 					{/if}

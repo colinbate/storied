@@ -16,6 +16,11 @@ import { requirePermission } from '$lib/server/auth';
 import { detectFirstSubjectLinkOfKind, ensureSubjectSource } from '$lib/server/subject-sources';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import type { SubjectSourceType } from '$shared/worker-messages';
+import {
+	classificationIdsFromForm,
+	loadClassificationEditor,
+	replaceSubjectClassifications
+} from '$lib/server/classifications';
 
 const SUBJECT = 'series' as const;
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
@@ -30,6 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const row = await locals.db.select().from(series).where(eq(series.slug, params.slug)).get();
 	if (!row) throw error(404, 'Series not found');
+	const classificationEditor = await loadClassificationEditor(locals.db, SUBJECT, row.id);
 
 	// Genres
 	const genreRows = await locals.db
@@ -87,6 +93,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		series: row,
+		...classificationEditor,
 		genreLinks: genreRows,
 		allGenres,
 		bookMemberships: bookRows,
@@ -131,6 +138,21 @@ export const actions: Actions = {
 			.where(eq(series.id, row.id));
 
 		return { updated: true };
+	},
+
+	saveClassifications: async ({ request, params, locals }) => {
+		requirePermission(locals, 'series:edit');
+		const row = await locals.db.select().from(series).where(eq(series.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Series not found' });
+
+		const data = await request.formData();
+		await replaceSubjectClassifications(
+			locals.db,
+			SUBJECT,
+			row.id,
+			classificationIdsFromForm(data)
+		);
+		return { classificationsUpdated: true };
 	},
 
 	saveGenres: async ({ request, params, locals }) => {

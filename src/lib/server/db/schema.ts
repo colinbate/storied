@@ -648,6 +648,42 @@ export const series = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
+// classifications  (extensible editorial advisories)
+// ──────────────────────────────────────────────
+export const classifications = sqliteTable(
+	'classifications',
+	{
+		id: integer('id').primaryKey(),
+		slug: text('slug').notNull().unique(),
+		name: text('name').notNull(),
+		description: text('description'),
+		/** Lucide icon identifier. Unknown values fall back to a tag icon. */
+		icon: text('icon').notNull().default('tag'),
+		displayOrder: integer('display_order').notNull().default(0),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_classifications_order_name').on(table.displayOrder, table.name)]
+);
+
+export const subjectClassifications = sqliteTable(
+	'subject_classifications',
+	{
+		classificationId: integer('classification_id')
+			.notNull()
+			.references(() => classifications.id, { onDelete: 'cascade' }),
+		/** Currently assigned to books and series; the polymorphic shape supports future subjects. */
+		subjectType: text('subject_type').notNull().$type<SubjectType>(),
+		subjectId: text('subject_id').notNull(),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.classificationId, table.subjectType, table.subjectId] }),
+		index('idx_subject_classifications_subject').on(table.subjectType, table.subjectId)
+	]
+);
+
+// ──────────────────────────────────────────────
 // authors  (canonical author metadata)
 // ──────────────────────────────────────────────
 export const authors = sqliteTable(

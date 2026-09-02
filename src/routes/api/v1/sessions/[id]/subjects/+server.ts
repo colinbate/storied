@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authors, books, series, sessionSubjects, sessions } from '$lib/server/db/schema';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 const publicApiHeaders = {
 	'Access-Control-Allow-Origin': '*',
@@ -121,6 +122,18 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		)
 		.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt), asc(authors.name))
 		.all();
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			locals.db,
+			'book',
+			bookRows.map((book) => book.id)
+		),
+		loadClassificationsBySubject(
+			locals.db,
+			'series',
+			seriesRows.map((entry) => entry.id)
+		)
+	]);
 
 	return json(
 		{
@@ -145,6 +158,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				hardcoverUrl: book.hardcoverUrl,
 				firstPublishYear: book.firstPublishYear,
 				description: book.description,
+				classifications: bookClassifications[book.id] ?? [],
 				createdAt: book.createdAt
 			})),
 			series: seriesRows.map((seriesRow) => ({
@@ -164,6 +178,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				hardcoverUrl: seriesRow.hardcoverUrl,
 				isComplete: seriesRow.isComplete,
 				bookCount: seriesRow.bookCount,
+				classifications: seriesClassifications[seriesRow.id] ?? [],
 				createdAt: seriesRow.createdAt
 			})),
 			authors: authorRows.map((author) => ({

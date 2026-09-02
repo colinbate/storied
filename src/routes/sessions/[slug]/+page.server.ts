@@ -20,6 +20,7 @@ import { createThreadReply } from '$lib/server/thread-replies';
 import { canAcceptSessionRsvps, getCurrentUserSessionRsvp, setMemberRsvp } from '$lib/server/rsvp';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
+import { loadClassificationsBySubject } from '$lib/server/classifications';
 
 export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	if (!locals.user) {
@@ -150,10 +151,30 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
 			.all()
 	]);
+	const [bookClassifications, seriesClassifications] = await Promise.all([
+		loadClassificationsBySubject(
+			locals.db,
+			'book',
+			bookSubjectRows.map(({ book }) => book.id)
+		),
+		loadClassificationsBySubject(
+			locals.db,
+			'series',
+			seriesSubjectRows.map(({ series }) => series.id)
+		)
+	]);
 
 	const subjects = [
-		...bookSubjectRows.map(({ link, book }) => ({ kind: 'book' as const, link, book })),
-		...seriesSubjectRows.map(({ link, series }) => ({ kind: 'series' as const, link, series })),
+		...bookSubjectRows.map(({ link, book }) => ({
+			kind: 'book' as const,
+			link,
+			book: { ...book, classifications: bookClassifications[book.id] ?? [] }
+		})),
+		...seriesSubjectRows.map(({ link, series }) => ({
+			kind: 'series' as const,
+			link,
+			series: { ...series, classifications: seriesClassifications[series.id] ?? [] }
+		})),
 		...authorSubjectRows.map(({ link, author }) => ({ kind: 'author' as const, link, author }))
 	].sort(
 		(a, b) =>
