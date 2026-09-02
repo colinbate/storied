@@ -31,7 +31,7 @@
 <Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props })}
-			<Button variant="outline" class="w-full justify-between" {...props}>
+			<Button variant="outline" class="min-h-10 w-full justify-between" {...props}>
 				<span class="truncate">{selected?.name ?? 'Select author...'}</span>
 				<ChevronsUpDownIcon class="ml-2 h-4 w-4 shrink-0 opacity-50" />
 			</Button>

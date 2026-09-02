@@ -193,7 +193,7 @@
 						<NativeSelectOption value="past">past</NativeSelectOption>
 					</NativeSelect>
 				</div>
-				<Button type="submit" disabled={savingStatus}>
+				<Button type="submit" class="h-10" disabled={savingStatus}>
 					{savingStatus ? 'Updating…' : 'Update Status'}
 				</Button>
 			</form>
@@ -402,14 +402,15 @@
 									Theme
 								</label>
 								<Input name="note" class="w-44" placeholder="note" value={read.note ?? ''} />
-								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
 							</form>
 							<ConfirmButton
 								confirmText="Remove this session read?"
 								formAction="?/removeParticipantSubject"
 								formData={{ userId: user.id, kind: read.subjectType, subjectId: read.subjectId }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
@@ -440,8 +441,8 @@
 				}}
 				class="space-y-4"
 			>
-				<div class="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_10rem]">
-					<div class="space-y-1">
+				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
+					<div class="space-y-2">
 						<Label for="read-user">Member</Label>
 						<MemberPicker
 							members={activeUsers}
@@ -450,13 +451,19 @@
 							placeholder="Search members..."
 						/>
 					</div>
-					<div class="space-y-1">
+					<div class="space-y-2">
 						<Label>Kind</Label>
-						<div class="flex gap-2">
+						<div
+							class="grid h-11 grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+							role="group"
+							aria-label="Session read kind"
+						>
 							<Button
 								type="button"
 								size="sm"
-								variant={readKind === 'book' ? 'default' : 'outline'}
+								class="h-9"
+								variant={readKind === 'book' ? 'default' : 'ghost'}
+								aria-pressed={readKind === 'book'}
 								onclick={() => (readKind = 'book')}
 							>
 								Book
@@ -464,7 +471,9 @@
 							<Button
 								type="button"
 								size="sm"
-								variant={readKind === 'series' ? 'default' : 'outline'}
+								class="h-9"
+								variant={readKind === 'series' ? 'default' : 'ghost'}
+								aria-pressed={readKind === 'series'}
 								onclick={() => (readKind = 'series')}
 							>
 								Series
@@ -472,9 +481,9 @@
 						</div>
 					</div>
 				</div>
-				<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_14rem]">
 					<input type="hidden" name="kind" value={readKind} />
-					<div class="space-y-1">
+					<div class="space-y-2">
 						<Label>{readKind === 'book' ? 'Book' : 'Series'}</Label>
 						{#if readKind === 'book'}
 							<BookPicker
@@ -492,18 +501,23 @@
 							/>
 						{/if}
 					</div>
-					<div class="space-y-1">
+					<div class="space-y-2">
 						<Label for="read-relation">Relation</Label>
-						<NativeSelect id="read-relation" name="relationType" value="read_for_session">
+						<NativeSelect
+							class="w-full"
+							id="read-relation"
+							name="relationType"
+							value="read_for_session"
+						>
 							<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
 							<NativeSelectOption value="considered">considered</NativeSelectOption>
 							<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
 						</NativeSelect>
 					</div>
-					<div class="space-y-1">
+					<div class="space-y-2">
 						<Label>Flags</Label>
 						<div
-							class="flex min-h-11 flex-wrap items-center gap-4 rounded-md border px-3 py-2 text-sm"
+							class="flex min-h-10 flex-wrap items-center gap-4 rounded-lg border px-3 py-2 text-sm"
 						>
 							<label class="flex items-center gap-2">
 								<input name="isPrimaryPick" type="checkbox" class="rounded border-input" />
@@ -516,14 +530,14 @@
 						</div>
 					</div>
 				</div>
-				<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-					<div class="space-y-1">
+				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+					<div class="space-y-2">
 						<Label for="read-note">Note</Label>
 						<Input id="read-note" name="note" placeholder="optional" />
 					</div>
 					<Button
 						type="submit"
-						class="self-end"
+						class="h-10 w-full md:w-auto"
 						disabled={saving || !readUserId || (readKind === 'book' ? !readBookId : !readSeriesId)}
 					>
 						<PlusIcon class="h-4 w-4" />
@@ -609,14 +623,15 @@
 									</NativeSelect>
 								</div>
 								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
-								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
 							</form>
 							<ConfirmButton
 								confirmText="Remove this book from session?"
 								formAction="?/removeLink"
 								formData={{ kind: 'book', subjectId: entry.book.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
@@ -705,14 +720,15 @@
 									</NativeSelect>
 								</div>
 								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
-								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
 							</form>
 							<ConfirmButton
 								confirmText="Remove this series from session?"
 								formAction="?/removeLink"
 								formData={{ kind: 'series', subjectId: entry.series.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
@@ -796,14 +812,15 @@
 									</NativeSelect>
 								</div>
 								<Input name="note" class="w-40" placeholder="note" value={entry.link.note ?? ''} />
-								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
 							</form>
 							<ConfirmButton
 								confirmText="Remove this author from session?"
 								formAction="?/removeLink"
 								formData={{ kind: 'author', subjectId: entry.author.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
@@ -819,7 +836,10 @@
 	<!-- Add link from existing -->
 	<Card.Root>
 		<Card.Header>
-			<Card.Title class="text-base">Link an Existing Book or Series</Card.Title>
+			<Card.Title class="text-base">Link an Existing Library Item</Card.Title>
+			<Card.Description>
+				Choose a book, series, or author that is already in the club library.
+			</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<form
@@ -841,73 +861,94 @@
 						}
 					};
 				}}
-				class="flex flex-wrap items-end gap-2"
+				class="space-y-4"
 			>
-				<div class="space-y-1">
-					<Label>Kind</Label>
-					<div class="flex gap-2">
-						<Button
-							type="button"
-							size="sm"
-							variant={addKind === 'book' ? 'default' : 'outline'}
-							onclick={() => (addKind = 'book')}
+				<div class="grid gap-4 md:grid-cols-[15rem_minmax(0,1fr)]">
+					<div class="space-y-2">
+						<Label>Kind</Label>
+						<div
+							class="grid h-10 grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+							role="group"
+							aria-label="Library item kind"
 						>
-							Book
-						</Button>
-						<Button
-							type="button"
-							size="sm"
-							variant={addKind === 'series' ? 'default' : 'outline'}
-							onclick={() => (addKind = 'series')}
+							<Button
+								type="button"
+								size="sm"
+								class="h-8"
+								variant={addKind === 'book' ? 'default' : 'ghost'}
+								aria-pressed={addKind === 'book'}
+								onclick={() => (addKind = 'book')}
+							>
+								Book
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								class="h-8"
+								variant={addKind === 'series' ? 'default' : 'ghost'}
+								aria-pressed={addKind === 'series'}
+								onclick={() => (addKind = 'series')}
+							>
+								Series
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								class="h-8"
+								variant={addKind === 'author' ? 'default' : 'ghost'}
+								aria-pressed={addKind === 'author'}
+								onclick={() => (addKind = 'author')}
+							>
+								Author
+							</Button>
+						</div>
+					</div>
+					<input type="hidden" name="kind" value={addKind} />
+					<div class="min-w-0 space-y-2">
+						<Label>{addKind === 'book' ? 'Book' : addKind === 'series' ? 'Series' : 'Author'}</Label
 						>
-							Series
-						</Button>
-						<Button
-							type="button"
-							size="sm"
-							variant={addKind === 'author' ? 'default' : 'outline'}
-							onclick={() => (addKind = 'author')}
-						>
-							Author
-						</Button>
+						{#if addKind === 'book'}
+							<BookPicker books={bookPickerItems} bind:selectedId={addBookId} name="subjectId" />
+						{:else if addKind === 'series'}
+							<SeriesPicker
+								series={seriesPickerItems}
+								bind:selectedId={addSeriesId}
+								name="subjectId"
+							/>
+						{:else}
+							<AuthorPicker
+								authors={authorPickerItems}
+								bind:selectedId={addAuthorId}
+								name="subjectId"
+							/>
+						{/if}
 					</div>
 				</div>
-				<input type="hidden" name="kind" value={addKind} />
-				<div class="min-w-0 flex-1 space-y-1">
-					<Label>{addKind === 'book' ? 'Book' : addKind === 'series' ? 'Series' : 'Author'}</Label>
-					{#if addKind === 'book'}
-						<BookPicker books={bookPickerItems} bind:selectedId={addBookId} name="subjectId" />
-					{:else if addKind === 'series'}
-						<SeriesPicker
-							series={seriesPickerItems}
-							bind:selectedId={addSeriesId}
-							name="subjectId"
-						/>
-					{:else}
-						<AuthorPicker
-							authors={authorPickerItems}
-							bind:selectedId={addAuthorId}
-							name="subjectId"
-						/>
-					{/if}
+				<div class="grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)_auto] md:items-end">
+					<div class="space-y-2">
+						<Label for="add-status">Status</Label>
+						<NativeSelect class="w-full" id="add-status" name="status" bind:value={addStatus}>
+							<NativeSelectOption value="starter">starter</NativeSelectOption>
+							<NativeSelectOption value="featured">featured</NativeSelectOption>
+							<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+							<NativeSelectOption value="mentioned_off_theme"
+								>mentioned off theme</NativeSelectOption
+							>
+						</NativeSelect>
+					</div>
+					<div class="space-y-2">
+						<Label for="add-note">Note</Label>
+						<Input id="add-note" name="note" placeholder="Optional context for this session" />
+					</div>
+					<Button
+						class="h-10 w-full md:w-auto"
+						type="submit"
+						disabled={saving || !addSubjectSelected}
+					>
+						<PlusIcon class="h-4 w-4" />
+						Link Item
+					</Button>
 				</div>
-				<div class="space-y-1">
-					<Label for="add-status">Status</Label>
-					<NativeSelect id="add-status" name="status" bind:value={addStatus}>
-						<NativeSelectOption value="starter">starter</NativeSelectOption>
-						<NativeSelectOption value="featured">featured</NativeSelectOption>
-						<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-						<NativeSelectOption value="mentioned_off_theme">mentioned off theme</NativeSelectOption>
-					</NativeSelect>
-				</div>
-				<div class="flex-1 space-y-1">
-					<Label for="add-note">Note</Label>
-					<Input id="add-note" name="note" placeholder="optional" />
-				</div>
-				<Button type="submit" disabled={saving || !addSubjectSelected}>
-					<PlusIcon class="h-4 w-4" />
-					Link
-				</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>
@@ -938,35 +979,41 @@
 						}
 					};
 				}}
-				class="flex flex-wrap items-end gap-2"
+				class="space-y-4"
 			>
-				<div class="min-w-0 flex-1 space-y-1">
-					<Label for="url-input">Subject URL</Label>
-					<Input
-						id="url-input"
-						name="url"
-						type="url"
-						placeholder="https://hardcover.app/books/..."
-						required
-					/>
+				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+					<div class="min-w-0 space-y-2">
+						<Label for="url-input">Subject URL</Label>
+						<Input
+							id="url-input"
+							name="url"
+							type="url"
+							placeholder="https://hardcover.app/books/..."
+							required
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="url-status">Status</Label>
+						<NativeSelect class="w-full" id="url-status" name="status" bind:value={urlStatus}>
+							<NativeSelectOption value="starter">starter</NativeSelectOption>
+							<NativeSelectOption value="featured">featured</NativeSelectOption>
+							<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+							<NativeSelectOption value="mentioned_off_theme"
+								>mentioned off theme</NativeSelectOption
+							>
+						</NativeSelect>
+					</div>
 				</div>
-				<div class="space-y-1">
-					<Label for="url-status">Status</Label>
-					<NativeSelect id="url-status" name="status" bind:value={urlStatus}>
-						<NativeSelectOption value="starter">starter</NativeSelectOption>
-						<NativeSelectOption value="featured">featured</NativeSelectOption>
-						<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-						<NativeSelectOption value="mentioned_off_theme">mentioned off theme</NativeSelectOption>
-					</NativeSelect>
+				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+					<div class="space-y-2">
+						<Label for="url-note">Note</Label>
+						<Input id="url-note" name="note" placeholder="Optional context for this session" />
+					</div>
+					<Button class="h-10 w-full md:w-auto" type="submit" disabled={saving}>
+						<LinkIcon class="h-4 w-4" />
+						Link URL
+					</Button>
 				</div>
-				<div class="flex-1 space-y-1">
-					<Label for="url-note">Note</Label>
-					<Input id="url-note" name="note" placeholder="optional" />
-				</div>
-				<Button type="submit" disabled={saving}>
-					<LinkIcon class="h-4 w-4" />
-					Link
-				</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>
