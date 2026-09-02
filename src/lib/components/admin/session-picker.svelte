@@ -32,13 +32,17 @@
 	const selected = $derived(sessions.find((s) => s.id === selectedId));
 </script>
 
+{#if name}
+	<input type="hidden" {name} value={selectedId ?? ''} />
+{/if}
+
 <Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props })}
 			<Button
 				{...props}
 				variant="outline"
-				class={['h-auto w-full justify-between px-3 py-2 text-left', className]}
+				class={['h-auto min-h-10 w-full justify-between px-3 py-2 text-left', className]}
 			>
 				<span class="flex min-w-0 items-center gap-3 text-left">
 					<CalendarIcon class="h-4 w-4 text-muted-foreground" />
@@ -91,6 +95,3 @@
 		</Command.Root>
 	</Popover.Content>
 </Popover.Root>
-{#if name}
-	<input type="hidden" {name} value={selectedId ?? ''} />
-{/if}

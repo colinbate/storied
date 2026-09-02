@@ -22,7 +22,7 @@
 	import XIcon from '@lucide/svelte/icons/x';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import { toast } from 'svelte-sonner';
-	import * as NativeSelect from '$lib/components/ui/native-select';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 
 	let { data } = $props();
 	let saving = $state(false);
@@ -35,9 +35,11 @@
 	// Series add state
 	let addSeriesId = $state<string | undefined>(undefined);
 	let addSeriesMode = $state<'existing' | 'url'>('existing');
+	let showAddSeriesForm = $state(false);
 
 	// Session add state
 	let addSessionId = $state<string | undefined>(undefined);
+	let showAddSessionForm = $state(false);
 	let addSessionStatus = $state<'starter' | 'featured' | 'discussed' | 'mentioned_off_theme'>(
 		'starter'
 	);
@@ -68,10 +70,11 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<Button variant="ghost" size="icon-sm" href={resolve('/admin/books')}>
 			<ArrowLeftIcon class="h-4 w-4" />
 		</Button>
+		<Badge variant="secondary">Book</Badge>
 		<h1 class="text-2xl font-bold {data.book.deletedAt ? 'line-through' : ''}">
 			{data.book.title}
 		</h1>
@@ -280,171 +283,211 @@
 			{#if data.seriesMemberships.length > 0}
 				<div class="divide-y rounded border">
 					{#each data.seriesMemberships as m (m.series.id)}
-						<form
-							method="POST"
-							action="?/updateSeriesMembership"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update({ reset: false });
-									if (result.type === 'success') {
-										if (result.data?.membershipUpdated) toast.success('Updated.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
-							class="flex items-center gap-3 px-3 py-2"
-						>
-							<input type="hidden" name="seriesId" value={m.series.id} />
-							<a
-								class="min-w-0 flex-1 font-medium hover:underline"
-								href={resolve('/admin/series/[slug]', { slug: m.series.slug })}
+						<div class="flex flex-wrap items-center gap-3 px-3 py-2">
+							<form
+								method="POST"
+								action="?/updateSeriesMembership"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.membershipUpdated) toast.success('Updated.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
 							>
-								{m.series.title}
-							</a>
-							<div class="flex items-center gap-2">
-								<Label for="position-{m.series.id}" class="text-xs">Position</Label>
-								<Input
-									id="position-{m.series.id}"
-									name="position"
-									class="w-20"
-									value={m.link.position ?? ''}
-								/>
-								<Label for="positionSort-{m.series.id}" class="text-xs">Sort</Label>
-								<Input
-									id="positionSort-{m.series.id}"
-									name="positionSort"
-									type="number"
-									step="0.5"
-									class="w-20"
-									value={m.link.positionSort ?? ''}
-								/>
-								<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
-							</div>
+								<input type="hidden" name="seriesId" value={m.series.id} />
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline"
+									href={resolve('/admin/series/[slug]', { slug: m.series.slug })}
+								>
+									{m.series.title}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="position-{m.series.id}" class="text-xs">Position</Label>
+									<Input
+										id="position-{m.series.id}"
+										name="position"
+										class="w-20"
+										value={m.link.position ?? ''}
+									/>
+									<Label for="positionSort-{m.series.id}" class="text-xs">Sort</Label>
+									<Input
+										id="positionSort-{m.series.id}"
+										name="positionSort"
+										type="number"
+										step="0.5"
+										class="w-20"
+										value={m.link.positionSort ?? ''}
+									/>
+								</div>
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove from series?"
 								formAction="?/removeFromSeries"
 								formData={{ seriesId: m.series.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
 				<p class="text-sm text-muted-foreground">Not currently in any series.</p>
 			{/if}
 
-			<div class="border-t pt-3">
-				<div class="mb-2 flex items-center gap-2 text-sm">
-					<Button
-						size="sm"
-						variant={addSeriesMode === 'existing' ? 'default' : 'outline'}
-						onclick={() => (addSeriesMode = 'existing')}
-					>
-						Existing
-					</Button>
-					<Button
-						size="sm"
-						variant={addSeriesMode === 'url' ? 'default' : 'outline'}
-						onclick={() => (addSeriesMode = 'url')}
-					>
-						From URL
+			{#if showAddSeriesForm}
+				<div class="border-t pt-3">
+					<div class="mb-4 flex items-center justify-between gap-2">
+						<div
+							class="grid h-10 w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:w-60"
+							role="group"
+							aria-label="Series source"
+						>
+							<Button
+								size="sm"
+								class="h-8"
+								variant={addSeriesMode === 'existing' ? 'default' : 'ghost'}
+								aria-pressed={addSeriesMode === 'existing'}
+								onclick={() => (addSeriesMode = 'existing')}
+							>
+								Existing
+							</Button>
+							<Button
+								size="sm"
+								class="h-8"
+								variant={addSeriesMode === 'url' ? 'default' : 'ghost'}
+								aria-pressed={addSeriesMode === 'url'}
+								onclick={() => (addSeriesMode = 'url')}
+							>
+								From URL
+							</Button>
+						</div>
+						<Button variant="ghost" size="sm" onclick={() => (showAddSeriesForm = false)}>
+							Cancel
+						</Button>
+					</div>
+
+					{#if addSeriesMode === 'existing'}
+						<form
+							method="POST"
+							action="?/addToSeries"
+							use:enhance={() => {
+								saving = true;
+								return async ({ result, update }) => {
+									saving = false;
+									await update();
+									if (result.type === 'success') {
+										if (result.data?.seriesAdded) {
+											toast.success('Added to series.');
+											addSeriesId = undefined;
+											showAddSeriesForm = false;
+										}
+										if (result.data?.error) toast.error(String(result.data.error));
+									}
+								};
+							}}
+							class="space-y-4"
+						>
+							<input type="hidden" name="mode" value="existing" />
+							<div class="min-w-0 space-y-2">
+								<Label>Series</Label>
+								<SeriesPicker
+									series={seriesPickerItems}
+									bind:selectedId={addSeriesId}
+									name="seriesId"
+									class="h-10"
+									placeholder="Search series to link..."
+								/>
+							</div>
+							<div class="grid gap-4 sm:grid-cols-[10rem_10rem_minmax(0,1fr)] sm:items-end">
+								<div class="space-y-2">
+									<Label for="add-position">Position</Label>
+									<Input id="add-position" name="position" placeholder="e.g. 1" />
+								</div>
+								<div class="space-y-2">
+									<Label for="add-positionSort">Sort</Label>
+									<Input
+										id="add-positionSort"
+										name="positionSort"
+										type="number"
+										step="0.5"
+										placeholder="1"
+									/>
+								</div>
+								<Button
+									type="submit"
+									class="h-10 w-full sm:w-auto sm:justify-self-end"
+									disabled={saving || !addSeriesId}
+								>
+									<PlusIcon class="h-4 w-4" />
+									Add
+								</Button>
+							</div>
+						</form>
+					{:else}
+						<form
+							method="POST"
+							action="?/addToSeries"
+							use:enhance={() => {
+								saving = true;
+								return async ({ result, update }) => {
+									saving = false;
+									await update();
+									if (result.type === 'success') {
+										if (result.data?.seriesAdded) {
+											toast.success('Added to series.');
+											showAddSeriesForm = false;
+										}
+										if (result.data?.queuedSeries) {
+											toast.success(
+												'Series URL queued. This book will be linked once it resolves.'
+											);
+											showAddSeriesForm = false;
+										}
+										if (result.data?.error) toast.error(String(result.data.error));
+									}
+								};
+							}}
+							class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
+						>
+							<input type="hidden" name="mode" value="url" />
+							<div class="min-w-0 space-y-2">
+								<Label for="series-url">Goodreads Series URL</Label>
+								<Input
+									id="series-url"
+									name="url"
+									type="url"
+									placeholder="https://www.goodreads.com/series/..."
+									required
+								/>
+							</div>
+							<Button type="submit" class="h-10 w-full md:w-auto" disabled={saving}>
+								<LinkIcon class="h-4 w-4" />
+								Queue
+							</Button>
+						</form>
+						<p class="mt-2 text-xs text-muted-foreground">
+							The book will be auto-linked to the series once the worker resolves it.
+						</p>
+					{/if}
+				</div>
+			{:else}
+				<div class="border-t pt-3">
+					<Button variant="outline" onclick={() => (showAddSeriesForm = true)}>
+						<PlusIcon class="h-4 w-4" />
+						Add to Series
 					</Button>
 				</div>
-
-				{#if addSeriesMode === 'existing'}
-					<form
-						method="POST"
-						action="?/addToSeries"
-						use:enhance={() => {
-							saving = true;
-							return async ({ result, update }) => {
-								saving = false;
-								await update();
-								if (result.type === 'success') {
-									if (result.data?.seriesAdded) {
-										toast.success('Added to series.');
-										addSeriesId = undefined;
-									}
-									if (result.data?.error) toast.error(String(result.data.error));
-								}
-							};
-						}}
-						class="flex flex-wrap items-end gap-2"
-					>
-						<input type="hidden" name="mode" value="existing" />
-						<div class="min-w-0 flex-1 space-y-1">
-							<Label>Series</Label>
-							<SeriesPicker
-								series={seriesPickerItems}
-								bind:selectedId={addSeriesId}
-								name="seriesId"
-							/>
-						</div>
-						<div class="space-y-1">
-							<Label for="add-position">Position</Label>
-							<Input id="add-position" name="position" class="w-20" placeholder="e.g. 1" />
-						</div>
-						<div class="space-y-1">
-							<Label for="add-positionSort">Sort</Label>
-							<Input
-								id="add-positionSort"
-								name="positionSort"
-								type="number"
-								step="0.5"
-								class="w-20"
-								placeholder="1"
-							/>
-						</div>
-						<Button type="submit" disabled={saving || !addSeriesId}>
-							<PlusIcon class="h-4 w-4" />
-							Add
-						</Button>
-					</form>
-				{:else}
-					<form
-						method="POST"
-						action="?/addToSeries"
-						use:enhance={() => {
-							saving = true;
-							return async ({ result, update }) => {
-								saving = false;
-								await update();
-								if (result.type === 'success') {
-									if (result.data?.seriesAdded) toast.success('Added to series.');
-									if (result.data?.queuedSeries)
-										toast.success('Series URL queued. This book will be linked once it resolves.');
-									if (result.data?.error) toast.error(String(result.data.error));
-								}
-							};
-						}}
-						class="flex flex-wrap items-end gap-2"
-					>
-						<input type="hidden" name="mode" value="url" />
-						<div class="min-w-0 flex-1 space-y-1">
-							<Label for="series-url">Goodreads Series URL</Label>
-							<Input
-								id="series-url"
-								name="url"
-								type="url"
-								placeholder="https://www.goodreads.com/series/..."
-								required
-							/>
-						</div>
-						<Button type="submit" disabled={saving}>
-							<LinkIcon class="h-4 w-4" />
-							Queue
-						</Button>
-					</form>
-					<p class="mt-2 text-xs text-muted-foreground">
-						The book will be auto-linked to the series once the worker resolves it.
-					</p>
-				{/if}
-			</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 
@@ -458,109 +501,137 @@
 			{#if data.sessionLinks.length > 0}
 				<div class="divide-y rounded border">
 					{#each data.sessionLinks as link (link.session.id)}
-						<form
-							method="POST"
-							action="?/updateSessionLink"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update({ reset: false });
-									if (result.type === 'success') {
-										if (result.data?.sessionLinkUpdated) toast.success('Updated.');
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
-							class="flex flex-wrap items-center gap-3 px-3 py-2"
-						>
-							<input type="hidden" name="sessionId" value={link.session.id} />
-							<a
-								class="min-w-40 flex-1 truncate font-medium hover:underline"
-								href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
+						<div class="flex flex-wrap items-center gap-3 px-3 py-2">
+							<form
+								method="POST"
+								action="?/updateSessionLink"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') {
+											if (result.data?.sessionLinkUpdated) toast.success('Updated.');
+											if (result.data?.error) toast.error(String(result.data.error));
+										}
+									};
+								}}
+								class="contents"
 							>
-								{link.session.title}
-							</a>
-							<div class="flex items-center gap-2">
-								<Label for="status-{link.session.id}" class="text-xs">Status</Label>
-								<NativeSelect.Root
-									id="status-{link.session.id}"
-									name="status"
-									value={link.link.status}
+								<input type="hidden" name="sessionId" value={link.session.id} />
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline"
+									href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
 								>
-									<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-									<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-									<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-									<NativeSelect.Option value="mentioned_off_theme"
-										>mentioned off theme</NativeSelect.Option
+									{link.session.title}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="status-{link.session.id}" class="text-xs">Status</Label>
+									<NativeSelect
+										id="status-{link.session.id}"
+										name="status"
+										value={link.link.status}
 									>
-								</NativeSelect.Root>
-							</div>
-							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+										<NativeSelectOption value="starter">starter</NativeSelectOption>
+										<NativeSelectOption value="featured">featured</NativeSelectOption>
+										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="mentioned_off_theme"
+											>mentioned off theme</NativeSelectOption
+										>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this session link?"
 								formAction="?/removeSessionLink"
 								formData={{ sessionId: link.session.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
 				<p class="text-sm text-muted-foreground">Not linked to any sessions.</p>
 			{/if}
 
-			<form
-				method="POST"
-				action="?/addSessionLink"
-				use:enhance={() => {
-					saving = true;
-					return async ({ result, update }) => {
-						saving = false;
-						await update();
-						if (result.type === 'success') {
-							if (result.data?.sessionLinkAdded) {
-								toast.success('Linked to session.');
-								addSessionId = undefined;
+			{#if showAddSessionForm}
+				<form
+					method="POST"
+					action="?/addSessionLink"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update();
+							if (result.type === 'success') {
+								if (result.data?.sessionLinkAdded) {
+									toast.success('Linked to session.');
+									addSessionId = undefined;
+									showAddSessionForm = false;
+								}
+								if (result.data?.error) toast.error(String(result.data.error));
 							}
-							if (result.data?.error) toast.error(String(result.data.error));
-						}
-					};
-				}}
-				class="flex flex-wrap items-end gap-2 border-t pt-3"
-			>
-				<div class="min-w-0 flex-1 space-y-1">
-					<Label>Session</Label>
-					<SessionPicker
-						sessions={sessionPickerItems}
-						bind:selectedId={addSessionId}
-						name="sessionId"
-					/>
+						};
+					}}
+					class="space-y-4 border-t pt-4"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<p class="text-sm font-medium">Link a Session</p>
+						<Button variant="ghost" size="sm" onclick={() => (showAddSessionForm = false)}>
+							Cancel
+						</Button>
+					</div>
+					<div class="min-w-0 space-y-2">
+						<Label>Session</Label>
+						<SessionPicker
+							sessions={sessionPickerItems}
+							bind:selectedId={addSessionId}
+							name="sessionId"
+							class="h-10"
+							placeholder="Search sessions to link..."
+						/>
+					</div>
+					<div class="grid gap-4 md:grid-cols-[10rem_minmax(0,1fr)_auto] md:items-end">
+						<div class="space-y-2">
+							<Label for="add-status">Status</Label>
+							<NativeSelect
+								class="w-full"
+								id="add-status"
+								name="status"
+								bind:value={addSessionStatus}
+							>
+								<NativeSelectOption value="starter">starter</NativeSelectOption>
+								<NativeSelectOption value="featured">featured</NativeSelectOption>
+								<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+								<NativeSelectOption value="mentioned_off_theme"
+									>mentioned off theme</NativeSelectOption
+								>
+							</NativeSelect>
+						</div>
+						<div class="space-y-2">
+							<Label for="add-note">Note</Label>
+							<Input id="add-note" name="note" placeholder="Optional context for this session" />
+						</div>
+						<Button type="submit" class="h-10 w-full md:w-auto" disabled={saving || !addSessionId}>
+							<PlusIcon class="h-4 w-4" />
+							Link
+						</Button>
+					</div>
+				</form>
+			{:else}
+				<div class="border-t pt-3">
+					<Button variant="outline" onclick={() => (showAddSessionForm = true)}>
+						<PlusIcon class="h-4 w-4" />
+						Link Session
+					</Button>
 				</div>
-				<div class="space-y-1">
-					<Label for="add-status">Status</Label>
-					<NativeSelect.Root id="add-status" name="status" bind:value={addSessionStatus}>
-						<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-						<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-						<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-						<NativeSelect.Option value="mentioned_off_theme"
-							>mentioned off theme</NativeSelect.Option
-						>
-					</NativeSelect.Root>
-				</div>
-				<div class="flex-1 space-y-1">
-					<Label for="add-note">Note</Label>
-					<Input id="add-note" name="note" placeholder="optional" />
-				</div>
-				<Button type="submit" disabled={saving || !addSessionId}>
-					<PlusIcon class="h-4 w-4" />
-					Link
-				</Button>
-			</form>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

@@ -10,7 +10,6 @@
 	import PenLineIcon from '@lucide/svelte/icons/pen-line';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import TagIcon from '@lucide/svelte/icons/tag';
-	import ImportIcon from '@lucide/svelte/icons/import';
 	import { resolve } from '$app/paths';
 
 	let { children, data } = $props();
@@ -84,6 +83,12 @@
 			show: data.permissions.has('genre:edit')
 		}
 	] as const);
+
+	function isActive(href: string) {
+		return href === '/admin'
+			? page.url.pathname === href
+			: page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+	}
 </script>
 
 <div class="flex flex-col gap-6 md:flex-row">
@@ -93,8 +98,10 @@
 				{#if item.show}
 					<a
 						href={resolve(item.href)}
-						class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors {page.url
-							.pathname === item.href
+						aria-current={isActive(item.href) ? 'page' : undefined}
+						class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors {isActive(
+							item.href
+						)
 							? 'bg-primary text-primary-foreground'
 							: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 					>

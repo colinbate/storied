@@ -33,6 +33,10 @@
 	const selected = $derived(members.find((member) => member.id === selectedId));
 </script>
 
+{#if name}
+	<input type="hidden" {name} value={selectedId ?? ''} />
+{/if}
+
 <Popover.Root bind:open>
 	<Popover.Trigger>
 		{#snippet child({ props })}
@@ -101,6 +105,3 @@
 		</Command.Root>
 	</Popover.Content>
 </Popover.Root>
-{#if name}
-	<input type="hidden" {name} value={selectedId ?? ''} />
-{/if}

@@ -13,7 +13,7 @@
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
 	import SessionPicker from '$lib/components/admin/session-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
-	import * as NativeSelect from '$lib/components/ui/native-select';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
@@ -68,10 +68,11 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<Button variant="ghost" size="icon-sm" href={resolve('/admin/authors')}>
 			<ArrowLeftIcon class="h-4 w-4" />
 		</Button>
+		<Badge variant="secondary">Author</Badge>
 		<h1 class="text-2xl font-bold {data.author.deletedAt ? 'line-through' : ''}">
 			{data.author.name}
 		</h1>
@@ -277,13 +278,13 @@
 					}}
 					class="flex flex-wrap items-end gap-2 border-t pt-3"
 				>
-					<div class="min-w-0 flex-1 space-y-1">
-						<Label class="mb-2">Book</Label>
+					<div class="min-w-0 flex-1 space-y-2">
+						<Label>Book</Label>
 						<BookPicker
 							books={bookPickerItems}
 							bind:selectedId={addBookId}
 							name="bookId"
-							class="mb-0 h-10"
+							class="h-10"
 							placeholder="Search books to link..."
 						/>
 					</div>
@@ -372,13 +373,13 @@
 					}}
 					class="flex flex-wrap items-end gap-2 border-t pt-3"
 				>
-					<div class="min-w-0 flex-1 space-y-1">
-						<Label class="mb-2">Series</Label>
+					<div class="min-w-0 flex-1 space-y-2">
+						<Label>Series</Label>
 						<SeriesPicker
 							series={seriesPickerItems}
 							bind:selectedId={addSeriesId}
 							name="seriesId"
-							class="mb-0 h-10"
+							class="h-10"
 							placeholder="Search series to link..."
 						/>
 					</div>
@@ -401,54 +402,57 @@
 			{#if data.sessionLinks.length > 0}
 				<div class="divide-y rounded border">
 					{#each data.sessionLinks as link (link.session.id)}
-						<form
-							method="POST"
-							action="?/updateSessionLink"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update({ reset: false });
-									if (result.type === 'success' && result.data?.sessionLinkUpdated)
-										toast.success('Updated.');
-								};
-							}}
-							class="flex flex-wrap items-center gap-3 px-3 py-2"
-						>
-							<input type="hidden" name="sessionId" value={link.session.id} />
-							<a
-								class="min-w-40 flex-1 truncate font-medium hover:underline"
-								href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
+						<div class="flex flex-wrap items-center gap-3 px-3 py-2">
+							<form
+								method="POST"
+								action="?/updateSessionLink"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success' && result.data?.sessionLinkUpdated)
+											toast.success('Updated.');
+									};
+								}}
+								class="contents"
 							>
-								{link.session.title}
-							</a>
-							<div class="flex items-center gap-2">
-								<Label for="status-{link.session.id}" class="text-xs">Status</Label>
-								<NativeSelect.Root
-									id="status-{link.session.id}"
-									name="status"
-									value={link.link.status}
+								<input type="hidden" name="sessionId" value={link.session.id} />
+								<a
+									class="min-w-40 flex-1 truncate font-medium hover:underline"
+									href={resolve('/admin/sessions/[slug]', { slug: link.session.slug })}
 								>
-									<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-									<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-									<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-									<NativeSelect.Option value="mentioned_off_theme"
-										>mentioned off theme</NativeSelect.Option
+									{link.session.title}
+								</a>
+								<div class="flex items-center gap-2">
+									<Label for="status-{link.session.id}" class="text-xs">Status</Label>
+									<NativeSelect
+										id="status-{link.session.id}"
+										name="status"
+										value={link.link.status}
 									>
-								</NativeSelect.Root>
-							</div>
-							<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
-							<Button type="submit" size="sm" variant="outline" disabled={saving}>Save</Button>
+										<NativeSelectOption value="starter">starter</NativeSelectOption>
+										<NativeSelectOption value="featured">featured</NativeSelectOption>
+										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="mentioned_off_theme"
+											>mentioned off theme</NativeSelectOption
+										>
+									</NativeSelect>
+								</div>
+								<Input name="note" class="w-40" placeholder="note" value={link.link.note ?? ''} />
+								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
+							</form>
 							<ConfirmButton
 								confirmText="Remove this session link?"
 								formAction="?/removeSessionLink"
 								formData={{ sessionId: link.session.id }}
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
+								class="h-10 w-10"
 							>
 								<XIcon class="h-4 w-4" />
 							</ConfirmButton>
-						</form>
+						</div>
 					{/each}
 				</div>
 			{:else}
@@ -469,41 +473,44 @@
 						}
 					};
 				}}
-				class="flex flex-wrap items-end gap-2 border-t pt-3"
+				class="space-y-4 border-t pt-4"
 			>
-				<div class="min-w-0 flex-1 space-y-1">
-					<Label class="mb-2">Session</Label>
+				<div class="min-w-0 space-y-2">
+					<Label>Session</Label>
 					<SessionPicker
 						sessions={sessionPickerItems}
 						bind:selectedId={addSessionId}
 						name="sessionId"
-						class="mb-0 h-10"
+						class="h-10"
+						placeholder="Search sessions to link..."
 					/>
 				</div>
-				<div class="space-y-1">
-					<Label for="add-status" class="mb-2">Status</Label>
-					<NativeSelect.Root
-						id="add-status"
-						name="status"
-						class="h-10"
-						bind:value={addSessionStatus}
-					>
-						<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-						<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-						<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-						<NativeSelect.Option value="mentioned_off_theme"
-							>mentioned off theme</NativeSelect.Option
+				<div class="grid gap-4 md:grid-cols-[10rem_minmax(0,1fr)_auto] md:items-end">
+					<div class="space-y-2">
+						<Label for="add-status">Status</Label>
+						<NativeSelect
+							id="add-status"
+							name="status"
+							class="w-full"
+							bind:value={addSessionStatus}
 						>
-					</NativeSelect.Root>
+							<NativeSelectOption value="starter">starter</NativeSelectOption>
+							<NativeSelectOption value="featured">featured</NativeSelectOption>
+							<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+							<NativeSelectOption value="mentioned_off_theme"
+								>mentioned off theme</NativeSelectOption
+							>
+						</NativeSelect>
+					</div>
+					<div class="space-y-2">
+						<Label for="add-note">Note</Label>
+						<Input id="add-note" name="note" placeholder="Optional context for this session" />
+					</div>
+					<Button type="submit" class="h-10 w-full md:w-auto" disabled={saving || !addSessionId}>
+						<PlusIcon class="h-4 w-4" />
+						Link
+					</Button>
 				</div>
-				<div class="flex-1 space-y-1">
-					<Label for="add-note" class="mb-2">Note</Label>
-					<Input id="add-note" name="note" placeholder="optional" />
-				</div>
-				<Button type="submit" class="h-10" disabled={saving || !addSessionId}>
-					<PlusIcon class="h-4 w-4" />
-					Link
-				</Button>
 			</form>
 		</Card.Content>
 	</Card.Root>

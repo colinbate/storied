@@ -41,6 +41,7 @@
 	let addSeriesId = $state<string | undefined>(undefined);
 	let addAuthorId = $state<string | undefined>(undefined);
 	let addStatus = $state<SubjectStatus>('starter');
+	let showLinkForms = $state(false);
 	let readUserId = $state<string | undefined>(undefined);
 	let readKind = $state<LinkKind>('book');
 	let readBookId = $state<string | undefined>(undefined);
@@ -834,187 +835,204 @@
 	</Card.Root>
 
 	<!-- Add link from existing -->
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-base">Link an Existing Library Item</Card.Title>
-			<Card.Description>
-				Choose a book, series, or author that is already in the club library.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<form
-				method="POST"
-				action="?/addLink"
-				use:enhance={() => {
-					saving = true;
-					return async ({ result, update }) => {
-						saving = false;
-						await update();
-						if (result.type === 'success') {
-							if (result.data?.linkAdded) {
-								toast.success('Linked to session.');
-								addBookId = undefined;
-								addSeriesId = undefined;
-								addAuthorId = undefined;
+	{#if showLinkForms}
+		<div class="flex justify-end">
+			<Button variant="ghost" size="sm" onclick={() => (showLinkForms = false)}>Cancel</Button>
+		</div>
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">Link an Existing Library Item</Card.Title>
+				<Card.Description>
+					Choose a book, series, or author that is already in the club library.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<form
+					method="POST"
+					action="?/addLink"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update();
+							if (result.type === 'success') {
+								if (result.data?.linkAdded) {
+									toast.success('Linked to session.');
+									addBookId = undefined;
+									addSeriesId = undefined;
+									addAuthorId = undefined;
+									showLinkForms = false;
+								}
+								if (result.data?.error) toast.error(String(result.data.error));
 							}
-							if (result.data?.error) toast.error(String(result.data.error));
-						}
-					};
-				}}
-				class="space-y-4"
-			>
-				<div class="grid gap-4 md:grid-cols-[15rem_minmax(0,1fr)]">
-					<div class="space-y-2">
-						<Label>Kind</Label>
-						<div
-							class="grid h-10 grid-cols-3 gap-1 rounded-lg bg-muted p-1"
-							role="group"
-							aria-label="Library item kind"
-						>
-							<Button
-								type="button"
-								size="sm"
-								class="h-8"
-								variant={addKind === 'book' ? 'default' : 'ghost'}
-								aria-pressed={addKind === 'book'}
-								onclick={() => (addKind = 'book')}
+						};
+					}}
+					class="space-y-4"
+				>
+					<div class="grid gap-4 md:grid-cols-[15rem_minmax(0,1fr)]">
+						<div class="space-y-2">
+							<Label>Kind</Label>
+							<div
+								class="grid h-10 grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+								role="group"
+								aria-label="Library item kind"
 							>
-								Book
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								class="h-8"
-								variant={addKind === 'series' ? 'default' : 'ghost'}
-								aria-pressed={addKind === 'series'}
-								onclick={() => (addKind = 'series')}
+								<Button
+									type="button"
+									size="sm"
+									class="h-8"
+									variant={addKind === 'book' ? 'default' : 'ghost'}
+									aria-pressed={addKind === 'book'}
+									onclick={() => (addKind = 'book')}
+								>
+									Book
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									class="h-8"
+									variant={addKind === 'series' ? 'default' : 'ghost'}
+									aria-pressed={addKind === 'series'}
+									onclick={() => (addKind = 'series')}
+								>
+									Series
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									class="h-8"
+									variant={addKind === 'author' ? 'default' : 'ghost'}
+									aria-pressed={addKind === 'author'}
+									onclick={() => (addKind = 'author')}
+								>
+									Author
+								</Button>
+							</div>
+						</div>
+						<input type="hidden" name="kind" value={addKind} />
+						<div class="min-w-0 space-y-2">
+							<Label
+								>{addKind === 'book' ? 'Book' : addKind === 'series' ? 'Series' : 'Author'}</Label
 							>
-								Series
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								class="h-8"
-								variant={addKind === 'author' ? 'default' : 'ghost'}
-								aria-pressed={addKind === 'author'}
-								onclick={() => (addKind = 'author')}
-							>
-								Author
-							</Button>
+							{#if addKind === 'book'}
+								<BookPicker books={bookPickerItems} bind:selectedId={addBookId} name="subjectId" />
+							{:else if addKind === 'series'}
+								<SeriesPicker
+									series={seriesPickerItems}
+									bind:selectedId={addSeriesId}
+									name="subjectId"
+								/>
+							{:else}
+								<AuthorPicker
+									authors={authorPickerItems}
+									bind:selectedId={addAuthorId}
+									name="subjectId"
+								/>
+							{/if}
 						</div>
 					</div>
-					<input type="hidden" name="kind" value={addKind} />
-					<div class="min-w-0 space-y-2">
-						<Label>{addKind === 'book' ? 'Book' : addKind === 'series' ? 'Series' : 'Author'}</Label
+					<div class="grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)_auto] md:items-end">
+						<div class="space-y-2">
+							<Label for="add-status">Status</Label>
+							<NativeSelect class="w-full" id="add-status" name="status" bind:value={addStatus}>
+								<NativeSelectOption value="starter">starter</NativeSelectOption>
+								<NativeSelectOption value="featured">featured</NativeSelectOption>
+								<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+								<NativeSelectOption value="mentioned_off_theme"
+									>mentioned off theme</NativeSelectOption
+								>
+							</NativeSelect>
+						</div>
+						<div class="space-y-2">
+							<Label for="add-note">Note</Label>
+							<Input id="add-note" name="note" placeholder="Optional context for this session" />
+						</div>
+						<Button
+							class="h-10 w-full md:w-auto"
+							type="submit"
+							disabled={saving || !addSubjectSelected}
 						>
-						{#if addKind === 'book'}
-							<BookPicker books={bookPickerItems} bind:selectedId={addBookId} name="subjectId" />
-						{:else if addKind === 'series'}
-							<SeriesPicker
-								series={seriesPickerItems}
-								bind:selectedId={addSeriesId}
-								name="subjectId"
-							/>
-						{:else}
-							<AuthorPicker
-								authors={authorPickerItems}
-								bind:selectedId={addAuthorId}
-								name="subjectId"
-							/>
-						{/if}
+							<PlusIcon class="h-4 w-4" />
+							Link Item
+						</Button>
 					</div>
-				</div>
-				<div class="grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)_auto] md:items-end">
-					<div class="space-y-2">
-						<Label for="add-status">Status</Label>
-						<NativeSelect class="w-full" id="add-status" name="status" bind:value={addStatus}>
-							<NativeSelectOption value="starter">starter</NativeSelectOption>
-							<NativeSelectOption value="featured">featured</NativeSelectOption>
-							<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-							<NativeSelectOption value="mentioned_off_theme"
-								>mentioned off theme</NativeSelectOption
-							>
-						</NativeSelect>
-					</div>
-					<div class="space-y-2">
-						<Label for="add-note">Note</Label>
-						<Input id="add-note" name="note" placeholder="Optional context for this session" />
-					</div>
-					<Button
-						class="h-10 w-full md:w-auto"
-						type="submit"
-						disabled={saving || !addSubjectSelected}
-					>
-						<PlusIcon class="h-4 w-4" />
-						Link Item
-					</Button>
-				</div>
-			</form>
-		</Card.Content>
-	</Card.Root>
+				</form>
+			</Card.Content>
+		</Card.Root>
 
-	<!-- Add link from external subject URL -->
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-base">Link from URL</Card.Title>
-			<Card.Description>
-				Paste a Hardcover or Goodreads book, series, or author URL. If not already in our library,
-				it'll be queued for resolution and auto-linked to this session once resolved.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<form
-				method="POST"
-				action="?/addLinkFromUrl"
-				use:enhance={() => {
-					saving = true;
-					return async ({ result, update }) => {
-						saving = false;
-						await update();
-						if (result.type === 'success') {
-							if (result.data?.linkAddedFromResolved) toast.success('Linked to session.');
-							if (result.data?.linkQueuedFromUrl)
-								toast.success('Queued. Will link to session once resolved.');
-							if (result.data?.error) toast.error(String(result.data.error));
-						}
-					};
-				}}
-				class="space-y-4"
-			>
-				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
-					<div class="min-w-0 space-y-2">
-						<Label for="url-input">Subject URL</Label>
-						<Input
-							id="url-input"
-							name="url"
-							type="url"
-							placeholder="https://hardcover.app/books/..."
-							required
-						/>
+		<!-- Add link from external subject URL -->
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">Link from URL</Card.Title>
+				<Card.Description>
+					Paste a Hardcover or Goodreads book, series, or author URL. If not already in our library,
+					it'll be queued for resolution and auto-linked to this session once resolved.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<form
+					method="POST"
+					action="?/addLinkFromUrl"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update();
+							if (result.type === 'success') {
+								if (result.data?.linkAddedFromResolved) {
+									toast.success('Linked to session.');
+									showLinkForms = false;
+								}
+								if (result.data?.linkQueuedFromUrl) {
+									toast.success('Queued. Will link to session once resolved.');
+									showLinkForms = false;
+								}
+								if (result.data?.error) toast.error(String(result.data.error));
+							}
+						};
+					}}
+					class="space-y-4"
+				>
+					<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+						<div class="min-w-0 space-y-2">
+							<Label for="url-input">Subject URL</Label>
+							<Input
+								id="url-input"
+								name="url"
+								type="url"
+								placeholder="https://hardcover.app/books/..."
+								required
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="url-status">Status</Label>
+							<NativeSelect class="w-full" id="url-status" name="status" bind:value={urlStatus}>
+								<NativeSelectOption value="starter">starter</NativeSelectOption>
+								<NativeSelectOption value="featured">featured</NativeSelectOption>
+								<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+								<NativeSelectOption value="mentioned_off_theme"
+									>mentioned off theme</NativeSelectOption
+								>
+							</NativeSelect>
+						</div>
 					</div>
-					<div class="space-y-2">
-						<Label for="url-status">Status</Label>
-						<NativeSelect class="w-full" id="url-status" name="status" bind:value={urlStatus}>
-							<NativeSelectOption value="starter">starter</NativeSelectOption>
-							<NativeSelectOption value="featured">featured</NativeSelectOption>
-							<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-							<NativeSelectOption value="mentioned_off_theme"
-								>mentioned off theme</NativeSelectOption
-							>
-						</NativeSelect>
+					<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+						<div class="space-y-2">
+							<Label for="url-note">Note</Label>
+							<Input id="url-note" name="note" placeholder="Optional context for this session" />
+						</div>
+						<Button class="h-10 w-full md:w-auto" type="submit" disabled={saving}>
+							<LinkIcon class="h-4 w-4" />
+							Link URL
+						</Button>
 					</div>
-				</div>
-				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-					<div class="space-y-2">
-						<Label for="url-note">Note</Label>
-						<Input id="url-note" name="note" placeholder="Optional context for this session" />
-					</div>
-					<Button class="h-10 w-full md:w-auto" type="submit" disabled={saving}>
-						<LinkIcon class="h-4 w-4" />
-						Link URL
-					</Button>
-				</div>
-			</form>
-		</Card.Content>
-	</Card.Root>
+				</form>
+			</Card.Content>
+		</Card.Root>
+	{:else}
+		<Button variant="outline" onclick={() => (showLinkForms = true)}>
+			<PlusIcon class="h-4 w-4" />
+			Link Library Item
+		</Button>
+	{/if}
 </div>
