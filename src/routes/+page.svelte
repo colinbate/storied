@@ -3,7 +3,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import ThreadParticipants from '$lib/components/thread-participants.svelte';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
@@ -189,12 +189,14 @@
 							)}</span
 						>
 					</div>
-					<Button
-						variant="outline"
-						href={resolve('/thread/[slug]', { slug: data.featuredDiscussion.thread.slug })}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a fragment -->
+					<a
+						class={buttonVariants({ variant: 'outline' })}
+						href={`${resolve('/sessions/[slug]', { slug: data.currentSession!.slug })}#discussion`}
 					>
 						Open Discussion
-					</Button>
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				</Card.Content>
 			</Card.Root>
 		</section>

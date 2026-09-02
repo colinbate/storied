@@ -9,6 +9,7 @@
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
+	import DiscussionNav from '$lib/components/discussion-nav.svelte';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -30,9 +31,11 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl space-y-6">
+	<DiscussionNav categories={data.discussionCategories} />
+
 	<div>
 		<a
-			href={resolve('/')}
+			href={resolve('/discussions')}
 			class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
 		>
 			<ArrowLeftIcon class="h-4 w-4" />
@@ -136,7 +139,7 @@
 				{/if}
 
 				<div class="flex justify-end gap-3">
-					<Button variant="outline" href="/">Cancel</Button>
+					<Button variant="outline" href={resolve('/discussions')}>Cancel</Button>
 					<Button type="submit" disabled={loading}>
 						{loading ? 'Creating…' : 'Create Thread'}
 					</Button>

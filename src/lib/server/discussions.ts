@@ -1,13 +1,109 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
 
 import type { ORM } from '$lib/server/db';
 import { categories, notificationPreferences, threads } from '$lib/server/db/schema';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { slugify } from '$lib/server/slugify';
+import {
+	threadAccessBindings,
+	threadAccessCondition,
+	threadAccessSql,
+	type ThreadViewer
+} from '$lib/server/thread-access';
 
 export const SESSION_DISCUSSIONS_CATEGORY_ID = 'cat_session_discussions';
 export const ANNOUNCEMENTS_CATEGORY_ID = 'cat_announcements';
+
+export async function listDiscussionCategories(db: ORM, viewer: ThreadViewer) {
+	return db
+		.select({
+			id: categories.id,
+			name: categories.name,
+			slug: categories.slug,
+			description: categories.description,
+			size: count(threads.id).as('size')
+		})
+		.from(categories)
+		.leftJoin(
+			threads,
+			and(
+				eq(threads.categoryId, categories.id),
+				isNull(threads.deletedAt),
+				threadAccessCondition(db, viewer)
+			)
+		)
+		.where(and(eq(categories.isPrivate, false), ne(categories.id, SESSION_DISCUSSIONS_CATEGORY_ID)))
+		.groupBy(
+			categories.id,
+			categories.name,
+			categories.slug,
+			categories.description,
+			categories.sortOrder
+		)
+		.orderBy(asc(categories.sortOrder), asc(categories.name))
+		.all();
+}
+
+export async function listRecentDiscussionThreads(db: ORM, viewer: ThreadViewer, limit = 30) {
+	const { results = [] } = await db.$client
+		.prepare(
+			`WITH listed_threads AS (
+				SELECT *
+				FROM threads
+				WHERE category_id <> ?
+					AND deleted_at IS NULL
+					AND ${threadAccessSql('threads')}
+				ORDER BY last_post_at DESC, created_at DESC
+				LIMIT ?
+			)
+			SELECT
+				t.id AS threadId,
+				t.category_id AS threadCategoryId,
+				t.author_user_id AS threadAuthorUserId,
+				t.session_id AS threadSessionId,
+				t.session_thread_role AS threadSessionThreadRole,
+				t.audience_group_id AS threadAudienceGroupId,
+				t.title AS threadTitle,
+				t.slug AS threadSlug,
+				t.body_source AS threadBodySource,
+				t.body_html AS threadBodyHtml,
+				t.visibility AS threadVisibility,
+				t.is_locked AS threadIsLocked,
+				t.is_pinned AS threadIsPinned,
+				t.reply_count AS threadReplyCount,
+				t.last_post_at AS threadLastPostAt,
+				t.deleted_at AS threadDeletedAt,
+				t.created_at AS threadCreatedAt,
+				t.updated_at AS threadUpdatedAt,
+				author.id AS authorId,
+				author.display_name AS authorDisplayName,
+				author.avatar_url AS authorAvatarUrl,
+				COALESCE((
+					SELECT json_group_array(json_object(
+						'id', participant.id,
+						'displayName', participant.displayName,
+						'avatarUrl', participant.avatarUrl,
+						'lastActivityAt', participant.lastActivityAt
+					))
+					FROM (
+						SELECT u.id, u.display_name AS displayName, u.avatar_url AS avatarUrl, max(p.created_at) AS lastActivityAt
+						FROM posts p
+						INNER JOIN users u ON u.id = p.author_user_id
+						WHERE p.thread_id = t.id AND p.deleted_at IS NULL
+						GROUP BY u.id, u.display_name, u.avatar_url
+						ORDER BY lastActivityAt DESC
+					) participant
+				), '[]') AS participantsJson
+			FROM listed_threads t
+			INNER JOIN users author ON author.id = t.author_user_id
+			ORDER BY t.last_post_at DESC, t.created_at DESC`
+		)
+		.bind(SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer), limit)
+		.all<ThreadListSqlRow>();
+
+	return results.map(mapThreadListSqlRow);
+}
 
 export function buildSessionDiscussionBody(args: { title: string; themeTitle?: string | null }) {
 	const lines = [`Discussion for **${args.title}**.`];

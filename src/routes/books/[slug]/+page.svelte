@@ -11,11 +11,12 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import HeartIcon from '@lucide/svelte/icons/heart';
-	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
+	import LibraryNav from '$lib/components/library-nav.svelte';
+	import LibraryBreadcrumb from '$lib/components/library-breadcrumb.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -42,13 +43,8 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<a
-		href={resolve('/')}
-		class="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-	>
-		<ArrowLeftIcon class="h-4 w-4" />
-		Back to Discussions
-	</a>
+	<LibraryNav />
+	<LibraryBreadcrumb section="Books" sectionHref="/books" title={data.book.title} />
 
 	<!-- Book header -->
 	<div class="flex flex-col gap-6 sm:flex-row">

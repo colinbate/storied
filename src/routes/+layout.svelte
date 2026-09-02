@@ -13,7 +13,7 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
+	import HouseIcon from '@lucide/svelte/icons/house';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import MailIcon from '@lucide/svelte/icons/mail';
 	import MenuIcon from '@lucide/svelte/icons/menu';
@@ -28,18 +28,44 @@
 	let { children, data } = $props();
 	const user = $derived(data.user);
 
-	const secondaryLinks = $derived([
+	const primaryLinks = [
+		{ label: 'Home', href: '/' as const, icon: HouseIcon },
 		{ kind: 'static' as const, label: 'Sessions', href: '/sessions' as const, icon: CalendarIcon },
-		{ kind: 'static' as const, label: 'Themes', href: '/themes' as const, icon: LightbulbIcon },
-		{ kind: 'static' as const, label: 'Library', href: '/library' as const, icon: LibraryIcon },
-		{ kind: 'static' as const, label: 'Members', href: '/members' as const, icon: UsersIcon },
-		...data.navCategories.map((category) => ({
-			kind: 'category' as const,
-			label: category.name,
-			slug: category.slug,
+		{
+			kind: 'static' as const,
+			label: 'Discussions',
+			href: '/discussions' as const,
 			icon: MessageSquareIcon
-		}))
-	]);
+		},
+		{ kind: 'static' as const, label: 'Library', href: '/library' as const, icon: LibraryIcon },
+		{ kind: 'static' as const, label: 'Members', href: '/members' as const, icon: UsersIcon }
+	];
+
+	function isPrimaryLinkActive(href: (typeof primaryLinks)[number]['href']) {
+		const pathname = page.url.pathname;
+		const isThread = pathname.startsWith('/thread/');
+		const isSessionThread = isThread && 'session' in page.data && Boolean(page.data.session);
+
+		switch (href) {
+			case '/':
+				return pathname === '/';
+			case '/sessions':
+				return pathname.startsWith('/sessions') || pathname === '/themes' || isSessionThread;
+			case '/discussions':
+				return (
+					pathname.startsWith('/discussions') ||
+					pathname.startsWith('/category/') ||
+					pathname === '/new' ||
+					(isThread && !isSessionThread)
+				);
+			case '/library':
+				return ['/library', '/books', '/series', '/authors'].some(
+					(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+				);
+			case '/members':
+				return pathname === '/members' || pathname.startsWith('/members/');
+		}
+	}
 </script>
 
 <ModeWatcher />
@@ -85,21 +111,12 @@
 						<DropdownMenu.Content align="end" class="w-56 md:hidden">
 							<DropdownMenu.Label>Navigate</DropdownMenu.Label>
 							<DropdownMenu.Separator />
-							{#each secondaryLinks as link (link.kind === 'category' ? `category-${link.slug}` : link.href)}
+							{#each primaryLinks as link (link.href)}
 								{@const Icon = link.icon}
-								{#if link.kind === 'category'}
-									<DropdownMenu.Item
-										onSelect={() => goto(resolve('/category/[slug]', { slug: link.slug }))}
-									>
-										<Icon class="h-4 w-4" />
-										{link.label}
-									</DropdownMenu.Item>
-								{:else}
-									<DropdownMenu.Item onSelect={() => goto(resolve(link.href))}>
-										<Icon class="h-4 w-4" />
-										{link.label}
-									</DropdownMenu.Item>
-								{/if}
+								<DropdownMenu.Item onSelect={() => goto(resolve(link.href))}>
+									<Icon class="h-4 w-4" />
+									{link.label}
+								</DropdownMenu.Item>
 							{/each}
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
@@ -206,27 +223,16 @@
 			<nav class="hidden border-t md:block">
 				<div class="mx-auto max-w-5xl overflow-x-auto px-4">
 					<div class="flex h-11 w-max items-center gap-1">
-						{#each secondaryLinks as link (link.kind === 'category' ? `category-${link.slug}` : link.href)}
+						{#each primaryLinks as link (link.href)}
 							{@const Icon = link.icon}
-							{#if link.kind === 'category'}
-								<a
-									href={resolve('/category/[slug]', { slug: link.slug })}
-									aria-current={page.url.pathname === `/category/${link.slug}` ? 'page' : undefined}
-									class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
-								>
-									<Icon class="h-4 w-4" />
-									{link.label}
-								</a>
-							{:else}
-								<a
-									href={resolve(link.href)}
-									aria-current={page.url.pathname === link.href ? 'page' : undefined}
-									class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
-								>
-									<Icon class="h-4 w-4" />
-									{link.label}
-								</a>
-							{/if}
+							<a
+								href={resolve(link.href)}
+								aria-current={isPrimaryLinkActive(link.href) ? 'page' : undefined}
+								class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground"
+							>
+								<Icon class="h-4 w-4" />
+								{link.label}
+							</a>
 						{/each}
 					</div>
 				</div>
@@ -240,7 +246,15 @@
 
 	<footer class="border-t py-6 text-center text-sm text-muted-foreground">
 		<div class="mx-auto max-w-5xl px-4">
-			<p>{APP_NAME} &mdash; Powered by {#if PRODUCT_URL}<a class="text-primary hover:underline" href={PRODUCT_URL}>{PRODUCT_NAME}</a>{:else}{PRODUCT_NAME}{/if}</p>
+			<p>
+				{APP_NAME} &mdash; Powered by
+				{#if PRODUCT_URL}
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external product URL -->
+					<a class="text-primary hover:underline" href={PRODUCT_URL}>{PRODUCT_NAME}</a>
+				{:else}
+					{PRODUCT_NAME}
+				{/if}
+			</p>
 		</div>
 	</footer>
 </div>

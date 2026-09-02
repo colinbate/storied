@@ -2,9 +2,9 @@
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import AuthorCard from '$lib/components/author-card.svelte';
+	import LibraryNav from '$lib/components/library-nav.svelte';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -106,28 +106,12 @@
 </script>
 
 <div class="space-y-8">
+	<LibraryNav />
+
 	<div class="space-y-4">
-		<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-			<div>
-				<h1 class="text-2xl font-bold">{title}</h1>
-				<p class="text-muted-foreground">{description}</p>
-			</div>
-			{#if sections.length > 1}
-				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/books')} variant="outline" size="sm">
-						<BookOpenIcon class="h-4 w-4" />
-						Books
-					</Button>
-					<Button href={resolve('/series')} variant="outline" size="sm">
-						<LibraryIcon class="h-4 w-4" />
-						Series
-					</Button>
-					<Button href={resolve('/authors')} variant="outline" size="sm">
-						<UserIcon class="h-4 w-4" />
-						Authors
-					</Button>
-				</div>
-			{/if}
+		<div>
+			<h1 class="text-2xl font-bold">{title}</h1>
+			<p class="text-muted-foreground">{description}</p>
 		</div>
 
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

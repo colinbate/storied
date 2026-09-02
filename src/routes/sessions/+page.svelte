@@ -6,6 +6,7 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import { formatDate } from '$lib/date-format';
+	import SessionNav from '$lib/components/session-nav.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -21,6 +22,8 @@
 </svelte:head>
 
 <div class="space-y-8">
+	<SessionNav />
+
 	<div>
 		<h1 class="text-2xl font-bold">Sessions</h1>
 		<p class="text-muted-foreground">Reading sessions, themes, and meeting threads.</p>

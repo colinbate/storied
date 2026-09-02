@@ -48,6 +48,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		categories: availableCategories,
+		discussionCategories: allCategories.filter(
+			(category) => !category.isPrivate && category.id !== SESSION_DISCUSSIONS_CATEGORY_ID
+		),
 		audienceGroups,
 		preselectedCategory,
 		announcementCategoryId: ANNOUNCEMENTS_CATEGORY_ID,

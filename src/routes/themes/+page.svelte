@@ -12,6 +12,7 @@
 	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
+	import SessionNav from '$lib/components/session-nav.svelte';
 
 	let { data, form } = $props();
 	let saving = $state(false);
@@ -42,6 +43,8 @@
 </svelte:head>
 
 <div class="space-y-6">
+	<SessionNav />
+
 	<div class="flex items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-bold">Themes</h1>

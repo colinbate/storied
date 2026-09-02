@@ -13,6 +13,7 @@ import {
 	sessions,
 	moderationEvents,
 	groups,
+	categories,
 	type SubjectType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
@@ -24,6 +25,7 @@ import { createThreadReply } from '$lib/server/thread-replies';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { canAssignGroup, threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
+import { listDiscussionCategories } from '$lib/server/discussions';
 
 /** How long after posting a user can edit their own post or thread. */
 const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -54,10 +56,16 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 				displayName: users.displayName,
 				avatarUrl: users.avatarUrl
 			},
+			category: {
+				id: categories.id,
+				name: categories.name,
+				slug: categories.slug
+			},
 			audienceGroup: { id: groups.id, name: groups.name }
 		})
 		.from(threads)
 		.innerJoin(users, eq(threads.authorUserId, users.id))
+		.innerJoin(categories, eq(threads.categoryId, categories.id))
 		.leftJoin(groups, eq(threads.audienceGroupId, groups.id))
 		.where(
 			and(
@@ -189,6 +197,10 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 		session = row ?? null;
 	}
 
+	const discussionCategories = session
+		? []
+		: await listDiscussionCategories(locals.db, threadViewer(locals));
+
 	const sessionSubjectRows =
 		thread.thread.sessionId && linkedSubjects.length
 			? await locals.db
@@ -247,7 +259,9 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 	return {
 		thread: thread.thread,
 		author: thread.author,
+		category: thread.category,
 		audienceGroup: thread.audienceGroup,
+		discussionCategories,
 		posts: threadPosts,
 		isSubscribed: !!subscription,
 		subscriptionMode: (subscription?.mode ?? 'none') as

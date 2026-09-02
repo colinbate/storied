@@ -25,6 +25,7 @@
 	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { toast } from 'svelte-sonner';
 	import { publicPostImageUrl } from '$lib/post-images';
+	import SessionNav from '$lib/components/session-nav.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -131,6 +132,8 @@
 </svelte:head>
 
 <div class="space-y-8">
+	<SessionNav />
+
 	<a
 		href={resolve('/sessions')}
 		class="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -286,7 +289,7 @@
 	{/if}
 
 	{#if data.primaryThread}
-		<section class="space-y-4">
+		<section id="discussion" class="scroll-mt-28 space-y-4">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div class="space-y-1">
 					<h2 class="text-lg font-semibold">Discussion</h2>
@@ -318,13 +321,6 @@
 							</NativeSelect.Root>
 						</div>
 					</form>
-					<Button
-						variant="outline"
-						class="h-10"
-						href={resolve('/thread/[slug]', { slug: data.primaryThread.thread.slug })}
-					>
-						View full thread
-					</Button>
 				</div>
 			</div>
 

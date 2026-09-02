@@ -46,6 +46,8 @@
 	import type { SubjectSourceType } from '$shared/worker-messages';
 	import MemberName from '$lib/components/member-name.svelte';
 	import { publicPostImageUrl } from '$lib/post-images';
+	import DiscussionNav from '$lib/components/discussion-nav.svelte';
+	import SessionNav from '$lib/components/session-nav.svelte';
 
 	type QueuedSubjectLink = {
 		sourceType: Extract<
@@ -327,943 +329,984 @@
 	<title>{pageTitle(data.thread.title)}</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6 lg:flex-row">
-	<div class="@container min-w-0 flex-1 space-y-6">
-		<!-- Back + thread header -->
-		<div>
-			<a
-				href={resolve('/')}
-				class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-			>
-				<ArrowLeftIcon class="h-4 w-4" />
-				Back to Discussions
-			</a>
+<div class="space-y-6">
+	{#if data.session}
+		<SessionNav />
+	{:else}
+		<DiscussionNav categories={data.discussionCategories} activeCategorySlug={data.category.slug} />
+	{/if}
 
-			<div class="flex flex-col items-start justify-between gap-4 @3xl:flex-row">
-				<div>
-					<div class="flex items-center gap-2">
-						<h1 class="text-2xl font-bold">{data.thread.title}</h1>
-						{#if data.thread.isPinned}
-							<PinIcon class="h-4 w-4 text-primary" />
-						{/if}
-						{#if data.thread.isLocked}
-							<LockIcon class="h-4 w-4 text-muted-foreground" />
-						{/if}
-					</div>
-					<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-						<MemberName userId={data.author.id} name={data.author.displayName} />
-						<span>·</span>
-						<span>{formatDate(data.thread.createdAt, { time: 'never', timeZone })}</span>
-						{#if data.thread.replyCount > 0}
-							<span>·</span>
-							<span
-								>{data.thread.replyCount}
-								{data.thread.replyCount === 1 ? 'reply' : 'replies'}</span
-							>
-						{/if}
-						{#if data.audienceGroup}
-							<span>·</span>
-							<Badge variant="outline" class="gap-1 px-2 py-0 text-xs">
-								<UsersIcon class="h-3 w-3" />
-								{data.audienceGroup.name}
-							</Badge>
-						{/if}
-						{#if data.session}
-							<span>·</span>
-							<a href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
-								<Badge variant="secondary" class="gap-1 px-2 py-0 text-xs hover:bg-secondary/80">
-									<CalendarIcon class="h-3 w-3" />
-									{data.session.title}
-								</Badge>
-							</a>
-							{#if data.thread.sessionThreadRole === 'primary'}
-								<Badge variant="outline" class="px-2 py-0 text-xs">main discussion</Badge>
-							{/if}
-						{/if}
-					</div>
-				</div>
-
-				<div class="flex flex-row gap-2">
-					<form method="POST" action="?/setSubscriptionMode" use:enhance={subscriptionModeEnhance}>
-						<label for="thread-sub-mode" class="sr-only">Notify me</label>
-						<div class="flex items-center gap-2">
-							{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
-								<BellOffIcon class="h-4 w-4 text-muted-foreground" />
-							{:else}
-								<BellIcon class="h-4 w-4 text-muted-foreground" />
-							{/if}
-							<NativeSelect.Root
-								id="thread-sub-mode"
-								name="mode"
-								value={data.subscriptionMode}
-								onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
-							>
-								<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option>
-								<NativeSelect.Option value="daily_digest"
-									>Notify me: In my digest</NativeSelect.Option
-								>
-								<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
-							</NativeSelect.Root>
-						</div>
-					</form>
-
-					<!-- Moderation widget -->
-					{#if data.canModerate}
-						<Popover.Root>
-							<Popover.Trigger class={buttonVariants({ variant: 'outline', class: 'h-10' })}
-								><ShieldIcon class="size-4" /></Popover.Trigger
-							>
-							<Popover.Content align="end" class="w-min">
-								<div class="flex items-center gap-2 font-medium">
-									<ShieldIcon class="h-4 w-4" />
-									<span class="font-medium">Moderator Tools</span>
-								</div>
-								<div class="flex gap-2">
-									<form
-										method="POST"
-										action="?/togglePin"
-										use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
-									>
-										<input type="hidden" name="threadId" value={data.thread.id} />
-										<input
-											type="hidden"
-											name="sessionThreadRole"
-											value={data.thread.sessionThreadRole ?? 'related'}
-										/>
-										<Button variant="outline" size="sm" type="submit">
-											{#if data.thread.isPinned}
-												<PinOffIcon class="h-4 w-4" />
-												Unpin
-											{:else}
-												<PinIcon class="h-4 w-4" />
-												Pin
-											{/if}
-										</Button>
-									</form>
-
-									<form
-										method="POST"
-										action="?/toggleLock"
-										use:enhance={modEnhance(data.thread.isLocked ? 'Unlocked.' : 'Locked.')}
-									>
-										<input type="hidden" name="threadId" value={data.thread.id} />
-										<Button variant="outline" size="sm" type="submit">
-											{#if data.thread.isLocked}
-												<UnlockIcon class="h-4 w-4" />
-												Unlock
-											{:else}
-												<LockIcon class="h-4 w-4" />
-												Lock
-											{/if}
-										</Button>
-									</form>
-									<div class="ml-auto">
-										<ConfirmButton
-											confirmText="Delete this thread?"
-											formAction="?/deleteThread"
-											formData={{ threadId: data.thread.id }}
-											variant="outline"
-											size="sm"
-											class="text-destructive hover:text-destructive"
-										>
-											<TrashIcon class="h-4 w-4" />
-											Delete Thread
-										</ConfirmButton>
-									</div>
-								</div>
-								{#if data.permissions.has('sessions:edit')}
-									<form
-										method="POST"
-										action="?/linkSession"
-										use:enhance={modEnhance('Session link updated.')}
-										class="inline-flex items-center gap-2"
-									>
-										<input type="hidden" name="threadId" value={data.thread.id} />
-										<label
-											for="session-select"
-											class="flex items-center gap-1 text-muted-foreground"
-										>
-											<CalendarIcon class="h-4 w-4" />
-											Session
-										</label>
-										<NativeSelect.Root
-											id="session-select"
-											name="sessionId"
-											onchange={(e) => {
-												(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-											}}
-										>
-											<NativeSelect.Option value="" selected={!data.thread.sessionId}
-												>No session</NativeSelect.Option
-											>
-											{#each data.allSessions as session (session.id)}
-												<NativeSelect.Option
-													value={session.id}
-													selected={data.thread.sessionId === session.id}
-												>
-													{session.title}
-												</NativeSelect.Option>
-											{/each}
-										</NativeSelect.Root>
-									</form>
-									{#if data.thread.sessionId}
-										<p class="text-sm text-muted-foreground">
-											Manually linked session threads are treated as related conversations.
-										</p>
-									{/if}
-								{/if}
-								{#if data.canManageGroups}
-									<form
-										method="POST"
-										action="?/setAudienceGroup"
-										use:enhance={modEnhance('Thread audience updated.')}
-										class="inline-flex items-center gap-2"
-									>
-										<label
-											for="audience-select"
-											class="flex items-center gap-1 text-muted-foreground"
-										>
-											<UsersIcon class="h-4 w-4" />
-											Audience
-										</label>
-										<NativeSelect.Root
-											id="audience-select"
-											name="audienceGroupId"
-											onchange={(e) =>
-												(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit()}
-										>
-											<NativeSelect.Option value="" selected={!data.thread.audienceGroupId}
-												>All members</NativeSelect.Option
-											>
-											{#each data.allAudienceGroups as group (group.id)}
-												<NativeSelect.Option
-													value={group.id}
-													selected={data.thread.audienceGroupId === group.id}
-													>{group.name}{group.archivedAt ? ' (archived)' : ''}</NativeSelect.Option
-												>
-											{/each}
-										</NativeSelect.Root>
-									</form>
-								{/if}
-							</Popover.Content>
-						</Popover.Root>
-					{/if}
-				</div>
-			</div>
-		</div>
-
-		{#if data.session}
-			<Card.Root class="border-primary/30 bg-primary/20">
-				<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div class="min-w-0">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="font-medium">Part of {data.session.title}</span>
-							{#if data.thread.sessionThreadRole === 'primary'}
-								<Badge variant="secondary">Main discussion thread</Badge>
-							{:else}
-								<Badge variant="outline">Related thread</Badge>
-							{/if}
-						</div>
-						<div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-							{#if data.session.startsAt}
-								<span class="inline-flex items-center gap-1">
-									<CalendarIcon class="h-3.5 w-3.5" />
-									{formatDate(data.session.startsAt, {
-										time: 'never',
-										timeZone: data.session.timezone ?? timeZone
-									})}
-								</span>
-							{/if}
-							{#if data.session.locationName}
-								<span class="inline-flex items-center gap-1">
-									<MapPinIcon class="h-3.5 w-3.5" />
-									{data.session.locationName}
-								</span>
-							{/if}
-							{#if data.session.themeTitle ?? data.session.theme}
-								<span>{data.session.themeTitle ?? data.session.theme}</span>
-							{/if}
-						</div>
-					</div>
-					<Button variant="outline" href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
-						View Session
-					</Button>
-				</Card.Content>
-			</Card.Root>
-		{/if}
-
-		<!-- Thread body (the opening post) -->
-		<Card.Root>
-			<Card.Content class="pt-1">
-				<div class="flex items-start gap-3">
-					<Avatar.Root class="h-10 w-10 shrink-0">
-						{#if data.author.avatarUrl}
-							<Avatar.Image src={data.author.avatarUrl} alt={data.author.displayName} />
-						{/if}
-						<Avatar.Fallback>{getInitial(data.author.displayName)}</Avatar.Fallback>
-					</Avatar.Root>
-					<div class="min-w-0 flex-1">
-						<div class="mb-2 flex items-center gap-2">
-							<a
-								href={resolve('/members/[id]', { id: data.author.id })}
-								class="font-medium hover:underline"
-							>
-								<MemberName userId={data.author.id} name={data.author.displayName} />
-							</a>
-							<span class="text-xs text-muted-foreground"
-								>{formatDate(data.thread.createdAt, { time: 'always', timeZone })}</span
-							>
-							{#if editingId !== '' && canEdit(data.author.id, data.thread.createdAt)}
-								<button
-									type="button"
-									class="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
-									onclick={startEditThread}
-								>
-									<PencilIcon class="mr-1 inline h-3 w-3" />
-									Edit
-								</button>
-							{/if}
-						</div>
-						{#if threadImageUrl}
-							<div class="mb-4">
-								<PostImage src={threadImageUrl} alt="Image attached by {data.author.displayName}" />
-							</div>
-						{/if}
-						{#if editingId === ''}
-							<form method="POST" action="?/editThread" use:enhance={editEnhance} class="space-y-2">
-								<Textarea name="body" rows={6} bind:value={editBody} required />
-								<div class="flex justify-end gap-2">
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										onclick={cancelEdit}
-										disabled={editSaving}
-									>
-										<XIcon class="h-4 w-4" />
-										Cancel
-									</Button>
-									<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
-										{editSaving ? 'Saving…' : 'Save'}
-									</Button>
-								</div>
-							</form>
-						{:else}
-							<div class="prose max-w-none wrap-anywhere dark:prose-invert">
-								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html data.thread.bodyHtml}
-							</div>
-						{/if}
-					</div>
-				</div>
-			</Card.Content>
-		</Card.Root>
-
-		<!-- Replies -->
-		{#if data.posts.length > 0}
-			<Separator />
-			<h2 class="text-lg font-semibold">
-				{data.posts.length}
-				{data.posts.length === 1 ? 'Reply' : 'Replies'}
-			</h2>
-
-			<div class="space-y-3">
-				{#each data.posts as { post, author } (post.id)}
-					{@const postImageUrl = publicPostImageUrl(data.fileBaseUrl, post.imageKey)}
-					<Card.Root
-						id="post-{post.id}"
-						class={cn(
-							'scroll-mt-20 target:border-2 target:border-primary',
-							replyingTo === post.id && 'border-2 border-primary bg-primary/5'
-						)}
+	<div class="flex flex-col gap-6 lg:flex-row">
+		<div class="@container min-w-0 flex-1 space-y-6">
+			<!-- Back + thread header -->
+			<div>
+				{#if data.session}
+					<a
+						href={resolve('/sessions/[slug]', { slug: data.session.slug })}
+						class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
 					>
-						<Card.Content class="pt-1">
-							<div class="flex items-start gap-3">
-								<Avatar.Root class="h-8 w-8 shrink-0">
-									{#if author.avatarUrl}
-										<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
-									{/if}
-									<Avatar.Fallback class="text-xs">{getInitial(author.displayName)}</Avatar.Fallback
+						<ArrowLeftIcon class="h-4 w-4" />
+						Back to {data.session.title}
+					</a>
+				{:else}
+					<a
+						href={resolve('/category/[slug]', { slug: data.category.slug })}
+						class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+					>
+						<ArrowLeftIcon class="h-4 w-4" />
+						Back to {data.category.name}
+					</a>
+				{/if}
+
+				<div class="flex flex-col items-start justify-between gap-4 @3xl:flex-row">
+					<div>
+						<div class="flex items-center gap-2">
+							<h1 class="text-2xl font-bold">{data.thread.title}</h1>
+							{#if data.thread.isPinned}
+								<PinIcon class="h-4 w-4 text-primary" />
+							{/if}
+							{#if data.thread.isLocked}
+								<LockIcon class="h-4 w-4 text-muted-foreground" />
+							{/if}
+						</div>
+						<div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+							<MemberName userId={data.author.id} name={data.author.displayName} />
+							<span>·</span>
+							<span>{formatDate(data.thread.createdAt, { time: 'never', timeZone })}</span>
+							{#if data.thread.replyCount > 0}
+								<span>·</span>
+								<span
+									>{data.thread.replyCount}
+									{data.thread.replyCount === 1 ? 'reply' : 'replies'}</span
+								>
+							{/if}
+							{#if data.audienceGroup}
+								<span>·</span>
+								<Badge variant="outline" class="gap-1 px-2 py-0 text-xs">
+									<UsersIcon class="h-3 w-3" />
+									{data.audienceGroup.name}
+								</Badge>
+							{/if}
+							{#if data.session}
+								<span>·</span>
+								<a href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
+									<Badge variant="secondary" class="gap-1 px-2 py-0 text-xs hover:bg-secondary/80">
+										<CalendarIcon class="h-3 w-3" />
+										{data.session.title}
+									</Badge>
+								</a>
+								{#if data.thread.sessionThreadRole === 'primary'}
+									<Badge variant="outline" class="px-2 py-0 text-xs">main discussion</Badge>
+								{/if}
+							{/if}
+						</div>
+					</div>
+
+					<div class="flex flex-row gap-2">
+						<form
+							method="POST"
+							action="?/setSubscriptionMode"
+							use:enhance={subscriptionModeEnhance}
+						>
+							<label for="thread-sub-mode" class="sr-only">Notify me</label>
+							<div class="flex items-center gap-2">
+								{#if data.subscriptionMode === 'none' || data.subscriptionMode === 'mute'}
+									<BellOffIcon class="h-4 w-4 text-muted-foreground" />
+								{:else}
+									<BellIcon class="h-4 w-4 text-muted-foreground" />
+								{/if}
+								<NativeSelect.Root
+									id="thread-sub-mode"
+									name="mode"
+									value={data.subscriptionMode}
+									onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
+								>
+									<NativeSelect.Option value="immediate">Notify me: Immediately</NativeSelect.Option
 									>
-								</Avatar.Root>
-								<div class="min-w-0 flex-1">
-									<div class="mb-2 flex flex-wrap items-center gap-2">
-										<a
-											href={resolve('/members/[id]', { id: author.id })}
-											class="text-sm font-medium hover:underline"
-										>
-											<MemberName userId={author.id} name={author.displayName} />
-										</a>
-										<span class="text-xs text-muted-foreground"
-											>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
-										>
-										{#if post.editCount > 0}
-											<span class="text-xs text-muted-foreground italic">(edited)</span>
-										{/if}
-										{#if post.parentPostId}
-											{@const parentPost = postsById.get(post.parentPostId)}
-											<a
-												href="#post-{post.parentPostId}"
-												class="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-primary hover:underline"
-											>
-												<ReplyIcon class="h-3 w-3 shrink-0" />
-												{#if parentPost}
-													<span class="shrink-0">in reply to {parentPost.author.displayName}</span>
-													<span class="shrink-0 text-muted-foreground">-</span>
-													<span class="line-clamp-1 min-w-0 text-muted-foreground">
-														{getPostPreview(parentPost.post.bodySource)}
-													</span>
-												{:else}
-													<span>in reply</span>
-												{/if}
-											</a>
-										{/if}
+									<NativeSelect.Option value="daily_digest"
+										>Notify me: In my digest</NativeSelect.Option
+									>
+									<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
+								</NativeSelect.Root>
+							</div>
+						</form>
+
+						<!-- Moderation widget -->
+						{#if data.canModerate}
+							<Popover.Root>
+								<Popover.Trigger class={buttonVariants({ variant: 'outline', class: 'h-10' })}
+									><ShieldIcon class="size-4" /></Popover.Trigger
+								>
+								<Popover.Content align="end" class="w-min">
+									<div class="flex items-center gap-2 font-medium">
+										<ShieldIcon class="h-4 w-4" />
+										<span class="font-medium">Moderator Tools</span>
 									</div>
-									{#if postImageUrl}
-										<div class="mb-4">
-											<PostImage src={postImageUrl} alt="Image attached by {author.displayName}" />
-										</div>
-									{/if}
-									{#if editingId === post.id}
+									<div class="flex gap-2">
 										<form
 											method="POST"
-											action="?/editPost"
-											use:enhance={editEnhance}
-											class="space-y-2"
+											action="?/togglePin"
+											use:enhance={modEnhance(data.thread.isPinned ? 'Unpinned.' : 'Pinned.')}
 										>
-											<input type="hidden" name="postId" value={post.id} />
-											<Textarea name="body" rows={4} bind:value={editBody} required />
-											<div class="flex justify-end gap-2">
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													onclick={cancelEdit}
-													disabled={editSaving}
-												>
-													<XIcon class="h-4 w-4" />
-													Cancel
-												</Button>
-												<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
-													{editSaving ? 'Saving…' : 'Save'}
-												</Button>
-											</div>
+											<input type="hidden" name="threadId" value={data.thread.id} />
+											<input
+												type="hidden"
+												name="sessionThreadRole"
+												value={data.thread.sessionThreadRole ?? 'related'}
+											/>
+											<Button variant="outline" size="sm" type="submit">
+												{#if data.thread.isPinned}
+													<PinOffIcon class="h-4 w-4" />
+													Unpin
+												{:else}
+													<PinIcon class="h-4 w-4" />
+													Pin
+												{/if}
+											</Button>
 										</form>
-									{:else}
-										<div class="prose max-w-none wrap-anywhere dark:prose-invert">
-											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-											{@html post.bodyHtml}
-										</div>
-										<div class="mt-2 flex flex-wrap items-center gap-3">
-											{#if !data.thread.isLocked}
-												<button
-													type="button"
-													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
-													onclick={() => selectReplyTarget(post.id)}
-												>
-													<ReplyIcon class="mr-1 inline h-3 w-3" />
-													Reply
-												</button>
-											{/if}
-											{#if canEdit(author.id, post.createdAt)}
-												<button
-													type="button"
-													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
-													onclick={() => startEditPost(post.id, post.bodySource)}
-												>
-													<PencilIcon class="mr-1 inline h-3 w-3" />
-													Edit
-												</button>
-											{/if}
-											{#if data.canModerate}
-												<ConfirmButton
-													confirmText="Delete this post?"
-													formAction="?/deletePost"
-													formData={{ postId: post.id }}
-													enhance={deletePostEnhance}
-													variant="ghost"
-													size="sm"
-													class="h-auto px-0 py-0 text-xs text-muted-foreground hover:bg-transparent hover:text-destructive"
-												>
-													<TrashIcon class="mr-1 inline h-3 w-3" />
-													Delete
-												</ConfirmButton>
-											{/if}
-										</div>
-									{/if}
-								</div>
-							</div>
-						</Card.Content>
-					</Card.Root>
-				{/each}
-			</div>
-		{/if}
 
-		<!-- Reply form -->
-		{#if !data.thread.isLocked}
-			<Separator />
-			<Card.Root id="reply-form">
-				<Card.Header>
-					<Card.Title class="flex flex-wrap items-center gap-3 text-base">
-						{#if replyingTo}
-							Reply to {replyingToPost?.author.displayName ?? 'post'}
-							<Button
-								size="sm"
-								variant="outline"
-								onclick={() => {
-									replyingTo = null;
-								}}
-							>
-								Cancel
-							</Button>
-						{:else}
-							Post a Reply
-						{/if}
-					</Card.Title>
-				</Card.Header>
-				<Card.Content>
-					<form
-						method="POST"
-						action="?/reply"
-						enctype="multipart/form-data"
-						use:enhance={() => {
-							loading = true;
-							return async ({ result, update }) => {
-								loading = false;
-								await update();
-								if (result.type === 'success') {
-									const queued =
-										typeof result.data === 'object' && result.data !== null
-											? (
-													result.data as {
-														queuedSubjectLinks?: QueuedSubjectLink[];
-													}
-												).queuedSubjectLinks
-											: null;
-									addQueuedSubjectLinks(queued);
-									if (currentUserId) {
-										removeReplyDraft(currentUserId, replyDraftComposerId);
-									}
-									replyBody = '';
-									replyImageFiles = undefined;
-									replyingTo = null;
-									toast.success(
-										Array.isArray(queued) && queued.length > 0
-											? 'Reply posted. Book links are being processed.'
-											: 'Reply posted!'
-									);
-								}
-							};
-						}}
-						class="space-y-3"
-					>
-						{#if replyingTo}
-							<input type="hidden" name="parentPostId" value={replyingTo} />
-						{/if}
-						<PostComposer
-							id="thread-reply"
-							bind:ref={replyTextarea}
-							placeholder="Write your reply… (Markdown supported)"
-							rows={4}
-							bind:value={replyBody}
-							bind:files={replyImageFiles}
-							required
-						/>
-						<p class="text-xs text-muted-foreground">
-							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
-							Goodreads book, series, and author URLs are linked to the thread after posting.
-						</p>
-						{#if form?.error}
-							<p class="text-sm text-destructive">{form.error}</p>
-						{/if}
-						<div class="flex justify-end">
-							<Button type="submit" disabled={loading || !replyBody.trim()}>
-								{#if loading}Posting…{:else if data.session}<CalendarIcon class="size-4" /> Post Session
-									Reply{:else}Post Reply{/if}
-							</Button>
-						</div>
-					</form>
-				</Card.Content>
-			</Card.Root>
-		{:else}
-			<Card.Root>
-				<Card.Content class="py-8 text-center text-muted-foreground">
-					<LockIcon class="mx-auto mb-2 h-5 w-5" />
-					<p>This thread is locked. No new replies can be posted.</p>
-				</Card.Content>
-			</Card.Root>
-		{/if}
-	</div>
-
-	{#if data.books.length > 0 || data.series.length > 0 || data.authors.length > 0 || queuedSubjectLinks.length > 0}
-		<aside class="w-full shrink-0 lg:w-64">
-			<div class="top-20 space-y-6">
-				{#if queuedSubjectLinks.length > 0}
-					<div>
-						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Processing</h3>
-						<div class="space-y-2">
-							{#each queuedSubjectLinks as link (`${link.sourceType}:${link.sourceKey}`)}
-								<div class="flex items-start gap-3 rounded-lg border border-dashed p-2">
-									<span
-										class="flex h-16 w-11 shrink-0 animate-pulse items-center justify-center rounded bg-muted"
-									>
-										{#if link.subjectKind === 'series'}
-											<LibraryIcon class="h-5 w-5 text-muted-foreground" />
-										{:else if link.subjectKind === 'author'}
-											<UserIcon class="h-5 w-5 text-muted-foreground" />
-										{:else}
-											<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
+										<form
+											method="POST"
+											action="?/toggleLock"
+											use:enhance={modEnhance(data.thread.isLocked ? 'Unlocked.' : 'Locked.')}
+										>
+											<input type="hidden" name="threadId" value={data.thread.id} />
+											<Button variant="outline" size="sm" type="submit">
+												{#if data.thread.isLocked}
+													<UnlockIcon class="h-4 w-4" />
+													Unlock
+												{:else}
+													<LockIcon class="h-4 w-4" />
+													Lock
+												{/if}
+											</Button>
+										</form>
+										<div class="ml-auto">
+											<ConfirmButton
+												confirmText="Delete this thread?"
+												formAction="?/deleteThread"
+												formData={{ threadId: data.thread.id }}
+												variant="outline"
+												size="sm"
+												class="text-destructive hover:text-destructive"
+											>
+												<TrashIcon class="h-4 w-4" />
+												Delete Thread
+											</ConfirmButton>
+										</div>
+									</div>
+									{#if data.permissions.has('sessions:edit')}
+										<form
+											method="POST"
+											action="?/linkSession"
+											use:enhance={modEnhance('Session link updated.')}
+											class="inline-flex items-center gap-2"
+										>
+											<input type="hidden" name="threadId" value={data.thread.id} />
+											<label
+												for="session-select"
+												class="flex items-center gap-1 text-muted-foreground"
+											>
+												<CalendarIcon class="h-4 w-4" />
+												Session
+											</label>
+											<NativeSelect.Root
+												id="session-select"
+												name="sessionId"
+												onchange={(e) => {
+													(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+												}}
+											>
+												<NativeSelect.Option value="" selected={!data.thread.sessionId}
+													>No session</NativeSelect.Option
+												>
+												{#each data.allSessions as session (session.id)}
+													<NativeSelect.Option
+														value={session.id}
+														selected={data.thread.sessionId === session.id}
+													>
+														{session.title}
+													</NativeSelect.Option>
+												{/each}
+											</NativeSelect.Root>
+										</form>
+										{#if data.thread.sessionId}
+											<p class="text-sm text-muted-foreground">
+												Manually linked session threads are treated as related conversations.
+											</p>
 										{/if}
+									{/if}
+									{#if data.canManageGroups}
+										<form
+											method="POST"
+											action="?/setAudienceGroup"
+											use:enhance={modEnhance('Thread audience updated.')}
+											class="inline-flex items-center gap-2"
+										>
+											<label
+												for="audience-select"
+												class="flex items-center gap-1 text-muted-foreground"
+											>
+												<UsersIcon class="h-4 w-4" />
+												Audience
+											</label>
+											<NativeSelect.Root
+												id="audience-select"
+												name="audienceGroupId"
+												onchange={(e) =>
+													(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit()}
+											>
+												<NativeSelect.Option value="" selected={!data.thread.audienceGroupId}
+													>All members</NativeSelect.Option
+												>
+												{#each data.allAudienceGroups as group (group.id)}
+													<NativeSelect.Option
+														value={group.id}
+														selected={data.thread.audienceGroupId === group.id}
+														>{group.name}{group.archivedAt
+															? ' (archived)'
+															: ''}</NativeSelect.Option
+													>
+												{/each}
+											</NativeSelect.Root>
+										</form>
+									{/if}
+								</Popover.Content>
+							</Popover.Root>
+						{/if}
+					</div>
+				</div>
+			</div>
+
+			{#if data.session}
+				<Card.Root class="border-primary/30 bg-primary/20">
+					<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<span class="font-medium">Part of {data.session.title}</span>
+								{#if data.thread.sessionThreadRole === 'primary'}
+									<Badge variant="secondary">Main discussion thread</Badge>
+								{:else}
+									<Badge variant="outline">Related thread</Badge>
+								{/if}
+							</div>
+							<div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+								{#if data.session.startsAt}
+									<span class="inline-flex items-center gap-1">
+										<CalendarIcon class="h-3.5 w-3.5" />
+										{formatDate(data.session.startsAt, {
+											time: 'never',
+											timeZone: data.session.timezone ?? timeZone
+										})}
 									</span>
-									<div class="min-w-0 flex-1 space-y-2 pt-0.5">
-										<div class="flex items-center gap-1.5 text-sm leading-tight font-medium">
-											<LoaderCircleIcon class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-											<span>
-												{link.subjectKind === 'series'
-													? 'Series'
-													: link.subjectKind === 'author'
-														? 'Author'
-														: 'Book'} loading
-											</span>
+								{/if}
+								{#if data.session.locationName}
+									<span class="inline-flex items-center gap-1">
+										<MapPinIcon class="h-3.5 w-3.5" />
+										{data.session.locationName}
+									</span>
+								{/if}
+								{#if data.session.themeTitle ?? data.session.theme}
+									<span>{data.session.themeTitle ?? data.session.theme}</span>
+								{/if}
+							</div>
+						</div>
+						<Button
+							variant="outline"
+							href={resolve('/sessions/[slug]', { slug: data.session.slug })}
+						>
+							View Session
+						</Button>
+					</Card.Content>
+				</Card.Root>
+			{/if}
+
+			<!-- Thread body (the opening post) -->
+			<Card.Root>
+				<Card.Content class="pt-1">
+					<div class="flex items-start gap-3">
+						<Avatar.Root class="h-10 w-10 shrink-0">
+							{#if data.author.avatarUrl}
+								<Avatar.Image src={data.author.avatarUrl} alt={data.author.displayName} />
+							{/if}
+							<Avatar.Fallback>{getInitial(data.author.displayName)}</Avatar.Fallback>
+						</Avatar.Root>
+						<div class="min-w-0 flex-1">
+							<div class="mb-2 flex items-center gap-2">
+								<a
+									href={resolve('/members/[id]', { id: data.author.id })}
+									class="font-medium hover:underline"
+								>
+									<MemberName userId={data.author.id} name={data.author.displayName} />
+								</a>
+								<span class="text-xs text-muted-foreground"
+									>{formatDate(data.thread.createdAt, { time: 'always', timeZone })}</span
+								>
+								{#if editingId !== '' && canEdit(data.author.id, data.thread.createdAt)}
+									<button
+										type="button"
+										class="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
+										onclick={startEditThread}
+									>
+										<PencilIcon class="mr-1 inline h-3 w-3" />
+										Edit
+									</button>
+								{/if}
+							</div>
+							{#if threadImageUrl}
+								<div class="mb-4">
+									<PostImage
+										src={threadImageUrl}
+										alt="Image attached by {data.author.displayName}"
+									/>
+								</div>
+							{/if}
+							{#if editingId === ''}
+								<form
+									method="POST"
+									action="?/editThread"
+									use:enhance={editEnhance}
+									class="space-y-2"
+								>
+									<Textarea name="body" rows={6} bind:value={editBody} required />
+									<div class="flex justify-end gap-2">
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onclick={cancelEdit}
+											disabled={editSaving}
+										>
+											<XIcon class="h-4 w-4" />
+											Cancel
+										</Button>
+										<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
+											{editSaving ? 'Saving…' : 'Save'}
+										</Button>
+									</div>
+								</form>
+							{:else}
+								<div class="prose max-w-none wrap-anywhere dark:prose-invert">
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									{@html data.thread.bodyHtml}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</Card.Content>
+			</Card.Root>
+
+			<!-- Replies -->
+			{#if data.posts.length > 0}
+				<Separator />
+				<h2 class="text-lg font-semibold">
+					{data.posts.length}
+					{data.posts.length === 1 ? 'Reply' : 'Replies'}
+				</h2>
+
+				<div class="space-y-3">
+					{#each data.posts as { post, author } (post.id)}
+						{@const postImageUrl = publicPostImageUrl(data.fileBaseUrl, post.imageKey)}
+						<Card.Root
+							id="post-{post.id}"
+							class={cn(
+								'scroll-mt-20 target:border-2 target:border-primary',
+								replyingTo === post.id && 'border-2 border-primary bg-primary/5'
+							)}
+						>
+							<Card.Content class="pt-1">
+								<div class="flex items-start gap-3">
+									<Avatar.Root class="h-8 w-8 shrink-0">
+										{#if author.avatarUrl}
+											<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
+										{/if}
+										<Avatar.Fallback class="text-xs"
+											>{getInitial(author.displayName)}</Avatar.Fallback
+										>
+									</Avatar.Root>
+									<div class="min-w-0 flex-1">
+										<div class="mb-2 flex flex-wrap items-center gap-2">
+											<a
+												href={resolve('/members/[id]', { id: author.id })}
+												class="text-sm font-medium hover:underline"
+											>
+												<MemberName userId={author.id} name={author.displayName} />
+											</a>
+											<span class="text-xs text-muted-foreground"
+												>{formatDate(post.createdAt, { time: 'always', timeZone })}</span
+											>
+											{#if post.editCount > 0}
+												<span class="text-xs text-muted-foreground italic">(edited)</span>
+											{/if}
+											{#if post.parentPostId}
+												{@const parentPost = postsById.get(post.parentPostId)}
+												<a
+													href="#post-{post.parentPostId}"
+													class="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-primary hover:underline"
+												>
+													<ReplyIcon class="h-3 w-3 shrink-0" />
+													{#if parentPost}
+														<span class="shrink-0">in reply to {parentPost.author.displayName}</span
+														>
+														<span class="shrink-0 text-muted-foreground">-</span>
+														<span class="line-clamp-1 min-w-0 text-muted-foreground">
+															{getPostPreview(parentPost.post.bodySource)}
+														</span>
+													{:else}
+														<span>in reply</span>
+													{/if}
+												</a>
+											{/if}
 										</div>
-										<p class="text-xs text-muted-foreground">
-											Book URL is being processed. It should appear here shortly.
-										</p>
+										{#if postImageUrl}
+											<div class="mb-4">
+												<PostImage
+													src={postImageUrl}
+													alt="Image attached by {author.displayName}"
+												/>
+											</div>
+										{/if}
+										{#if editingId === post.id}
+											<form
+												method="POST"
+												action="?/editPost"
+												use:enhance={editEnhance}
+												class="space-y-2"
+											>
+												<input type="hidden" name="postId" value={post.id} />
+												<Textarea name="body" rows={4} bind:value={editBody} required />
+												<div class="flex justify-end gap-2">
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														onclick={cancelEdit}
+														disabled={editSaving}
+													>
+														<XIcon class="h-4 w-4" />
+														Cancel
+													</Button>
+													<Button type="submit" size="sm" disabled={editSaving || !editBody.trim()}>
+														{editSaving ? 'Saving…' : 'Save'}
+													</Button>
+												</div>
+											</form>
+										{:else}
+											<div class="prose max-w-none wrap-anywhere dark:prose-invert">
+												<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+												{@html post.bodyHtml}
+											</div>
+											<div class="mt-2 flex flex-wrap items-center gap-3">
+												{#if !data.thread.isLocked}
+													<button
+														type="button"
+														class="text-xs text-muted-foreground transition-colors hover:text-foreground"
+														onclick={() => selectReplyTarget(post.id)}
+													>
+														<ReplyIcon class="mr-1 inline h-3 w-3" />
+														Reply
+													</button>
+												{/if}
+												{#if canEdit(author.id, post.createdAt)}
+													<button
+														type="button"
+														class="text-xs text-muted-foreground transition-colors hover:text-foreground"
+														onclick={() => startEditPost(post.id, post.bodySource)}
+													>
+														<PencilIcon class="mr-1 inline h-3 w-3" />
+														Edit
+													</button>
+												{/if}
+												{#if data.canModerate}
+													<ConfirmButton
+														confirmText="Delete this post?"
+														formAction="?/deletePost"
+														formData={{ postId: post.id }}
+														enhance={deletePostEnhance}
+														variant="ghost"
+														size="sm"
+														class="h-auto px-0 py-0 text-xs text-muted-foreground hover:bg-transparent hover:text-destructive"
+													>
+														<TrashIcon class="mr-1 inline h-3 w-3" />
+														Delete
+													</ConfirmButton>
+												{/if}
+											</div>
+										{/if}
 									</div>
 								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-				{#if data.authors.length > 0}
-					<div>
-						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Authors Mentioned</h3>
-						<div class="space-y-2">
-							{#each data.authorsWithSessionLinks as entry (entry.author.id)}
-								{#if data.session && data.canPromoteBooks}
-									<Popover.Root>
-										<Popover.Trigger
-											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{/if}
+
+			<!-- Reply form -->
+			{#if !data.thread.isLocked}
+				<Separator />
+				<Card.Root id="reply-form">
+					<Card.Header>
+						<Card.Title class="flex flex-wrap items-center gap-3 text-base">
+							{#if replyingTo}
+								Reply to {replyingToPost?.author.displayName ?? 'post'}
+								<Button
+									size="sm"
+									variant="outline"
+									onclick={() => {
+										replyingTo = null;
+									}}
+								>
+									Cancel
+								</Button>
+							{:else}
+								Post a Reply
+							{/if}
+						</Card.Title>
+					</Card.Header>
+					<Card.Content>
+						<form
+							method="POST"
+							action="?/reply"
+							enctype="multipart/form-data"
+							use:enhance={() => {
+								loading = true;
+								return async ({ result, update }) => {
+									loading = false;
+									await update();
+									if (result.type === 'success') {
+										const queued =
+											typeof result.data === 'object' && result.data !== null
+												? (
+														result.data as {
+															queuedSubjectLinks?: QueuedSubjectLink[];
+														}
+													).queuedSubjectLinks
+												: null;
+										addQueuedSubjectLinks(queued);
+										if (currentUserId) {
+											removeReplyDraft(currentUserId, replyDraftComposerId);
+										}
+										replyBody = '';
+										replyImageFiles = undefined;
+										replyingTo = null;
+										toast.success(
+											Array.isArray(queued) && queued.length > 0
+												? 'Reply posted. Book links are being processed.'
+												: 'Reply posted!'
+										);
+									}
+								};
+							}}
+							class="space-y-3"
+						>
+							{#if replyingTo}
+								<input type="hidden" name="parentPostId" value={replyingTo} />
+							{/if}
+							<PostComposer
+								id="thread-reply"
+								bind:ref={replyTextarea}
+								placeholder="Write your reply… (Markdown supported)"
+								rows={4}
+								bind:value={replyBody}
+								bind:files={replyImageFiles}
+								required
+							/>
+							<p class="text-xs text-muted-foreground">
+								Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
+								Goodreads book, series, and author URLs are linked to the thread after posting.
+							</p>
+							{#if form?.error}
+								<p class="text-sm text-destructive">{form.error}</p>
+							{/if}
+							<div class="flex justify-end">
+								<Button type="submit" disabled={loading || !replyBody.trim()}>
+									{#if loading}Posting…{:else if data.session}<CalendarIcon class="size-4" /> Post Session
+										Reply{:else}Post Reply{/if}
+								</Button>
+							</div>
+						</form>
+					</Card.Content>
+				</Card.Root>
+			{:else}
+				<Card.Root>
+					<Card.Content class="py-8 text-center text-muted-foreground">
+						<LockIcon class="mx-auto mb-2 h-5 w-5" />
+						<p>This thread is locked. No new replies can be posted.</p>
+					</Card.Content>
+				</Card.Root>
+			{/if}
+		</div>
+
+		{#if data.books.length > 0 || data.series.length > 0 || data.authors.length > 0 || queuedSubjectLinks.length > 0}
+			<aside class="w-full shrink-0 lg:w-64">
+				<div class="top-20 space-y-6">
+					{#if queuedSubjectLinks.length > 0}
+						<div>
+							<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Processing</h3>
+							<div class="space-y-2">
+								{#each queuedSubjectLinks as link (`${link.sourceType}:${link.sourceKey}`)}
+									<div class="flex items-start gap-3 rounded-lg border border-dashed p-2">
+										<span
+											class="flex h-16 w-11 shrink-0 animate-pulse items-center justify-center rounded bg-muted"
 										>
-											<span class="flex items-start gap-3 p-2">
-												{#if entry.author.photoUrl}
-													<img
-														src={entry.author.photoUrl}
-														alt={entry.author.name}
-														class="h-16 w-16 shrink-0 rounded object-cover shadow-sm"
-													/>
-												{:else}
-													<span
-														class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted"
-													>
-														<UserIcon class="h-5 w-5 text-muted-foreground" />
-													</span>
-												{/if}
-												<span class="min-w-0 flex-1">
-													<span class="block text-sm leading-tight font-medium"
-														>{entry.author.name}</span
-													>
-													{#if entry.sessionSubject}
-														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
-															{entry.sessionSubject.status.replaceAll('_', ' ')}
-														</Badge>
-													{/if}
+											{#if link.subjectKind === 'series'}
+												<LibraryIcon class="h-5 w-5 text-muted-foreground" />
+											{:else if link.subjectKind === 'author'}
+												<UserIcon class="h-5 w-5 text-muted-foreground" />
+											{:else}
+												<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
+											{/if}
+										</span>
+										<div class="min-w-0 flex-1 space-y-2 pt-0.5">
+											<div class="flex items-center gap-1.5 text-sm leading-tight font-medium">
+												<LoaderCircleIcon class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+												<span>
+													{link.subjectKind === 'series'
+														? 'Series'
+														: link.subjectKind === 'author'
+															? 'Author'
+															: 'Book'} loading
 												</span>
-											</span>
-										</Popover.Trigger>
-										<Popover.Content align="start" class="w-72 space-y-3">
-											<div>
-												<p class="font-medium">{entry.author.name}</p>
-												<p class="text-sm text-muted-foreground">
-													{entry.sessionSubject
-														? 'Linked to this session.'
-														: 'Promote this mention to the session.'}
-												</p>
 											</div>
-											<form
-												method="POST"
-												action="?/promoteSessionSubject"
-												use:enhance={promoteEnhance('Session link updated.')}
-												class="space-y-2"
-											>
-												<input type="hidden" name="subjectType" value="author" />
-												<input type="hidden" name="subjectId" value={entry.author.id} />
-												<label for="author-status-{entry.author.id}" class="text-xs font-medium"
-													>Session status</label
-												>
-												<NativeSelect.Root
-													id="author-status-{entry.author.id}"
-													name="status"
-													value={entry.sessionSubject?.status ?? 'starter'}
-												>
-													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-													<NativeSelect.Option value="mentioned_off_theme"
-														>mentioned off theme</NativeSelect.Option
-													>
-												</NativeSelect.Root>
-												<Button type="submit" size="sm" class="w-full">
-													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
-												</Button>
-											</form>
-											<div class="flex gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													href={resolve('/authors/[slug]', { slug: entry.author.slug })}
-													class="flex-1"
-												>
-													<ExternalLinkIcon class="h-4 w-4" />
-													Open
-												</Button>
-												{#if entry.sessionSubject}
-													<form
-														method="POST"
-														action="?/unlinkSessionSubject"
-														use:enhance={promoteEnhance('Removed from session.')}
-														class="flex-1"
-													>
-														<input type="hidden" name="subjectType" value="author" />
-														<input type="hidden" name="subjectId" value={entry.author.id} />
-														<Button type="submit" variant="outline" size="sm" class="w-full">
-															Unlink
-														</Button>
-													</form>
-												{/if}
-											</div>
-										</Popover.Content>
-									</Popover.Root>
-								{:else}
-									<AuthorCard author={entry.author} compact />
-								{/if}
-							{/each}
+											<p class="text-xs text-muted-foreground">
+												Book URL is being processed. It should appear here shortly.
+											</p>
+										</div>
+									</div>
+								{/each}
+							</div>
 						</div>
-					</div>
-				{/if}
-				{#if data.series.length > 0}
-					<div>
-						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>
-						<div class="space-y-2">
-							{#each data.seriesWithSessionLinks as entry (entry.series.id)}
-								{#if data.session && data.canPromoteBooks}
-									<Popover.Root>
-										<Popover.Trigger
-											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
-										>
-											<span class="flex items-start gap-3 p-2">
-												{#if entry.series.coverUrl}
-													<img
-														src={entry.series.coverUrl}
-														alt={entry.series.title}
-														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
-													/>
-												{:else}
-													<span
-														class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
-													>
-														<LibraryIcon class="h-5 w-5 text-muted-foreground" />
-													</span>
-												{/if}
-												<span class="min-w-0 flex-1">
-													<span class="block text-sm leading-tight font-medium"
-														>{entry.series.title}</span
-													>
-													{#if entry.series.authorText}
-														<span class="mt-0.5 block text-xs text-muted-foreground">
-															{entry.series.authorText}
+					{/if}
+					{#if data.authors.length > 0}
+						<div>
+							<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Authors Mentioned</h3>
+							<div class="space-y-2">
+								{#each data.authorsWithSessionLinks as entry (entry.author.id)}
+									{#if data.session && data.canPromoteBooks}
+										<Popover.Root>
+											<Popover.Trigger
+												class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+											>
+												<span class="flex items-start gap-3 p-2">
+													{#if entry.author.photoUrl}
+														<img
+															src={entry.author.photoUrl}
+															alt={entry.author.name}
+															class="h-16 w-16 shrink-0 rounded object-cover shadow-sm"
+														/>
+													{:else}
+														<span
+															class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted"
+														>
+															<UserIcon class="h-5 w-5 text-muted-foreground" />
 														</span>
 													{/if}
-													{#if entry.sessionSubject}
-														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
-															{entry.sessionSubject.status.replaceAll('_', ' ')}
-														</Badge>
-													{/if}
+													<span class="min-w-0 flex-1">
+														<span class="block text-sm leading-tight font-medium"
+															>{entry.author.name}</span
+														>
+														{#if entry.sessionSubject}
+															<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+																{entry.sessionSubject.status.replaceAll('_', ' ')}
+															</Badge>
+														{/if}
+													</span>
 												</span>
-											</span>
-										</Popover.Trigger>
-										<Popover.Content align="start" class="w-72 space-y-3">
-											<div>
-												<p class="font-medium">{entry.series.title}</p>
-												<p class="text-sm text-muted-foreground">
-													{entry.sessionSubject
-														? 'Linked to this session.'
-														: 'Promote this mention to the session.'}
-												</p>
-											</div>
-											<form
-												method="POST"
-												action="?/promoteSessionSubject"
-												use:enhance={promoteEnhance('Session link updated.')}
-												class="space-y-2"
-											>
-												<input type="hidden" name="subjectType" value="series" />
-												<input type="hidden" name="subjectId" value={entry.series.id} />
-												<label for="series-status-{entry.series.id}" class="text-xs font-medium"
-													>Session status</label
+											</Popover.Trigger>
+											<Popover.Content align="start" class="w-72 space-y-3">
+												<div>
+													<p class="font-medium">{entry.author.name}</p>
+													<p class="text-sm text-muted-foreground">
+														{entry.sessionSubject
+															? 'Linked to this session.'
+															: 'Promote this mention to the session.'}
+													</p>
+												</div>
+												<form
+													method="POST"
+													action="?/promoteSessionSubject"
+													use:enhance={promoteEnhance('Session link updated.')}
+													class="space-y-2"
 												>
-												<NativeSelect.Root
-													id="series-status-{entry.series.id}"
-													name="status"
-													value={entry.sessionSubject?.status ?? 'starter'}
-												>
-													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-													<NativeSelect.Option value="mentioned_off_theme"
-														>mentioned off theme</NativeSelect.Option
+													<input type="hidden" name="subjectType" value="author" />
+													<input type="hidden" name="subjectId" value={entry.author.id} />
+													<label for="author-status-{entry.author.id}" class="text-xs font-medium"
+														>Session status</label
 													>
-												</NativeSelect.Root>
-												<Button type="submit" size="sm" class="w-full">
-													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
-												</Button>
-											</form>
-											<div class="flex gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													href={resolve('/series/[slug]', { slug: entry.series.slug })}
-													class="flex-1"
-												>
-													<ExternalLinkIcon class="h-4 w-4" />
-													Open
-												</Button>
-												{#if entry.sessionSubject}
-													<form
-														method="POST"
-														action="?/unlinkSessionSubject"
-														use:enhance={promoteEnhance('Removed from session.')}
+													<NativeSelect.Root
+														id="author-status-{entry.author.id}"
+														name="status"
+														value={entry.sessionSubject?.status ?? 'starter'}
+													>
+														<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+														<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+														<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+														<NativeSelect.Option value="mentioned_off_theme"
+															>mentioned off theme</NativeSelect.Option
+														>
+													</NativeSelect.Root>
+													<Button type="submit" size="sm" class="w-full">
+														{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+													</Button>
+												</form>
+												<div class="flex gap-2">
+													<Button
+														variant="outline"
+														size="sm"
+														href={resolve('/authors/[slug]', { slug: entry.author.slug })}
 														class="flex-1"
 													>
-														<input type="hidden" name="subjectType" value="series" />
-														<input type="hidden" name="subjectId" value={entry.series.id} />
-														<Button type="submit" variant="outline" size="sm" class="w-full">
-															Unlink
-														</Button>
-													</form>
-												{/if}
-											</div>
-										</Popover.Content>
-									</Popover.Root>
-								{:else}
-									<SeriesCard series={entry.series} compact />
-								{/if}
-							{/each}
+														<ExternalLinkIcon class="h-4 w-4" />
+														Open
+													</Button>
+													{#if entry.sessionSubject}
+														<form
+															method="POST"
+															action="?/unlinkSessionSubject"
+															use:enhance={promoteEnhance('Removed from session.')}
+															class="flex-1"
+														>
+															<input type="hidden" name="subjectType" value="author" />
+															<input type="hidden" name="subjectId" value={entry.author.id} />
+															<Button type="submit" variant="outline" size="sm" class="w-full">
+																Unlink
+															</Button>
+														</form>
+													{/if}
+												</div>
+											</Popover.Content>
+										</Popover.Root>
+									{:else}
+										<AuthorCard author={entry.author} compact />
+									{/if}
+								{/each}
+							</div>
 						</div>
-					</div>
-				{/if}
-				{#if data.books.length > 0}
-					<div>
-						<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Books Mentioned</h3>
-						<div class="space-y-2">
-							{#each data.booksWithSessionLinks as entry (entry.book.id)}
-								{#if data.session && data.canPromoteBooks}
-									<Popover.Root>
-										<Popover.Trigger
-											class="w-full rounded-lg text-left transition-colors hover:bg-muted"
-										>
-											<span class="flex items-start gap-3 p-2">
-												{#if entry.book.coverUrl}
-													<img
-														src={entry.book.coverUrl}
-														alt={entry.book.title}
-														class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
-													/>
-												{:else}
-													<span
-														class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
-													>
-														<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
-													</span>
-												{/if}
-												<span class="min-w-0 flex-1">
-													<span class="block text-sm leading-tight font-medium"
-														>{entry.book.title}</span
-													>
-													{#if entry.book.authorText}
-														<span class="mt-0.5 block text-xs text-muted-foreground">
-															{entry.book.authorText}
+					{/if}
+					{#if data.series.length > 0}
+						<div>
+							<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Series Mentioned</h3>
+							<div class="space-y-2">
+								{#each data.seriesWithSessionLinks as entry (entry.series.id)}
+									{#if data.session && data.canPromoteBooks}
+										<Popover.Root>
+											<Popover.Trigger
+												class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+											>
+												<span class="flex items-start gap-3 p-2">
+													{#if entry.series.coverUrl}
+														<img
+															src={entry.series.coverUrl}
+															alt={entry.series.title}
+															class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
+														/>
+													{:else}
+														<span
+															class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
+														>
+															<LibraryIcon class="h-5 w-5 text-muted-foreground" />
 														</span>
 													{/if}
-													{#if entry.sessionSubject}
-														<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
-															{entry.sessionSubject.status.replaceAll('_', ' ')}
-														</Badge>
-													{/if}
+													<span class="min-w-0 flex-1">
+														<span class="block text-sm leading-tight font-medium"
+															>{entry.series.title}</span
+														>
+														{#if entry.series.authorText}
+															<span class="mt-0.5 block text-xs text-muted-foreground">
+																{entry.series.authorText}
+															</span>
+														{/if}
+														{#if entry.sessionSubject}
+															<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+																{entry.sessionSubject.status.replaceAll('_', ' ')}
+															</Badge>
+														{/if}
+													</span>
 												</span>
-											</span>
-										</Popover.Trigger>
-										<Popover.Content align="start" class="w-72 space-y-3">
-											<div>
-												<p class="font-medium">{entry.book.title}</p>
-												<p class="text-sm text-muted-foreground">
-													{entry.sessionSubject
-														? 'Linked to this session.'
-														: 'Promote this mention to the session.'}
-												</p>
-											</div>
-											<form
-												method="POST"
-												action="?/promoteSessionSubject"
-												use:enhance={promoteEnhance('Session link updated.')}
-												class="space-y-2"
-											>
-												<input type="hidden" name="subjectType" value="book" />
-												<input type="hidden" name="subjectId" value={entry.book.id} />
-												<label for="book-status-{entry.book.id}" class="text-xs font-medium"
-													>Session status</label
+											</Popover.Trigger>
+											<Popover.Content align="start" class="w-72 space-y-3">
+												<div>
+													<p class="font-medium">{entry.series.title}</p>
+													<p class="text-sm text-muted-foreground">
+														{entry.sessionSubject
+															? 'Linked to this session.'
+															: 'Promote this mention to the session.'}
+													</p>
+												</div>
+												<form
+													method="POST"
+													action="?/promoteSessionSubject"
+													use:enhance={promoteEnhance('Session link updated.')}
+													class="space-y-2"
 												>
-												<NativeSelect.Root
-													id="book-status-{entry.book.id}"
-													name="status"
-													value={entry.sessionSubject?.status ?? 'starter'}
-												>
-													<NativeSelect.Option value="starter">starter</NativeSelect.Option>
-													<NativeSelect.Option value="featured">featured</NativeSelect.Option>
-													<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
-													<NativeSelect.Option value="mentioned_off_theme"
-														>mentioned off theme</NativeSelect.Option
+													<input type="hidden" name="subjectType" value="series" />
+													<input type="hidden" name="subjectId" value={entry.series.id} />
+													<label for="series-status-{entry.series.id}" class="text-xs font-medium"
+														>Session status</label
 													>
-												</NativeSelect.Root>
-												<Button type="submit" size="sm" class="w-full">
-													{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
-												</Button>
-											</form>
-											<div class="flex gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													href={resolve('/books/[slug]', { slug: entry.book.slug })}
-													class="flex-1"
-												>
-													<ExternalLinkIcon class="h-4 w-4" />
-													Open
-												</Button>
-												{#if entry.sessionSubject}
-													<form
-														method="POST"
-														action="?/unlinkSessionSubject"
-														use:enhance={promoteEnhance('Removed from session.')}
+													<NativeSelect.Root
+														id="series-status-{entry.series.id}"
+														name="status"
+														value={entry.sessionSubject?.status ?? 'starter'}
+													>
+														<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+														<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+														<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+														<NativeSelect.Option value="mentioned_off_theme"
+															>mentioned off theme</NativeSelect.Option
+														>
+													</NativeSelect.Root>
+													<Button type="submit" size="sm" class="w-full">
+														{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+													</Button>
+												</form>
+												<div class="flex gap-2">
+													<Button
+														variant="outline"
+														size="sm"
+														href={resolve('/series/[slug]', { slug: entry.series.slug })}
 														class="flex-1"
 													>
-														<input type="hidden" name="subjectType" value="book" />
-														<input type="hidden" name="subjectId" value={entry.book.id} />
-														<Button type="submit" variant="outline" size="sm" class="w-full">
-															Unlink
-														</Button>
-													</form>
-												{/if}
-											</div>
-										</Popover.Content>
-									</Popover.Root>
-								{:else}
-									<BookCard book={entry.book} compact />
-								{/if}
-							{/each}
+														<ExternalLinkIcon class="h-4 w-4" />
+														Open
+													</Button>
+													{#if entry.sessionSubject}
+														<form
+															method="POST"
+															action="?/unlinkSessionSubject"
+															use:enhance={promoteEnhance('Removed from session.')}
+															class="flex-1"
+														>
+															<input type="hidden" name="subjectType" value="series" />
+															<input type="hidden" name="subjectId" value={entry.series.id} />
+															<Button type="submit" variant="outline" size="sm" class="w-full">
+																Unlink
+															</Button>
+														</form>
+													{/if}
+												</div>
+											</Popover.Content>
+										</Popover.Root>
+									{:else}
+										<SeriesCard series={entry.series} compact />
+									{/if}
+								{/each}
+							</div>
 						</div>
-					</div>
-				{/if}
-			</div>
-		</aside>
-	{/if}
+					{/if}
+					{#if data.books.length > 0}
+						<div>
+							<h3 class="mb-3 text-sm font-semibold text-muted-foreground">Books Mentioned</h3>
+							<div class="space-y-2">
+								{#each data.booksWithSessionLinks as entry (entry.book.id)}
+									{#if data.session && data.canPromoteBooks}
+										<Popover.Root>
+											<Popover.Trigger
+												class="w-full rounded-lg text-left transition-colors hover:bg-muted"
+											>
+												<span class="flex items-start gap-3 p-2">
+													{#if entry.book.coverUrl}
+														<img
+															src={entry.book.coverUrl}
+															alt={entry.book.title}
+															class="h-16 w-11 shrink-0 rounded object-cover shadow-sm"
+														/>
+													{:else}
+														<span
+															class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-muted"
+														>
+															<BookOpenIcon class="h-5 w-5 text-muted-foreground" />
+														</span>
+													{/if}
+													<span class="min-w-0 flex-1">
+														<span class="block text-sm leading-tight font-medium"
+															>{entry.book.title}</span
+														>
+														{#if entry.book.authorText}
+															<span class="mt-0.5 block text-xs text-muted-foreground">
+																{entry.book.authorText}
+															</span>
+														{/if}
+														{#if entry.sessionSubject}
+															<Badge variant="secondary" class="mt-1 px-1.5 py-0 text-[10px]">
+																{entry.sessionSubject.status.replaceAll('_', ' ')}
+															</Badge>
+														{/if}
+													</span>
+												</span>
+											</Popover.Trigger>
+											<Popover.Content align="start" class="w-72 space-y-3">
+												<div>
+													<p class="font-medium">{entry.book.title}</p>
+													<p class="text-sm text-muted-foreground">
+														{entry.sessionSubject
+															? 'Linked to this session.'
+															: 'Promote this mention to the session.'}
+													</p>
+												</div>
+												<form
+													method="POST"
+													action="?/promoteSessionSubject"
+													use:enhance={promoteEnhance('Session link updated.')}
+													class="space-y-2"
+												>
+													<input type="hidden" name="subjectType" value="book" />
+													<input type="hidden" name="subjectId" value={entry.book.id} />
+													<label for="book-status-{entry.book.id}" class="text-xs font-medium"
+														>Session status</label
+													>
+													<NativeSelect.Root
+														id="book-status-{entry.book.id}"
+														name="status"
+														value={entry.sessionSubject?.status ?? 'starter'}
+													>
+														<NativeSelect.Option value="starter">starter</NativeSelect.Option>
+														<NativeSelect.Option value="featured">featured</NativeSelect.Option>
+														<NativeSelect.Option value="discussed">discussed</NativeSelect.Option>
+														<NativeSelect.Option value="mentioned_off_theme"
+															>mentioned off theme</NativeSelect.Option
+														>
+													</NativeSelect.Root>
+													<Button type="submit" size="sm" class="w-full">
+														{entry.sessionSubject ? 'Update Status' : 'Link to Session'}
+													</Button>
+												</form>
+												<div class="flex gap-2">
+													<Button
+														variant="outline"
+														size="sm"
+														href={resolve('/books/[slug]', { slug: entry.book.slug })}
+														class="flex-1"
+													>
+														<ExternalLinkIcon class="h-4 w-4" />
+														Open
+													</Button>
+													{#if entry.sessionSubject}
+														<form
+															method="POST"
+															action="?/unlinkSessionSubject"
+															use:enhance={promoteEnhance('Removed from session.')}
+															class="flex-1"
+														>
+															<input type="hidden" name="subjectType" value="book" />
+															<input type="hidden" name="subjectId" value={entry.book.id} />
+															<Button type="submit" variant="outline" size="sm" class="w-full">
+																Unlink
+															</Button>
+														</form>
+													{/if}
+												</div>
+											</Popover.Content>
+										</Popover.Root>
+									{:else}
+										<BookCard book={entry.book} compact />
+									{/if}
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+			</aside>
+		{/if}
+	</div>
 </div>

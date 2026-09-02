@@ -9,6 +9,8 @@
 	import GlobeIcon from '@lucide/svelte/icons/globe';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import UserIcon from '@lucide/svelte/icons/user';
+	import LibraryNav from '$lib/components/library-nav.svelte';
+	import LibraryBreadcrumb from '$lib/components/library-breadcrumb.svelte';
 
 	let { data } = $props();
 	const externalSourceLabel = $derived(data.author.hardcoverUrl ? 'Hardcover' : 'Goodreads');
@@ -20,6 +22,9 @@
 </svelte:head>
 
 <div class="space-y-8">
+	<LibraryNav />
+	<LibraryBreadcrumb section="Authors" sectionHref="/authors" title={data.author.name} />
+
 	<section class="flex flex-col gap-6 sm:flex-row">
 		{#if data.author.photoUrl}
 			<img

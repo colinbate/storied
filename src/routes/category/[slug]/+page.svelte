@@ -18,6 +18,7 @@
 	import { resolve } from '$app/paths';
 	import { formatDate } from '$lib/date-format';
 	import { toast } from 'svelte-sonner';
+	import DiscussionNav from '$lib/components/discussion-nav.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -48,13 +49,15 @@
 </svelte:head>
 
 <div class="space-y-6">
+	<DiscussionNav categories={data.discussionCategories} activeCategorySlug={data.category.slug} />
+
 	<div>
 		<a
-			href={resolve('/')}
+			href={resolve('/discussions')}
 			class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
 		>
 			<ArrowLeftIcon class="h-4 w-4" />
-			Back to Discussions
+			All Discussions
 		</a>
 		<div class="flex items-center justify-between">
 			<div>

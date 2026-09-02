@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import {
 	ANNOUNCEMENTS_CATEGORY_ID,
+	listDiscussionCategories,
 	mapThreadListSqlRow,
 	SESSION_DISCUSSIONS_CATEGORY_ID,
 	type ThreadListSqlRow,
@@ -19,11 +20,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 	const viewer = threadViewer(locals);
 
-	const category = await locals.db
-		.select()
-		.from(categories)
-		.where(eq(categories.slug, params.slug))
-		.get();
+	const [category, discussionCategories] = await Promise.all([
+		locals.db.select().from(categories).where(eq(categories.slug, params.slug)).get(),
+		listDiscussionCategories(locals.db, viewer)
+	]);
 
 	if (!category) {
 		throw error(404, 'Category not found');
@@ -95,6 +95,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		category,
+		discussionCategories,
 		threads: categoryThreads,
 		canCreateThread,
 		subscriptionMode: (subscription?.mode ?? 'none') as
