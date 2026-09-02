@@ -223,7 +223,7 @@
 		</section>
 	{/if}
 
-	<section class="grid gap-4 lg:grid-cols-2">
+	<section class="space-y-4">
 		{#each subjectGroups as group (group.title)}
 			<Card.Root>
 				<Card.Header>
@@ -232,28 +232,33 @@
 				</Card.Header>
 				<Card.Content>
 					{#if group.items.length > 0}
-						<div class="space-y-2">
+						<div class="grid gap-2 md:grid-cols-2">
 							{#each group.items as item (item.link.subjectType + item.link.subjectId)}
-								{#if item.kind === 'book'}
-									<BookCard book={item.book} compact />
-								{:else if item.kind === 'series'}
-									<SeriesCard series={item.series} compact />
-								{:else}
-									<AuthorCard author={item.author} compact />
-								{/if}
-								{#if item.link.note}
-									<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">{item.link.note}</p>
-								{/if}
 								{@const readers = readersFor(item.link.subjectType, item.link.subjectId)}
-								{#if readers.length > 0}
-									<div class="flex flex-wrap gap-1 px-2 pb-2">
-										{#each readers as { read, user } (user.id + read.subjectType + read.subjectId)}
-											<Badge variant={read.isPrimaryPick ? 'default' : 'secondary'} class="text-xs">
-												{user.displayName}{read.isPrimaryPick ? ' primary' : ''}
-											</Badge>
-										{/each}
-									</div>
-								{/if}
+								<div class="min-w-0">
+									{#if item.kind === 'book'}
+										<BookCard book={item.book} compact />
+									{:else if item.kind === 'series'}
+										<SeriesCard series={item.series} compact />
+									{:else}
+										<AuthorCard author={item.author} compact />
+									{/if}
+									{#if item.link.note}
+										<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">{item.link.note}</p>
+									{/if}
+									{#if readers.length > 0}
+										<div class="flex flex-wrap gap-1 px-2 pb-2">
+											{#each readers as { read, user } (user.id + read.subjectType + read.subjectId)}
+												<Badge
+													variant={read.isPrimaryPick ? 'default' : 'secondary'}
+													class="text-xs"
+												>
+													{user.displayName}{read.isPrimaryPick ? ' primary' : ''}
+												</Badge>
+											{/each}
+										</div>
+									{/if}
+								</div>
 							{/each}
 						</div>
 					{:else}
