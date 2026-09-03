@@ -5,19 +5,19 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="Storied is a self-hosted home for book clubs: thoughtful discussions, reading sessions, a shared library, and community tools on Cloudflare."
+			content="Storied is open-source, self-hosted software for book clubs, with discussions, reading sessions, a shared library, and community tools."
 		/>
 		<meta name="theme-color" content="#f7f3ea" />
-		<meta property="og:title" content="Storied — Your book club, thoughtfully hosted" />
+		<meta property="og:title" content="Storied | Self-hosted software for book clubs" />
 		<meta
 			property="og:description"
-			content="A self-hosted home for the books, conversations, and people that make a reading community."
+			content="Keep your club's sessions, discussions, library, and members in one place you control."
 		/>
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content="https://storied.bate.dev" />
 		<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
 		<link rel="stylesheet" href="./styles.css" />
-		<title>Storied — Your book club, thoughtfully hosted</title>
+		<title>Storied | Self-hosted software for book clubs</title>
 	</head>
 	<body>
 		<a class="skip-link" href="#main">Skip to content</a>
@@ -30,6 +30,7 @@
 				<a href="#features">Features</a>
 				<a href="#stack">Your stack</a>
 				<a href="#principles">Why Storied</a>
+				<a href="#roadmap">Roadmap</a>
 				<a href="#contact">Contact</a>
 			</nav>
 			<a class="button button-small button-ink" href="https://github.com/colinbate/storied">
@@ -43,15 +44,15 @@
 		<main id="main">
 			<section class="hero" id="top">
 				<div class="hero-copy">
-					<p class="eyebrow"><span></span> Open source · self-hosted · made for readers</p>
-					<h1>Your book club,<br /><em>thoughtfully hosted.</em></h1>
+					<h1>A proper home<br /><em>for your book club.</em></h1>
+					<p class="hero-subtitle">Open-source software for self-hosted book clubs.</p>
 					<p class="hero-lede">
-						Storied gives reading communities a lasting home for the books, conversations, and
-						people that make them worth returning to.
+						Storied keeps your sessions, discussions, shared library, and members connected. It runs
+						on Cloudflare and stays under your control.
 					</p>
 					<div class="hero-actions">
 						<a class="button button-primary" href="https://github.com/colinbate/storied">
-							Explore the source
+							Browse the source
 							<svg viewBox="0 0 24 24" aria-hidden="true">
 								<path d="M5 12h14M13 6l6 6-6 6" />
 							</svg>
@@ -61,66 +62,69 @@
 						>
 					</div>
 					<p class="hero-note">
-						Bring a Cloudflare account and a willingness to edit a config file.
+						Bring a Cloudflare account and a willingness to edit a config file or two.
 					</p>
 				</div>
 
-				<div class="hero-scene" aria-label="A preview of a Storied book club discussion">
-					<div class="orbit orbit-one" aria-hidden="true"></div>
-					<div class="orbit orbit-two" aria-hidden="true"></div>
-					<div class="book book-back" aria-hidden="true"><span>Essays</span></div>
+				<div class="hero-scene" aria-label="A preview of a Storied session page">
 					<div class="app-window">
 						<div class="window-bar">
 							<div class="mini-brand">
 								<img src="./storied-mark.svg" alt="" />
 								<span>Storied</span>
 							</div>
-							<div class="window-actions"><i></i><i></i><i></i></div>
+							<div class="window-user"><span>M</span> Mara</div>
+						</div>
+						<div class="window-nav">
+							<span>Home</span><strong>Sessions</strong><span>Discussions</span><span>Library</span
+							><span>Members</span>
 						</div>
 						<div class="window-body">
-							<div class="session-label"><span></span> Current session</div>
-							<p class="session-kicker">August reading</p>
+							<div class="session-tabs"><strong>Sessions</strong><span>Themes</span></div>
+							<p class="preview-back">&larr; Back to Sessions</p>
+							<div class="session-label">current</div>
 							<h2>Worlds within worlds</h2>
-							<p class="session-meta">Thursday, 7:30 PM · The reading room</p>
-							<div class="discussion-card">
-								<div class="avatar avatar-plum">M</div>
-								<div>
-									<p><strong>What stayed with you?</strong></p>
-									<span>6 replies · 4 readers</span>
-								</div>
-								<div class="reader-stack" aria-hidden="true"><i>A</i><i>J</i><i>R</i></div>
+							<p class="session-theme">August reading</p>
+							<p class="session-meta">
+								<span>August 24 at 7:30 PM</span><span>90 min</span><span>The reading room</span>
+							</p>
+							<div class="rsvp-row">
+								<strong>RSVP:</strong><span class="rsvp-active">✓ I'll be there</span
+								><span>I can't make it</span>
 							</div>
-							<div class="topic-row"><span>✦</span> Memory, place, and unreliable maps</div>
-							<div class="topic-row muted"><span>↳</span> Lines worth returning to</div>
+							<div class="discussion-heading">
+								<strong>Discussion</strong>
+								<span>Questions, reactions, and reading notes for this session.</span>
+							</div>
+							<div class="discussion-card">
+								<div class="preview-post">
+									<div class="avatar avatar-plum">M</div>
+									<div>
+										<p class="post-meta"><strong>Mara Chen</strong><span>Aug 24</span></p>
+										<p>What stayed with you after the final chapter?</p>
+									</div>
+								</div>
+								<div class="preview-post preview-reply">
+									<div class="avatar avatar-green">J</div>
+									<div>
+										<p class="post-meta"><strong>Jon Bell</strong><span>Aug 25</span></p>
+										<p>The map kept changing, but the characters treated it as normal.</p>
+									</div>
+								</div>
+							</div>
 						</div>
 					</div>
-					<div class="note-card note-rsvp" aria-hidden="true">
-						<span class="note-icon">✓</span>
-						<div><strong>You're going</strong><small>RSVP saved</small></div>
-					</div>
-					<div class="note-card note-book" aria-hidden="true">
-						<span class="note-icon">⌁</span>
-						<div><strong>128 books</strong><small>in your shared library</small></div>
-					</div>
-				</div>
-			</section>
-
-			<section class="marquee" aria-label="Storied capabilities">
-				<div>
-					<span>Discussions that endure</span><i>◆</i><span>Reading sessions</span><i>◆</i
-					><span>A library with context</span><i>◆</i><span>Your community, your cloud</span>
 				</div>
 			</section>
 
 			<section class="section features" id="features">
 				<div class="section-heading">
 					<div>
-						<p class="eyebrow"><span></span> The good parts of book club, kept</p>
-						<h2>More than a thread<br />that scrolls away.</h2>
+						<h2>The useful bits<br />stay connected.</h2>
 					</div>
 					<p>
-						Storied connects each conversation to the books, sessions, and people around it—so your
-						club builds a memory instead of losing one.
+						A chat thread is fine until you need something from six months ago. Storied connects
+						each conversation to the relevant books, sessions, and people.
 					</p>
 				</div>
 
@@ -133,7 +137,7 @@
 								<path d="M8 9h8M8 12h5" />
 							</svg>
 						</div>
-						<h3>Discussions with a long memory</h3>
+						<h3>Discussions you can find again</h3>
 						<p>
 							Start focused threads, write in Markdown, mention fellow readers, and find an idea
 							again long after the meeting ends.
@@ -151,7 +155,7 @@
 								<path d="m9 14 2 2 4-4" />
 							</svg>
 						</div>
-						<h3>Sessions that keep everyone on the same page</h3>
+						<h3>Sessions with the details attached</h3>
 						<p>
 							Plan the next read, propose themes, share time and place, collect RSVPs, and keep the
 							main discussion beside the event.
@@ -169,7 +173,7 @@
 								<path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" />
 							</svg>
 						</div>
-						<h3>A shared library, rich with context</h3>
+						<h3>A shared library with context</h3>
 						<p>
 							Browse books, authors, series, and genres. Connect titles to club history, reading
 							themes, and the discussions they inspired.
@@ -187,7 +191,7 @@
 								<path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 6a3 3 0 0 1 0 6M16 15a5 5 0 0 1 4.5 5" />
 							</svg>
 						</div>
-						<h3>Community, without the noise</h3>
+						<h3>Useful community tools</h3>
 						<p>
 							Member profiles, private messages, notification preferences, and sensible moderation
 							tools give a small community room to feel like itself.
@@ -202,13 +206,12 @@
 
 			<section class="stack-section" id="stack">
 				<div class="stack-copy">
-					<p class="eyebrow eyebrow-light"><span></span> For the reader who checks the footnotes</p>
-					<h2>Your club.<br />Your data.<br /><em>Your Cloudflare account.</em></h2>
+					<h2>You run it.<br /><em>You own the data.</em></h2>
 					<p>
-						Storied is open-source software, not a subscription. Fork it, configure it, and run a
-						private community on infrastructure you control. The reference deployment pairs this
-						member space with a separate public club site; a private-only setup is possible, but its
-						public integration points still require a manual pass.
+						Storied is open-source software that you run in your own Cloudflare account. The
+						reference setup pairs the private member space with a separate public club site. A
+						private-only setup also works, though a few public integration points still need a
+						manual pass.
 					</p>
 					<ul class="stack-list">
 						<li><span>01</span> SvelteKit application at the edge</li>
@@ -239,7 +242,7 @@
 						<p><span class="code-muted">04</span> <span class="code-purple">$</span> pnpm build</p>
 						<div class="deploy-result">
 							<div class="deploy-mark">✓</div>
-							<div><strong>Ready for your chapter</strong><span>Deployed on Cloudflare</span></div>
+							<div><strong>Build complete</strong><span>Ready for Cloudflare</span></div>
 						</div>
 					</div>
 				</div>
@@ -248,19 +251,20 @@
 			<section class="section principles" id="principles">
 				<div class="section-heading principle-heading">
 					<div>
-						<p class="eyebrow"><span></span> Built for a smaller, better internet</p>
-						<h2>Quietly opinionated.</h2>
+						<h2>A few deliberate choices.</h2>
 					</div>
 				</div>
 				<div class="principle-grid">
 					<article>
 						<span class="principle-glyph" aria-hidden="true">◎</span>
-						<h3>Focused by design</h3>
-						<p>No feeds to game and no engagement tricks—just your people talking about books.</p>
+						<h3>Discussion stays focused</h3>
+						<p>
+							No algorithmic feed or engagement scores. Your people can simply talk about books.
+						</p>
 					</article>
 					<article>
 						<span class="principle-glyph" aria-hidden="true">◐</span>
-						<h3>Comfortable to read</h3>
+						<h3>Reading comes first</h3>
 						<p>
 							Responsive layouts, dark mode, and an optional OpenDyslexic typeface put readers
 							first.
@@ -268,22 +272,64 @@
 					</article>
 					<article>
 						<span class="principle-glyph" aria-hidden="true">◇</span>
-						<h3>Made to be made yours</h3>
+						<h3>Change what you need</h3>
 						<p>
-							The code is available to inspect and adapt for the rituals that make your club unique.
+							Inspect the code, adapt the data model, and fit Storied to the way your club already
+							runs.
 						</p>
 					</article>
+				</div>
+			</section>
+
+			<section class="roadmap-section" id="roadmap">
+				<div class="roadmap-inner">
+					<div class="section-heading roadmap-heading">
+						<div>
+							<h2>A few things<br />on the list.</h2>
+						</div>
+						<p>
+							Storied already handles the day-to-day work of running my book club. These are a few of the
+							larger additions I would like to tackle next to help support other types of clubs.
+						</p>
+					</div>
+					<div class="roadmap-list">
+						<article class="roadmap-item">
+							<span class="roadmap-number">01</span>
+							<h3>Shared library curation</h3>
+							<p>
+								Let members add genres and classifications that imported records do not include.
+								Moderators could handle broader metadata edits, such as correcting a book
+								description.
+							</p>
+						</article>
+						<article class="roadmap-item">
+							<span class="roadmap-number">02</span>
+							<h3>Configurable session classifications</h3>
+							<p>
+								Make Starter Books, Featured, Discussed, and Off-Theme Mentions configurable for
+								each club. This would also give a session one clearly identified primary book.
+							</p>
+						</article>
+						<article class="roadmap-item">
+							<span class="roadmap-number">03</span>
+							<h3>Book/theme voting</h3>
+							<p>
+								Let members suggest and vote on future reads, then carry the selected book into a
+								session without entering it again.
+							</p>
+
+						</article>
+					</div>
 				</div>
 			</section>
 
 			<section class="contact-section" id="contact">
 				<div class="contact-inner">
 					<div class="contact-copy">
-						<p class="eyebrow"><span></span> Start a conversation</p>
-						<h2>Curious about<br /><em>your own chapter?</em></h2>
+						<h2>Questions, setup,<br /><em>or ideas?</em></h2>
 						<p>
-							Hi, I'm Colin—the person behind Storied. Whether you need a hand setting it up or have
-							an idea for where it could go next, I'd be glad to hear from you.
+							Hi, I'm Colin, the person behind Storied. If you need a hand setting it up, found a
+							bug, or have an idea for it, send me a note.
 						</p>
 					</div>
 					<div class="contact-options">
@@ -317,11 +363,8 @@
 
 			<section class="cta-section">
 				<div class="cta-mark"><img src="./storied-mark.svg" alt="" /></div>
-				<p class="eyebrow"><span></span> The next chapter is yours</p>
-				<h2>Give the conversation<br />somewhere to live.</h2>
-				<p>
-					Storied is early, open source, and ready for technically curious book clubs to explore.
-				</p>
+				<h2>Want to try it?</h2>
+				<p>The repository has the application code, migrations, worker, and deployment notes.</p>
 				<a class="button button-primary" href="https://github.com/colinbate/storied">
 					Explore Storied on GitHub
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
@@ -334,7 +377,7 @@
 				<span class="brand-mark"><img src="./storied-mark.svg" alt="" /></span>
 				<span>Storied</span>
 			</a>
-			<p>Self-hosted community software for people who read together.</p>
+			<p>Self-hosted software for people who read together.</p>
 			<div class="footer-links">
 				<a href="mailto:storied@bate.dev">Email</a>
 				<a href="https://github.com/colinbate/storied/issues">Issues</a>
