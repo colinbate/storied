@@ -14,7 +14,8 @@ import {
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
-import { detectFirstSubjectLink, ensureSubjectSource } from '$lib/server/subject-sources';
+import { ensureSubjectSource } from '$lib/server/subject-sources';
+import { detectSubjectLinks, type DetectedSubjectLink } from '$lib/server/book-links';
 import { renderMarkdown } from '$lib/server/markdown';
 import { DEFAULT_TIMEZONE, isValidTimezone } from '$lib/server/notification-preferences';
 import {
@@ -34,6 +35,74 @@ type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_of
 const sessionStatuses = new Set(['draft', 'current', 'past']);
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
 const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
+
+const subjectUrlBatchFields = [
+	{ name: 'starterUrls', label: 'Starter', status: 'starter' },
+	{ name: 'featuredUrls', label: 'Featured', status: 'featured' },
+	{ name: 'discussedUrls', label: 'Discussed', status: 'discussed' },
+	{
+		name: 'mentionedOffThemeUrls',
+		label: 'Mentioned off theme',
+		status: 'mentioned_off_theme'
+	}
+] as const satisfies readonly {
+	name: string;
+	label: string;
+	status: SessionSubjectStatus;
+}[];
+
+type SubjectUrlBatchItem = {
+	link: DetectedSubjectLink;
+	status: SessionSubjectStatus;
+};
+
+function parseSubjectUrlBatches(data: FormData) {
+	const items: SubjectUrlBatchItem[] = [];
+	const invalidEntries: string[] = [];
+	const conflictingEntries: string[] = [];
+	const seen = new Map<string, { status: SessionSubjectStatus; location: string }>();
+	let duplicateCount = 0;
+
+	for (const field of subjectUrlBatchFields) {
+		const lines = (data.get(field.name)?.toString() ?? '').split(/\r?\n/);
+		for (const [index, rawLine] of lines.entries()) {
+			const line = rawLine.trim();
+			if (!line) continue;
+
+			let isUrl = false;
+			try {
+				const parsedUrl = new URL(line);
+				isUrl = parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+			} catch {
+				// The validation message below covers malformed and unsupported URLs together.
+			}
+
+			const detectedLinks = isUrl ? detectSubjectLinks(line) : [];
+			if (detectedLinks.length !== 1) {
+				invalidEntries.push(`${field.label} line ${index + 1}`);
+				continue;
+			}
+
+			const link = detectedLinks[0];
+			const key = `${link.sourceType}:${link.sourceKey}`;
+			const location = `${field.label} line ${index + 1}`;
+			const previous = seen.get(key);
+			if (previous) {
+				if (previous.status === field.status) {
+					duplicateCount += 1;
+				} else {
+					conflictingEntries.push(`${previous.location} and ${location}`);
+				}
+				continue;
+			}
+
+			seen.set(key, { status: field.status, location });
+			items.push({ link, status: field.status });
+		}
+	}
+
+	return { items, invalidEntries, conflictingEntries, duplicateCount };
+}
 
 function rejectStaleSession(data: FormData, updatedAt: string) {
 	const expectedUpdatedAt = data.get('expectedUpdatedAt')?.toString();
@@ -389,29 +458,49 @@ export const actions: Actions = {
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
-		const url = data.get('url')?.toString()?.trim() || '';
-		const status = getSessionSubjectStatus(data);
 		const note = data.get('note')?.toString()?.trim() || null;
+		const { items, invalidEntries, conflictingEntries, duplicateCount } =
+			parseSubjectUrlBatches(data);
 
-		const link = detectFirstSubjectLink(url);
-		if (!link)
+		if (invalidEntries.length > 0) {
 			return fail(400, {
-				error: 'Only Goodreads or Hardcover book, series, or author URLs are supported.'
+				error: `Check ${invalidEntries.slice(0, 4).join(', ')}${invalidEntries.length > 4 ? `, and ${invalidEntries.length - 4} more` : ''}. Enter one supported Goodreads or Hardcover book, series, or author URL per line.`
+			});
+		}
+		if (conflictingEntries.length > 0) {
+			return fail(400, {
+				error: `The same URL cannot be in different status groups. Check ${conflictingEntries.slice(0, 3).join(', ')}${conflictingEntries.length > 3 ? `, and ${conflictingEntries.length - 3} more` : ''}.`
+			});
+		}
+		if (items.length === 0) {
+			return fail(400, {
+				error: 'Add at least one Goodreads or Hardcover book, series, or author URL.'
+			});
+		}
+
+		let resolvedCount = 0;
+		let queuedCount = 0;
+		for (const item of items) {
+			const result = await ensureSubjectSource(locals.db, item.link, platform?.env, {
+				sessionLink: {
+					sessionId: row.id,
+					status: item.status,
+					note,
+					addedByUserId: locals.user?.id ?? null
+				}
 			});
 
-		const result = await ensureSubjectSource(locals.db, link, platform?.env, {
-			sessionLink: {
-				sessionId: row.id,
-				status,
-				note,
-				addedByUserId: locals.user?.id ?? null
-			}
-		});
-
-		if (result.resolvedSubjectId) {
-			return { linkAddedFromResolved: true };
+			if (result.resolvedSubjectId) resolvedCount += 1;
+			else queuedCount += 1;
 		}
-		return { linkQueuedFromUrl: true };
+
+		return {
+			batchLinksAdded: true,
+			processedCount: items.length,
+			resolvedCount,
+			queuedCount,
+			duplicateCount
+		};
 	},
 
 	updateLink: async ({ request, params, locals }) => {

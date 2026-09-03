@@ -47,7 +47,16 @@
 	let readBookId = $state<string | undefined>(undefined);
 	let readSeriesId = $state<string | undefined>(undefined);
 
-	let urlStatus = $state<SubjectStatus>('starter');
+	let starterUrls = $state('');
+	let featuredUrls = $state('');
+	let discussedUrls = $state('');
+	let mentionedOffThemeUrls = $state('');
+	const batchUrlCount = $derived(
+		[starterUrls, featuredUrls, discussedUrls, mentionedOffThemeUrls].reduce(
+			(count, value) => count + value.split(/\r?\n/).filter((line) => line.trim()).length,
+			0
+		)
+	);
 
 	const bookPickerItems = $derived(
 		data.allBooks
@@ -963,10 +972,10 @@
 		<!-- Add link from external subject URL -->
 		<Card.Root>
 			<Card.Header>
-				<Card.Title class="text-base">Link from URL</Card.Title>
+				<Card.Title class="text-base">Link URLs in Batches</Card.Title>
 				<Card.Description>
-					Paste a Hardcover or Goodreads book, series, or author URL. If not already in our library,
-					it'll be queued for resolution and auto-linked to this session once resolved.
+					Paste one Hardcover or Goodreads book, series, or author URL per line in the matching
+					status group. New library items are queued individually and auto-linked once resolved.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -977,43 +986,74 @@
 						saving = true;
 						return async ({ result, update }) => {
 							saving = false;
-							await update();
+							await update({ reset: false });
 							if (result.type === 'success') {
-								if (result.data?.linkAddedFromResolved) {
-									toast.success('Linked to session.');
-									showLinkForms = false;
-								}
-								if (result.data?.linkQueuedFromUrl) {
-									toast.success('Queued. Will link to session once resolved.');
-									showLinkForms = false;
+								if (result.data?.batchLinksAdded) {
+									const resolvedCount = Number(result.data.resolvedCount ?? 0);
+									const queuedCount = Number(result.data.queuedCount ?? 0);
+									const duplicateCount = Number(result.data.duplicateCount ?? 0);
+									const parts = [
+										resolvedCount > 0 ? `${resolvedCount} linked` : '',
+										queuedCount > 0 ? `${queuedCount} queued` : '',
+										duplicateCount > 0
+											? `${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} skipped`
+											: ''
+									].filter(Boolean);
+									toast.success(`Batch complete: ${parts.join(', ')}.`);
+									starterUrls = '';
+									featuredUrls = '';
+									discussedUrls = '';
+									mentionedOffThemeUrls = '';
 								}
 								if (result.data?.error) toast.error(String(result.data.error));
+							}
+							if (result.type === 'failure' && result.data?.error) {
+								toast.error(String(result.data.error));
 							}
 						};
 					}}
 					class="space-y-4"
 				>
-					<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
-						<div class="min-w-0 space-y-2">
-							<Label for="url-input">Subject URL</Label>
-							<Input
-								id="url-input"
-								name="url"
-								type="url"
-								placeholder="https://hardcover.app/books/..."
-								required
+					<div class="grid gap-4 md:grid-cols-2">
+						<div class="space-y-2">
+							<Label for="starter-urls">Starter</Label>
+							<Textarea
+								id="starter-urls"
+								name="starterUrls"
+								rows={4}
+								placeholder="One URL per line"
+								bind:value={starterUrls}
 							/>
 						</div>
 						<div class="space-y-2">
-							<Label for="url-status">Status</Label>
-							<NativeSelect class="w-full" id="url-status" name="status" bind:value={urlStatus}>
-								<NativeSelectOption value="starter">starter</NativeSelectOption>
-								<NativeSelectOption value="featured">featured</NativeSelectOption>
-								<NativeSelectOption value="discussed">discussed</NativeSelectOption>
-								<NativeSelectOption value="mentioned_off_theme"
-									>mentioned off theme</NativeSelectOption
-								>
-							</NativeSelect>
+							<Label for="featured-urls">Featured</Label>
+							<Textarea
+								id="featured-urls"
+								name="featuredUrls"
+								rows={4}
+								placeholder="One URL per line"
+								bind:value={featuredUrls}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="discussed-urls">Discussed</Label>
+							<Textarea
+								id="discussed-urls"
+								name="discussedUrls"
+								rows={4}
+								placeholder="One URL per line"
+								bind:value={discussedUrls}
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="off-theme-urls">Mentioned off theme</Label>
+							<Textarea
+								id="off-theme-urls"
+								name="mentionedOffThemeUrls"
+								rows={4}
+								placeholder="One URL per line"
+								bind:value={mentionedOffThemeUrls}
+							/>
 						</div>
 					</div>
 					<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
@@ -1021,9 +1061,15 @@
 							<Label for="url-note">Note</Label>
 							<Input id="url-note" name="note" placeholder="Optional context for this session" />
 						</div>
-						<Button class="h-10 w-full md:w-auto" type="submit" disabled={saving}>
+						<Button
+							class="h-10 w-full md:w-auto"
+							type="submit"
+							disabled={saving || batchUrlCount === 0}
+						>
 							<LinkIcon class="h-4 w-4" />
-							Link URL
+							{saving
+								? 'Linking…'
+								: `Link ${batchUrlCount || ''} URL${batchUrlCount === 1 ? '' : 's'}`}
 						</Button>
 					</div>
 				</form>
