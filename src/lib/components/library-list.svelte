@@ -189,7 +189,7 @@
 										<BookOpenIcon class="h-6 w-6 text-muted-foreground" />
 									</div>
 								{/if}
-								<div class="min-w-0 space-y-2">
+								<div class="min-w-0 flex-1 space-y-2">
 									<div>
 										<div class="flex items-start gap-2">
 											<h3 class="line-clamp-2 min-w-0 flex-1 font-semibold">{book.title}</h3>
@@ -241,7 +241,7 @@
 										<LibraryIcon class="h-6 w-6 text-muted-foreground" />
 									</div>
 								{/if}
-								<div class="min-w-0 space-y-2">
+								<div class="min-w-0 flex-1 space-y-2">
 									<div>
 										<div class="flex items-start gap-2">
 											<h3 class="line-clamp-2 min-w-0 flex-1 font-semibold">{item.title}</h3>

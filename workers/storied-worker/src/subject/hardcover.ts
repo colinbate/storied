@@ -79,6 +79,33 @@ function firstString(values: unknown): string | undefined {
 	return values.map(stringValue).find(Boolean);
 }
 
+function authorNames(value: unknown): string | undefined {
+	if (!Array.isArray(value)) return stringValue(value);
+	const names = value.map(stringValue).filter((name): name is string => Boolean(name));
+	return [...new Set(names)].join(', ') || undefined;
+}
+
+function contributionAuthorNames(value: unknown): string | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const names = value
+		.map((contribution) =>
+			isRecord(contribution) && isRecord(contribution.author)
+				? stringValue(contribution.author.name)
+				: undefined
+		)
+		.filter((name): name is string => Boolean(name));
+	return [...new Set(names)].join(', ') || undefined;
+}
+
+function bookAuthorText(value: unknown): string | undefined {
+	if (!isRecord(value)) return undefined;
+	return (
+		authorNames(value.author_names) ??
+		(isRecord(value.author) ? stringValue(value.author.name) : undefined) ??
+		contributionAuthorNames(value.contributions)
+	);
+}
+
 function imageUrl(value: unknown): string | undefined {
 	if (typeof value === 'string') return stringValue(value);
 	if (Array.isArray(value)) return value.map(imageUrl).find(Boolean);
@@ -268,6 +295,9 @@ async function seriesBySlug(env: Env, slug: string): Promise<Record<string, unkn
 			id
 			slug
 			name
+			author {
+				name
+			}
 			description
 			books_count
 			book_series(
@@ -281,6 +311,11 @@ async function seriesBySlug(env: Env, slug: string): Promise<Record<string, unkn
 					slug
 					title
 					state
+					contributions {
+						author {
+							name
+						}
+					}
 					default_cover_edition {
 						image {
 							url
@@ -311,19 +346,8 @@ export async function fetchHardcoverBook(
 	if (!title) return null;
 
 	const resultSlug = stringValue(result.slug) ?? slug;
-	const authorText = Array.isArray(result.author_names)
-		? result.author_names.map(stringValue).filter(Boolean).join(', ')
-		: stringValue(result.author_names);
-	const contributionAuthors = Array.isArray(result.contributions)
-		? result.contributions
-				.map((contribution) =>
-					isRecord(contribution) && isRecord(contribution.author)
-						? stringValue(contribution.author.name)
-						: undefined
-				)
-				.filter(Boolean)
-				.join(', ')
-		: undefined;
+	const authorText = authorNames(result.author_names);
+	const contributionAuthors = contributionAuthorNames(result.contributions);
 	const defaultCoverEdition = isRecord(result.default_cover_edition)
 		? result.default_cover_edition
 		: undefined;
@@ -407,12 +431,21 @@ export async function fetchHardcoverSeries(
 						: undefined
 				)
 			: undefined;
+	const firstSeriesBookAuthor = seriesBooks
+		.map((seriesBook) => (isRecord(seriesBook.book) ? bookAuthorText(seriesBook.book) : undefined))
+		.find(Boolean);
+	const firstSearchBookAuthor = books.map(bookAuthorText).find(Boolean);
 
 	return {
 		hardcoverId: stringValue(result.id) ?? numberValue(result.id)?.toString(),
 		slug: resultSlug,
 		title,
-		authorText: stringValue(result.author_name) ?? author,
+		authorText:
+			stringValue(result.author_name) ??
+			author ??
+			authorNames(result.author_names) ??
+			firstSeriesBookAuthor ??
+			firstSearchBookAuthor,
 		description: descriptionText(result.description),
 		coverUrl: imageUrl(result.image) ?? firstSeriesBookCover ?? imageUrl(books[0]?.image),
 		bookCount: numberValue(result.books_count) ?? numberValue(result.primary_books_count),

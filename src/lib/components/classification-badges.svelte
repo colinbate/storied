@@ -30,7 +30,12 @@
 </script>
 
 {#if classifications?.length}
-	<span class="inline-flex flex-wrap items-center gap-1.5">
+	<span
+		class={[
+			'inline-flex flex-wrap items-center gap-1.5',
+			compact && 'ml-auto shrink-0 justify-end'
+		]}
+	>
 		{#each classifications as classification (classification.slug)}
 			{@const Icon = iconComponents[classification.icon as keyof typeof iconComponents] ?? TagIcon}
 			{#if compact}
