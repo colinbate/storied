@@ -1,3 +1,5 @@
+import { isFutureSession } from '$shared/session-lifecycle';
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { categories, sessions, threads } from '$lib/server/db/schema';
@@ -10,6 +12,7 @@ import {
 import {
 	attendingCount,
 	canAcceptSessionRsvps,
+	canDeclineSessionRsvp,
 	getCurrentUserSessionRsvp,
 	setMemberRsvp
 } from '$lib/server/rsvp';
@@ -103,27 +106,26 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const currentSessions = await locals.db
 		.select()
 		.from(sessions)
+		.where(sessionAccessCondition(locals))
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
 	const featuredSession =
 		currentSessions.find((session) => session.status === 'current') ??
-		currentSessions.find((session) => session.status === 'draft') ??
+		currentSessions.find((session) => session.status === 'scheduled' && isFutureSession(session)) ??
 		null;
 	const canManageSessions =
 		locals.permissions.has('admin:view') && locals.permissions.has('sessions:edit');
-	const upcomingSession = canManageSessions
-		? currentSessions.find(
-				(session) =>
-					session.id !== featuredSession?.id &&
-					(session.status === 'current' || session.status === 'draft') &&
-					session.startsAt !== null &&
-					new Date(session.startsAt).getTime() > Date.now()
-			)
-		: null;
+	const upcomingSession =
+		currentSessions.find(
+			(session) =>
+				session.id !== featuredSession?.id &&
+				(session.status === 'scheduled' || session.status === 'current') &&
+				isFutureSession(session)
+		) ?? null;
 	const [currentSessionAttendingCount, upcomingSessionAttendingCount] = await Promise.all([
 		canManageSessions && featuredSession ? attendingCount(locals.db, featuredSession.id) : null,
-		upcomingSession ? attendingCount(locals.db, upcomingSession.id) : null
+		canManageSessions && upcomingSession ? attendingCount(locals.db, upcomingSession.id) : null
 	]);
 
 	const { results: featuredDiscussionRows = [] } = featuredSession
@@ -189,10 +191,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		recentThreads,
 		currentSession: featuredSession,
 		currentSessionAttendingCount,
+		currentSessionCapacity: featuredSession
+			? await attendingCount(locals.db, featuredSession.id)
+			: 0,
 		upcomingSession: upcomingSession
 			? { title: upcomingSession.title, slug: upcomingSession.slug }
 			: null,
 		upcomingSessionAttendingCount,
+		canDeclineCurrentSessionRsvp: featuredSession ? canDeclineSessionRsvp(featuredSession) : false,
 		canRsvpToCurrentSession: featuredSession ? canAcceptSessionRsvps(featuredSession) : false,
 		currentSessionRsvp:
 			featuredSession && locals.user

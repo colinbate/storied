@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import { formatSessionDateInTimeZone } from '$shared/session-reminder-timezone';
 	import { pageTitle } from '$shared/brand';
 
 	let { data, form } = $props();
@@ -15,7 +16,7 @@
 </script>
 
 <svelte:head
-	><title>{pageTitle(data.session ? `RSVP — ${data.session.title}` : 'RSVP')}</title></svelte:head
+	><title>{pageTitle(data.session ? `RSVP: ${data.session.title}` : 'RSVP')}</title></svelte:head
 >
 
 <div class="mx-auto max-w-lg py-12">
@@ -27,6 +28,9 @@
 				>{/if}
 		</Card.Header>
 		<Card.Content>
+			{#if data.session?.startsAt}<p class="mb-4 text-sm">
+					{formatSessionDateInTimeZone(data.session.startsAt, data.session.timezone)}
+				</p>{/if}
 			{#if data.error}
 				<p class="rounded-md border border-destructive/50 p-4 text-sm text-destructive">
 					{data.error}

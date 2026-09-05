@@ -1,3 +1,4 @@
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { sessions, themes } from '$lib/server/db/schema';
@@ -26,6 +27,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				themeId: sessions.themeId
 			})
 			.from(sessions)
+			.where(sessionAccessCondition(locals))
 			.orderBy(desc(sessions.startsAt), desc(sessions.createdAt))
 			.all()
 	]);

@@ -6,6 +6,9 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
 	import { formatDate } from '$lib/date-format';
+	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
+	import { RSVP_STATUS_LABELS } from '$lib/rsvp-status';
+	import { Button } from '$lib/components/ui/button';
 	import SessionNav from '$lib/components/session-nav.svelte';
 
 	let { data } = $props();
@@ -13,7 +16,14 @@
 
 	const groups = $derived([
 		{ title: 'Current', sessions: data.currentSessions },
-		{ title: 'Past', sessions: data.pastSessions }
+		{ title: 'Upcoming', sessions: data.upcomingSessions },
+		{ title: 'Past', sessions: data.pastSessions },
+		...(data.cancelledSessions.length
+			? [{ title: 'Cancelled', sessions: data.cancelledSessions }]
+			: []),
+		...(data.draftSessions.length
+			? [{ title: 'Private drafts', sessions: data.draftSessions }]
+			: [])
 	]);
 </script>
 
@@ -24,9 +34,13 @@
 <div class="space-y-8">
 	<SessionNav />
 
-	<div>
+	<div class="flex justify-between items-start">
 		<h1 class="text-2xl font-bold">Sessions</h1>
-		<p class="text-muted-foreground">Reading sessions, themes, and meeting threads.</p>
+		{#if data.permissions.has('sessions:edit')}<Button
+				class="mt-3"
+				variant="outline"
+				href={resolve('/admin/sessions')}>Plan or manage sessions</Button
+			>{/if}
 	</div>
 
 	{#each groups as group (group.title)}
@@ -46,11 +60,14 @@
 											{/if}
 										</div>
 										<Badge variant={session.status === 'current' ? 'default' : 'secondary'}>
-											{session.status}
+											{SESSION_STATUS_LABELS[session.status]}
 										</Badge>
 									</div>
 								</Card.Header>
 								<Card.Content class="space-y-2 text-sm text-muted-foreground">
+									{#if data.myRsvps[session.id]}<p class="font-medium text-foreground">
+											{RSVP_STATUS_LABELS[data.myRsvps[session.id]]}
+										</p>{/if}
 									<div class="flex items-center gap-2">
 										<CalendarIcon class="h-4 w-4" />
 										<span

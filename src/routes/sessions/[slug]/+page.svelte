@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionRsvp from '$lib/components/session-rsvp.svelte';
 	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -17,15 +18,16 @@
 	import BellIcon from '@lucide/svelte/icons/bell';
 	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import CheckIcon from '@lucide/svelte/icons/check';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
-	import XIcon from '@lucide/svelte/icons/x';
 	import { formatDate } from '$lib/date-format';
 	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { toast } from 'svelte-sonner';
 	import { publicPostImageUrl } from '$lib/post-images';
 	import SessionNav from '$lib/components/session-nav.svelte';
+	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
+	import { PRIMARY_ORIGIN } from '$shared/brand';
+	import { createSessionCalendarLinks } from '$shared/session-calendar-links';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -33,10 +35,15 @@
 	let replyImageFiles = $state<FileList | undefined>();
 	let replying = $state(false);
 	let activeReplyDraftId = $state<string | null>(null);
-	let rsvping = $state(false);
 	const replyDraftComposerId = $derived(`session:${data.session.id}`);
 	const primaryThreadImageUrl = $derived(
 		publicPostImageUrl(data.fileBaseUrl, data.primaryThread?.thread.imageKey)
+	);
+	const calendarLinks = $derived(
+		createSessionCalendarLinks(data.session, {
+			detailsUrl: new URL(`/sessions/${data.session.slug}`, PRIMARY_ORIGIN).toString(),
+			icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.session.slug })
+		})
 	);
 
 	$effect(() => {
@@ -105,26 +112,6 @@
 			}
 		};
 	};
-
-	const rsvpEnhance: SubmitFunction = () => {
-		rsvping = true;
-		return async ({ result, update }) => {
-			rsvping = false;
-			await update();
-			if (result.type === 'success') {
-				const status = result.data?.status;
-				toast.success(
-					status === 'declined'
-						? 'RSVP saved as declined.'
-						: status === 'waitlisted'
-							? 'The session is full, so you are on the waitlist.'
-							: 'RSVP saved.'
-				);
-			} else if (result.type === 'failure' && result.data?.error) {
-				toast.error(String(result.data.error));
-			}
-		};
-	};
 </script>
 
 <svelte:head>
@@ -145,7 +132,7 @@
 	<section class="space-y-4">
 		<div class="flex flex-wrap items-center gap-2">
 			<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
-				{data.session.status}
+				{SESSION_STATUS_LABELS[data.session.status]}
 			</Badge>
 		</div>
 		<div>
@@ -189,39 +176,18 @@
 				Manage Session
 			</Button>
 		{/if}
-		{#if data.canRsvp}
-			<form
-				method="POST"
-				action="?/setRsvp"
-				use:enhance={rsvpEnhance}
-				class="flex flex-wrap items-center gap-2 rounded-lg border border-primary/50 px-3 py-2"
-			>
-				<span>RSVP:</span>
-				<Button
-					type="submit"
-					name="status"
-					value="registered"
-					variant={data.currentUserRsvp?.attendanceStatus === 'attending' ||
-					data.currentUserRsvp?.attendanceStatus === 'waitlisted'
-						? 'default'
-						: 'outline'}
-					disabled={rsvping}
-				>
-					<CheckIcon class="h-4 w-4" />
-					I'll be there!
-				</Button>
-				<Button
-					type="submit"
-					name="status"
-					value="declined"
-					variant={data.currentUserRsvp?.attendanceStatus === 'declined' ? 'default' : 'outline'}
-					disabled={rsvping}
-				>
-					<XIcon class="h-4 w-4" />
-					I can't make it
-				</Button>
-			</form>
-		{/if}
+		<SessionRsvp
+			action="?/setRsvp"
+			sessionSlug={data.session.slug}
+			sessionStatus={data.session.status}
+			status={data.currentUserRsvp?.attendanceStatus ?? null}
+			canRsvp={data.canRsvp}
+			canDecline={data.canDeclineRsvp}
+			capacity={data.session.rsvpCapacity}
+			attendingCount={data.attendingCount}
+			waitlistEnabled={data.session.rsvpWaitlistEnabled}
+			{calendarLinks}
+		/>
 	</section>
 
 	{#if data.session.bodyHtml}

@@ -24,6 +24,7 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import { SESSION_STATUSES, SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
 	import { supportedTimeZones } from '$lib/timezone-options';
 
 	let { data, form } = $props();
@@ -144,7 +145,7 @@
 		</Button>
 		<h1 class="text-2xl font-bold">{data.session.title}</h1>
 		<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
-			{data.session.status}
+			{SESSION_STATUS_LABELS[data.session.status]}
 		</Badge>
 		{#if data.session.themeTitle ?? data.session.theme}
 			<Badge variant="secondary">{data.session.themeTitle ?? data.session.theme}</Badge>
@@ -169,8 +170,11 @@
 		<Card.Header>
 			<Card.Title class="text-base">Session Status</Card.Title>
 			<Card.Description>
-				Making a session current also marks earlier sessions as past. RSVPs open automatically for
-				the current future session and close when it starts or becomes past.
+				Drafts stay private. Upcoming sessions are visible to members and can accept RSVPs. Current
+				also features the session on Home. When you choose a new current session, the previous one
+				stays Upcoming until it has happened. Upcoming sessions need a date. Current and Past
+				sessions also need a theme. Save required details below before changing the status.
+				Cancelling closes RSVPs; contact attendees separately about the change.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -183,12 +187,7 @@
 						savingStatus = false;
 						await update({ reset: false });
 						if (result.type === 'success' && result.data?.statusUpdated) {
-							const previousCount = Number(result.data.promotedPreviousCount ?? 0);
-							toast.success(
-								previousCount > 0
-									? `Session status updated; ${previousCount} earlier session${previousCount === 1 ? '' : 's'} marked past.`
-									: 'Session status updated.'
-							);
+							toast.success('Session status updated.');
 						}
 					};
 				}}
@@ -198,9 +197,9 @@
 				<div class="min-w-48 space-y-2">
 					<Label for="status">Status</Label>
 					<NativeSelect id="status" name="status" value={data.session.status}>
-						<NativeSelectOption value="draft">draft</NativeSelectOption>
-						<NativeSelectOption value="current">current</NativeSelectOption>
-						<NativeSelectOption value="past">past</NativeSelectOption>
+						{#each SESSION_STATUSES as status (status)}<NativeSelectOption value={status}
+								>{SESSION_STATUS_LABELS[status]}</NativeSelectOption
+							>{/each}
 					</NativeSelect>
 				</div>
 				<Button type="submit" class="h-10" disabled={savingStatus}>
@@ -283,7 +282,10 @@
 							<SessionThemePicker
 								themes={availableThemes}
 								bind:selectedId={selectedThemeId}
-								label="Theme"
+								label={data.session.status === 'current' || data.session.status === 'past'
+									? 'Theme'
+									: 'Theme (can be decided later)'}
+								required={data.session.status === 'current' || data.session.status === 'past'}
 							/>
 						</div>
 						<div class="space-y-2 sm:col-span-2">
@@ -296,7 +298,7 @@
 							/>
 						</div>
 						<div class="space-y-2 sm:col-span-2">
-							<Label for="bodySource">Body</Label>
+							<Label for="bodySource">Session description</Label>
 							<Textarea
 								id="bodySource"
 								name="bodySource"
@@ -318,6 +320,14 @@
 								value={data.session.rsvpCapacity}
 							/>
 						</div>
+						<label class="flex items-center gap-2 text-sm"
+							><input
+								name="rsvpEnabled"
+								type="checkbox"
+								class="rounded border-input"
+								checked={data.session.rsvpEnabled}
+							/>Accept RSVPs once published, until the session starts</label
+						>
 						<label class="flex items-center gap-2 text-sm">
 							<input
 								name="rsvpWaitlistEnabled"
@@ -338,7 +348,7 @@
 								checked={data.session.isPublic}
 								class="rounded border-input"
 							/>
-							Public
+							Show on the public site when published
 						</label>
 					</div>
 					<Button type="submit" disabled={saving}>

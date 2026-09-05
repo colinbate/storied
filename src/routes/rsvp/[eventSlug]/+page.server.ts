@@ -7,17 +7,18 @@ import {
 	getSessionByRsvpSlug,
 	isValidRsvpEmail,
 	RsvpCapacityError,
-	setAttendeeRsvp
+	submitSessionRsvp
 } from '$lib/server/rsvp';
-import {
-	sendRegistrationConfirmationEmail,
-	sendWaitlistConfirmationEmail,
-	sendWaitlistPromotionEmail
-} from '$lib/server/rsvp-email';
 
 const declineResponses = new Set(['declined', 'decline', 'not_attending', 'not-attending', 'no']);
 
-function statusRedirect(rawTarget: string, fallbackSlug: string, status: string) {
+function statusRedirect(
+	rawTarget: string,
+	fallbackSlug: string,
+	status: string,
+	actualStatus = status,
+	emailFailed = false
+) {
 	if (rawTarget) {
 		try {
 			const target = new URL(rawTarget);
@@ -29,12 +30,13 @@ function statusRedirect(rawTarget: string, fallbackSlug: string, status: string)
 			// Invalid or untrusted redirects fall back to Storied's success page.
 		}
 	}
-	return `/success?event=${encodeURIComponent(fallbackSlug)}&status=${encodeURIComponent(status)}`;
+	return `/success?event=${encodeURIComponent(fallbackSlug)}&status=${encodeURIComponent(actualStatus)}${emailFailed ? '&email=failed' : ''}`;
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const session = await getSessionByRsvpSlug(locals.db, params.eventSlug);
-	if (!session) return { session: null, error: 'Session not found.' };
+	if (!session || !session.isPublic || session.status === 'draft')
+		return { session: null, error: 'Session not found.' };
 	if (!session.isPublic || !canAcceptSessionRsvps(session)) {
 		return { session, error: 'This session is not currently accepting RSVPs.' };
 	}
@@ -58,15 +60,18 @@ export const actions = {
 		}
 
 		const session = await getSessionByRsvpSlug(locals.db, params.eventSlug);
-		if (!session) return fail(404, { name, email, error: 'Session not found.' });
+		if (!session || !session.isPublic || session.status === 'draft')
+			return fail(404, { name, email, error: 'Session not found.' });
 		if (!session.isPublic || !canAcceptSessionRsvps(session)) {
 			return fail(400, { name, email, error: 'This session is not currently accepting RSVPs.' });
 		}
 
 		const attendee = await getOrCreatePublicAttendee(locals.db, name, email);
 		try {
-			const result = await setAttendeeRsvp({
+			const result = await submitSessionRsvp({
 				db: locals.db,
+				platform,
+				baseUrl: url.origin,
 				session,
 				attendee,
 				response: declineResponses.has(response) ? 'declined' : 'attending',
@@ -74,39 +79,21 @@ export const actions = {
 				confirmationToken: crypto.randomUUID()
 			});
 
-			if (result.promoted) {
-				await sendWaitlistPromotionEmail(
-					platform,
-					session,
-					result.promoted.participant,
-					result.promoted.attendee,
-					url.origin
-				);
-			}
-			if (!result.duplicate && result.status === 'registered') {
-				await sendRegistrationConfirmationEmail(
-					platform,
-					session,
-					result.participant,
-					attendee,
-					url.origin
-				);
-			} else if (!result.duplicate && result.status === 'waitlisted') {
-				await sendWaitlistConfirmationEmail(
-					platform,
-					session,
-					result.participant,
-					attendee,
-					url.origin
-				);
-			}
-
 			const publicStatus = result.duplicate
 				? 'duplicate'
 				: result.status === 'registered'
 					? 'success'
 					: result.status;
-			return redirect(303, statusRedirect(redirectTo, params.eventSlug, publicStatus));
+			return redirect(
+				303,
+				statusRedirect(
+					redirectTo,
+					params.eventSlug,
+					publicStatus,
+					result.status,
+					result.confirmationEmailFailed
+				)
+			);
 		} catch (error) {
 			if (error instanceof RsvpCapacityError) {
 				return fail(400, { name, email, error: error.message });

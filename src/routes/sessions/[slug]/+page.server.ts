@@ -1,3 +1,4 @@
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
@@ -17,7 +18,13 @@ import {
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { createThreadReply } from '$lib/server/thread-replies';
-import { canAcceptSessionRsvps, getCurrentUserSessionRsvp, setMemberRsvp } from '$lib/server/rsvp';
+import {
+	attendingCount,
+	canAcceptSessionRsvps,
+	canDeclineSessionRsvp,
+	getCurrentUserSessionRsvp,
+	setMemberRsvp
+} from '$lib/server/rsvp';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
@@ -30,7 +37,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	const session = await locals.db
 		.select()
 		.from(sessions)
-		.where(eq(sessions.slug, params.slug))
+		.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
 		.get();
 
 	if (!session) throw error(404, 'Session not found');
@@ -234,7 +241,9 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			| 'none',
 		relatedThreads: sessionThreads.filter(({ thread }) => thread.id !== primaryThread?.thread.id),
 		participants,
+		canDeclineRsvp: canDeclineSessionRsvp(session),
 		canRsvp: canAcceptSessionRsvps(session),
+		attendingCount: await attendingCount(locals.db, session.id),
 		currentUserRsvp: await getCurrentUserSessionRsvp(locals.db, session.id, locals.user.id),
 		subjectReaders: Object.fromEntries(subjectReaders),
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
@@ -254,7 +263,7 @@ export const actions: Actions = {
 		const session = await locals.db
 			.select()
 			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
+			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
 			.get();
 		if (!session) throw error(404, 'Session not found');
 
@@ -322,7 +331,7 @@ export const actions: Actions = {
 		const session = await locals.db
 			.select()
 			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
+			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
 			.get();
 		if (!session) throw error(404, 'Session not found');
 
@@ -382,7 +391,7 @@ export const actions: Actions = {
 		const session = await locals.db
 			.select()
 			.from(sessions)
-			.where(eq(sessions.slug, params.slug))
+			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
 			.get();
 		if (!session) throw error(404, 'Session not found');
 

@@ -19,13 +19,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	const session = await locals.db
 		.select({
 			id: sessions.id,
-			isPublic: sessions.isPublic
+			isPublic: sessions.isPublic,
+			status: sessions.status
 		})
 		.from(sessions)
 		.where(eq(sessions.id, params.id))
 		.get();
 
-	if (!session || !session.isPublic) {
+	if (!session || !session.isPublic || session.status === 'draft') {
 		throw error(404, 'Session not found');
 	}
 

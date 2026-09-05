@@ -92,6 +92,6 @@ export async function resolveSessionTheme(db: ORM, input: ResolveSessionThemeInp
 	const themeId = input.themeId?.trim();
 	if (!themeId) return { themeId: null, themeName: null };
 
-	const theme = await selectThemeForSession(db, themeId);
+	const theme = await db.select().from(themes).where(eq(themes.id, themeId)).get();
 	return theme ? { themeId: theme.id, themeName: theme.name } : { themeId: null, themeName: null };
 }

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sessions } from '$lib/server/db/schema';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import { canAcceptSessionRsvps } from '$lib/server/rsvp';
 
 const publicApiHeaders = {
@@ -33,21 +33,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 			locationName: sessions.locationName,
 			isPublic: sessions.isPublic,
 			rsvpSlug: sessions.rsvpSlug,
+			rsvpEnabled: sessions.rsvpEnabled,
 			astroPath: sessions.astroPath,
 			externalUrl: sessions.externalUrl,
 			createdAt: sessions.createdAt,
 			updatedAt: sessions.updatedAt
 		})
 		.from(sessions)
-		.where(eq(sessions.isPublic, true))
+		.where(and(eq(sessions.isPublic, true), ne(sessions.status, 'draft')))
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
 	return json(
 		rows.map((r) => {
-			const { rsvpSlug, ...session } = r;
+			const { rsvpSlug, rsvpEnabled, ...session } = r;
 			const acceptsRsvps = canAcceptSessionRsvps({
 				status: r.status,
+				rsvpEnabled,
 				startsAt: r.start,
 				timezone: r.timezone
 			});

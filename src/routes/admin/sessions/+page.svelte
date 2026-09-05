@@ -17,25 +17,23 @@
 	import { toast } from 'svelte-sonner';
 	import { formatDate } from '$lib/date-format';
 	import { supportedTimeZones } from '$lib/timezone-options';
-	import { onMount } from 'svelte';
+	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
 
 	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
 	let loading = $state(false);
 	let showCreateForm = $state(false);
+	let createStatus = $state('current');
 	let createThemeId = $state('');
 	let createTitleInput = $state<HTMLInputElement | null>(null);
-	let allTimezones = $state<string[]>([]);
-
-	onMount(() => {
-		allTimezones = supportedTimeZones('Atlantic/Bermuda', data.user?.timezone);
-	});
+	const allTimezones = $derived(supportedTimeZones('Atlantic/Bermuda', data.user?.timezone));
 
 	const availableThemes = $derived(
 		data.themes
 			.filter((theme) => theme.status !== 'archived')
 			.map((theme) => ({ id: theme.id, name: theme.name, status: theme.status }))
 	);
+	const createThemeRequired = $derived(createStatus === 'current' || createStatus === 'past');
 
 	async function toggleCreateForm() {
 		showCreateForm = !showCreateForm;
@@ -70,7 +68,8 @@
 			<Card.Header>
 				<Card.Title class="text-base">Create a New Session</Card.Title>
 				<Card.Description>
-					Sessions represent reading periods or book club meetings.
+					Create the next current session in one step, or save a private draft with just a title.
+					Upcoming sessions need a date. Add the theme when you are ready.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -81,17 +80,9 @@
 						loading = true;
 						return async ({ result, update }) => {
 							loading = false;
-							await update();
-							if (result.type === 'success') {
-								if (result.data?.created) {
-									toast.success('Session created!');
-									showCreateForm = false;
-									createThemeId = '';
-								}
-								if (result.data?.error) {
-									toast.error(String(result.data.error));
-								}
-							}
+							await update({ reset: result.type === 'success' });
+							if (result.type === 'failure' && result.data?.error)
+								toast.error(String(result.data.error));
 						};
 					}}
 					class="space-y-4"
@@ -102,7 +93,7 @@
 							<Input
 								id="create-title"
 								name="title"
-								placeholder="e.g. January 2025"
+								placeholder="e.g. October 2026"
 								bind:ref={createTitleInput}
 								required
 							/>
@@ -113,14 +104,22 @@
 						</div>
 						<div class="space-y-2">
 							<Label for="create-status">Status</Label>
-							<NativeSelect id="create-status" name="status" value="draft">
-								<NativeSelectOption value="draft">draft</NativeSelectOption>
-								<NativeSelectOption value="past">past</NativeSelectOption>
+							<NativeSelect id="create-status" name="status" bind:value={createStatus}>
+								<NativeSelectOption value="current">Current: feature on Home</NativeSelectOption>
+								<NativeSelectOption value="draft">Draft: private preparation</NativeSelectOption>
+								<NativeSelectOption value="scheduled">Upcoming: publish ahead</NativeSelectOption>
+								<NativeSelectOption value="past">Past: record a previous session</NativeSelectOption
+								>
 							</NativeSelect>
 						</div>
 						<div class="space-y-2">
 							<Label for="create-startsAt">Starts At</Label>
-							<Input id="create-startsAt" name="startsAt" type="datetime-local" />
+							<Input
+								id="create-startsAt"
+								name="startsAt"
+								type="datetime-local"
+								required={createStatus !== 'draft'}
+							/>
 						</div>
 						<div class="space-y-2">
 							<Label for="create-timezone">Timezone</Label>
@@ -143,7 +142,8 @@
 								id="create-themeId"
 								themes={availableThemes}
 								bind:selectedId={createThemeId}
-								label="Theme"
+								label={createThemeRequired ? 'Theme' : 'Theme (can be decided later)'}
+								required={createThemeRequired}
 							/>
 						</div>
 						<div class="space-y-2 sm:col-span-2">
@@ -151,7 +151,7 @@
 							<Textarea id="create-themeSummary" name="themeSummary" rows={2} />
 						</div>
 						<div class="space-y-2 sm:col-span-2">
-							<Label for="create-bodySource">Body</Label>
+							<Label for="create-bodySource">Session description</Label>
 							<Textarea id="create-bodySource" name="bodySource" rows={6} />
 						</div>
 						<div class="space-y-2">
@@ -168,6 +168,14 @@
 								value="12"
 							/>
 						</div>
+						<label class="flex items-center gap-2 text-sm"
+							><input
+								name="rsvpEnabled"
+								type="checkbox"
+								class="rounded border-input"
+								checked
+							/>Accept RSVPs once published, until the session starts</label
+						>
 						<label class="flex items-center gap-2 text-sm">
 							<input
 								name="rsvpWaitlistEnabled"
@@ -183,12 +191,18 @@
 						</div>
 						<label class="flex items-center gap-2 text-sm">
 							<input name="isPublic" type="checkbox" class="rounded border-input" checked />
-							Public
+							Show on the public site when published
 						</label>
 					</div>
 					<div class="flex items-center gap-2">
 						<Button type="submit" disabled={loading}>
-							{loading ? 'Creating…' : 'Create Session'}
+							{loading
+								? 'Creating…'
+								: createStatus === 'draft'
+									? 'Save Draft'
+									: createStatus === 'current'
+										? 'Create Current Session'
+										: 'Create Session'}
 						</Button>
 						<Button
 							type="button"
@@ -214,9 +228,9 @@
 							<div class="flex items-center gap-2">
 								<span class="font-medium">{session.title}</span>
 								<Badge variant={session.status === 'current' ? 'default' : 'secondary'}
-									>{session.status}</Badge
+									>{SESSION_STATUS_LABELS[session.status]}</Badge
 								>
-								{#if session.isPublic}
+								{#if session.isPublic && session.status !== 'draft'}
 									<Badge variant="outline">public</Badge>
 								{/if}
 								{#if session.themeTitle ?? session.theme}

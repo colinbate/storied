@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import type { SubmitFunction } from '@sveltejs/kit';
+	import SessionRsvp from '$lib/components/session-rsvp.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
@@ -12,38 +11,23 @@
 	import PinIcon from '@lucide/svelte/icons/pin';
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import CheckIcon from '@lucide/svelte/icons/check';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
-	import XIcon from '@lucide/svelte/icons/x';
 	import { resolve } from '$app/paths';
 	import { formatDate } from '$lib/date-format';
-	import { APP_NAME, APP_SUBTITLE, pageTitle } from '$shared/brand';
-	import { toast } from 'svelte-sonner';
+	import { APP_NAME, APP_SUBTITLE, PRIMARY_ORIGIN, pageTitle } from '$shared/brand';
+	import { createSessionCalendarLinks } from '$shared/session-calendar-links';
 	import MemberName from '$lib/components/member-name.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
-	let rsvping = $state(false);
-
-	const rsvpEnhance: SubmitFunction = () => {
-		rsvping = true;
-		return async ({ result, update }) => {
-			rsvping = false;
-			await update();
-			if (result.type === 'success') {
-				const status = result.data?.status;
-				toast.success(
-					status === 'declined'
-						? 'RSVP saved as declined.'
-						: status === 'waitlisted'
-							? 'The session is full, so you are on the waitlist.'
-							: 'RSVP saved.'
-				);
-			} else if (result.type === 'failure' && result.data?.error) {
-				toast.error(String(result.data.error));
-			}
-		};
-	};
+	const currentSessionCalendarLinks = $derived(
+		data.currentSession
+			? createSessionCalendarLinks(data.currentSession, {
+					detailsUrl: new URL(`/sessions/${data.currentSession.slug}`, PRIMARY_ORIGIN).toString(),
+					icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.currentSession.slug })
+				})
+			: []
+	);
 </script>
 
 <svelte:head>
@@ -66,7 +50,7 @@
 	{#if data.currentSession}
 		<section>
 			<Card.Root class="border-primary/40 bg-primary/5 transition-colors hover:border-primary">
-				<Card.Content class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<Card.Content class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 					<div class="min-w-0">
 						<div class="mb-2 flex flex-wrap items-center gap-2">
 							<Badge variant={data.currentSession.status === 'current' ? 'default' : 'secondary'}>
@@ -84,7 +68,7 @@
 								{data.currentSession.themeTitle ?? data.currentSession.theme}
 							</p>
 						{/if}
-						<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+						<div class="mt-3 flex flex-col gap-x-4 gap-y-2 text-sm text-muted-foreground">
 							{#if data.currentSession.startsAt}
 								<span class="inline-flex items-center gap-1">
 									<CalendarIcon class="h-4 w-4" />
@@ -104,64 +88,43 @@
 						</div>
 					</div>
 					<div class="mt-3 flex flex-col items-start gap-2 sm:mt-0 sm:items-end">
-						{#if data.user && data.canRsvpToCurrentSession}
-							<form
-								method="POST"
-								action="?/setSessionRsvp"
-								use:enhance={rsvpEnhance}
-								class="flex flex-col gap-2"
-							>
-								<input type="hidden" name="sessionSlug" value={data.currentSession.slug} />
+						<SessionRsvp
+							action="?/setSessionRsvp"
+							sessionSlug={data.currentSession.slug}
+							sessionStatus={data.currentSession.status}
+							status={data.currentSessionRsvp?.attendanceStatus ?? null}
+							canRsvp={data.canRsvpToCurrentSession}
+							canDecline={data.canDeclineCurrentSessionRsvp}
+							capacity={data.currentSession.rsvpCapacity}
+							attendingCount={data.currentSessionCapacity}
+							waitlistEnabled={data.currentSession.rsvpWaitlistEnabled}
+							calendarLinks={currentSessionCalendarLinks}
+						/>
+						<div class="flex gap-2">
+							{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
 								<Button
-									type="submit"
-									name="status"
-									value="registered"
-									variant={data.currentSessionRsvp?.attendanceStatus === 'attending' ||
-									data.currentSessionRsvp?.attendanceStatus === 'waitlisted'
-										? 'default'
-										: 'outline'}
-									disabled={rsvping}
+									variant="outline"
+									href={resolve('/admin/sessions/[slug]/attendees', {
+										slug: data.currentSession.slug
+									})}
 								>
-									<CheckIcon class="h-4 w-4" />
-									I'll be there!
+									View RSVPs ({data.currentSessionAttendingCount} attending)
 								</Button>
-								<Button
-									type="submit"
-									name="status"
-									value="declined"
-									variant={data.currentSessionRsvp?.attendanceStatus === 'declined'
-										? 'default'
-										: 'outline'}
-									disabled={rsvping}
-								>
-									<XIcon class="h-4 w-4" />
-									I can't make it
-								</Button>
-							</form>
-						{/if}
-						<Button
-							variant="outline"
-							href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })}
-						>
-							View Session
-						</Button>
-						{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
+							{/if}
 							<Button
 								variant="outline"
-								href={resolve('/admin/sessions/[slug]/attendees', {
-									slug: data.currentSession.slug
-								})}
+								href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })}
 							>
-								View RSVPs ({data.currentSessionAttendingCount} attending)
+								View Session
 							</Button>
-						{/if}
+						</div>
 					</div>
 				</Card.Content>
 			</Card.Root>
 		</section>
 	{/if}
 
-	{#if data.upcomingSession && data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
+	{#if data.upcomingSession}
 		<section class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
 			<div>
 				<p class="text-sm text-muted-foreground">Upcoming session</p>
@@ -170,12 +133,14 @@
 					class="font-medium hover:underline">{data.upcomingSession.title}</a
 				>
 			</div>
-			<Button
-				variant="outline"
-				href={resolve('/admin/sessions/[slug]/attendees', { slug: data.upcomingSession.slug })}
-			>
-				View RSVPs ({data.upcomingSessionAttendingCount} attending)
-			</Button>
+			{#if data.permissions.has('sessions:edit')}
+				<Button
+					variant="outline"
+					href={resolve('/admin/sessions/[slug]/attendees', { slug: data.upcomingSession.slug })}
+				>
+					View RSVPs ({data.upcomingSessionAttendingCount} attending)
+				</Button>
+			{/if}
 		</section>
 	{/if}
 

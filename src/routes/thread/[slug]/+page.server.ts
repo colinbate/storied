@@ -1,3 +1,4 @@
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
@@ -260,6 +261,7 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 		allSessions = await locals.db
 			.select({ id: sessions.id, title: sessions.title })
 			.from(sessions)
+			.where(sessionAccessCondition(locals))
 			.orderBy(asc(sessions.title))
 			.all();
 	}
@@ -485,11 +487,21 @@ export const actions: Actions = {
 		const sessionThreadRole = sessionId ? 'related' : null;
 		if (!threadId) return fail(400, { error: 'Missing thread ID.' });
 
+		if (sessionId) {
+			const session = await locals.db
+				.select({ id: sessions.id })
+				.from(sessions)
+				.where(and(eq(sessions.id, sessionId), sessionAccessCondition(locals)))
+				.get();
+			if (!session) return fail(404, { error: 'Session not found.' });
+		}
 		const now = new Date().toISOString();
-		await locals.db
+		const updated = await locals.db
 			.update(threads)
 			.set({ sessionId, sessionThreadRole, updatedAt: now })
-			.where(eq(threads.id, threadId));
+			.where(and(eq(threads.id, threadId), threadAccessCondition(locals.db, threadViewer(locals))))
+			.returning({ id: threads.id });
+		if (!updated.length) return fail(404, { error: 'Thread not found.' });
 
 		await locals.db.insert(moderationEvents).values({
 			id: newId(),

@@ -16,8 +16,10 @@
 	import { toast } from 'svelte-sonner';
 	import { pageTitle } from '$shared/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
+	import { formatDate } from '$lib/date-format';
 
 	let { data } = $props();
+	const timeZone = $derived(data.user?.timezone);
 	const statusOptions = [
 		'attending',
 		'attended',
@@ -78,6 +80,9 @@
 	}
 	function confirmationLabel(status: string) {
 		return status === 'waitlisted' ? 'Resend waitlist confirmation' : 'Resend RSVP confirmation';
+	}
+	function recordedLabel(source: string | null) {
+		return source === 'member' || source === 'public_form' ? 'RSVP received' : 'Record created';
 	}
 	function openRecordAction(kind: RecordAction, participantId: string) {
 		recordAction = { kind, participantId };
@@ -247,6 +252,14 @@
 											</div>
 											<p class="text-sm text-muted-foreground">
 												{row.participant.emailSnapshot ?? 'No email address'}
+											</p>
+											<p class="text-xs text-muted-foreground">
+												{recordedLabel(row.participant.rsvpSource)}
+												{formatDate(row.participant.createdAt, {
+													dateStyle: 'medium',
+													time: 'always',
+													timeZone
+												})}
 											</p>
 										</div>
 										<div class="flex items-center gap-2">

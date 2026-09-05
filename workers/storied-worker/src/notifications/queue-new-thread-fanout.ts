@@ -20,7 +20,8 @@ export async function handleNewThreadFanout(
 		        t.visibility, t.audience_group_id, c.name AS category_name
 		 FROM threads t
 		 INNER JOIN categories c ON c.id = t.category_id
-		 WHERE t.id = ? AND t.deleted_at IS NULL`
+		 WHERE t.id = ? AND t.deleted_at IS NULL
+ AND NOT EXISTS (SELECT 1 FROM sessions se WHERE se.id = t.session_id AND se.status = 'draft')`
 	)
 		.bind(threadId)
 		.first<{

@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite dev --port 5999",
 		"build": "vite build",
+		"test": "node --import ./tests/register.mjs --test tests/*.test.mjs",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -52,6 +53,7 @@
 		"@types/sanitize-html": "^2.16.1",
 		"bits-ui": "^2.17.3",
 		"clsx": "^2.1.1",
+		"ics": "^3.12.0",
 		"marked": "^18.0.0",
 		"mode-watcher": "^1.1.0",
 		"nanoid": "^5.1.9",

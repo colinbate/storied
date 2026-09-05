@@ -20,6 +20,7 @@ const POST_PREVIEW_CHARS = 200;
 // Moderators may open any group thread, but group notifications remain limited
 // to actual group members so moderation access does not create extra noise.
 const DIGEST_THREAD_ACCESS_SQL = `
+ AND NOT EXISTS (SELECT 1 FROM sessions se WHERE se.id = t.session_id AND se.status = 'draft')
 	AND (
 		t.visibility <> 'admins'
 		OR EXISTS (

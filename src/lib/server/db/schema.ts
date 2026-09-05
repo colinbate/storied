@@ -13,7 +13,8 @@ import { sql } from 'drizzle-orm';
 // Helper for ISO-8601 timestamp default.
 const timestampDefault = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 export type SubjectType = 'book' | 'series' | 'author';
-export type SessionStatus = 'draft' | 'current' | 'past';
+import type { SessionStatus } from '$shared/session-lifecycle';
+export type { SessionStatus } from '$shared/session-lifecycle';
 export type SessionThreadRole = 'primary' | 'related';
 export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 export type SessionAttendanceStatus =
@@ -305,6 +306,7 @@ export const sessions = sqliteTable(
 		locationName: text('location_name'),
 		rsvpSlug: text('rsvp_slug'),
 		rsvpCapacity: integer('rsvp_capacity').notNull().default(12),
+		rsvpEnabled: integer('rsvp_enabled', { mode: 'boolean' }).notNull().default(true),
 		rsvpWaitlistEnabled: integer('rsvp_waitlist_enabled', { mode: 'boolean' })
 			.notNull()
 			.default(true),
@@ -319,6 +321,9 @@ export const sessions = sqliteTable(
 		index('idx_sessions_status_starts_at').on(table.status, table.startsAt),
 		index('idx_sessions_is_public_starts_at').on(table.isPublic, table.startsAt),
 		uniqueIndex('sessions_rsvp_slug_unique').on(table.rsvpSlug),
+		uniqueIndex('sessions_one_current')
+			.on(table.status)
+			.where(sql`${table.status} = 'current'`),
 		index('idx_sessions_theme_id').on(table.themeId)
 	]
 );

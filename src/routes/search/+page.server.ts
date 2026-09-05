@@ -1,3 +1,4 @@
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { searchSessions, searchSubjects, searchThreads } from '$shared/search';
@@ -39,7 +40,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const [threadResults, sessionResults, subjectResults] = await Promise.all([
 		loadThreadResults(locals.db, threadCandidates, threadViewer(locals)),
-		loadSessionResults(locals.db, sessionCandidates),
+		loadSessionResults(locals, sessionCandidates),
 		loadSubjectResults(locals.db, subjectCandidates)
 	]);
 
@@ -140,15 +141,16 @@ async function loadThreadResults(
 	}));
 }
 
-async function loadSessionResults(
-	db: App.Locals['db'],
-	candidates: { id: string; rank: number }[]
-) {
+async function loadSessionResults(locals: App.Locals, candidates: { id: string; rank: number }[]) {
 	if (candidates.length === 0) return [];
 
 	const rankById = new Map(candidates.map((candidate, index) => [candidate.id, index]));
 	const ids = candidates.map((candidate) => candidate.id);
-	const rows = await db.select().from(sessions).where(inArray(sessions.id, ids)).all();
+	const rows = await locals.db
+		.select()
+		.from(sessions)
+		.where(and(inArray(sessions.id, ids), sessionAccessCondition(locals)))
+		.all();
 
 	return rows.sort((a, b) => (rankById.get(a.id) ?? Infinity) - (rankById.get(b.id) ?? Infinity));
 }

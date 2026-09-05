@@ -42,7 +42,8 @@ export async function handleThreadReplyFanout(
 
 	const thread = await env.DB.prepare(
 		`SELECT id, slug, title, visibility, audience_group_id
-		 FROM threads WHERE id = ? AND deleted_at IS NULL`
+		 FROM threads WHERE id = ? AND deleted_at IS NULL
+ AND NOT EXISTS (SELECT 1 FROM sessions se WHERE se.id = threads.session_id AND se.status = 'draft')`
 	)
 		.bind(threadId)
 		.first<{

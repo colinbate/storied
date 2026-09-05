@@ -11,7 +11,7 @@ import {
 	sessionSubjects,
 	users
 } from '$lib/server/db/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { newId } from '$lib/server/ids';
 import { ensureSubjectSource } from '$lib/server/subject-sources';
@@ -27,12 +27,13 @@ import {
 	getParticipantForAttendee,
 	getSessionRsvpSlug
 } from '$lib/server/rsvp';
+import { changeSessionStatus, selectThemeStatement } from '$lib/server/session-lifecycle';
+import { isSessionStatus, sessionPublicationError } from '$shared/session-lifecycle';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
 type SubjectKind = 'book' | 'series' | 'author';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 
-const sessionStatuses = new Set(['draft', 'current', 'past']);
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
 const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
 
@@ -283,15 +284,18 @@ export const actions: Actions = {
 		if (!isValidTimezone(timezone)) {
 			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
 		}
-		if (!startsAt) {
-			return fail(400, { error: 'Starts At is required for a session.' });
-		}
 		const sessionTheme = await resolveSessionTheme(locals.db, {
 			themeId: getOptionalString(data, 'themeId')
 		});
-		if (!sessionTheme.themeId || !sessionTheme.themeName) {
-			return fail(400, { error: 'Choose a theme from the library before saving the session.' });
-		}
+		if (getOptionalString(data, 'themeId') && !sessionTheme.themeId)
+			return fail(400, { error: 'Choose an existing theme.' });
+		const publicationError = sessionPublicationError({
+			status: row.status,
+			startsAt,
+			timezone,
+			themeId: sessionTheme.themeId
+		});
+		if (publicationError) return fail(400, { error: publicationError });
 		const themeTitle = sessionTheme.themeName;
 		const updatedSession = {
 			...row,
@@ -311,6 +315,7 @@ export const actions: Actions = {
 				1,
 				Number.parseInt(data.get('rsvpCapacity')?.toString() ?? '12', 10) || 12
 			),
+			rsvpEnabled: data.get('rsvpEnabled') === 'on',
 			rsvpWaitlistEnabled: data.get('rsvpWaitlistEnabled') === 'on',
 			isPublic: data.get('isPublic') === 'on',
 			astroPath: getOptionalString(data, 'astroPath'),
@@ -318,7 +323,7 @@ export const actions: Actions = {
 			updatedAt: new Date().toISOString()
 		};
 
-		await locals.db
+		const update = locals.db
 			.update(sessions)
 			.set({
 				title: updatedSession.title,
@@ -334,13 +339,33 @@ export const actions: Actions = {
 				locationName: updatedSession.locationName,
 				rsvpSlug: updatedSession.rsvpSlug,
 				rsvpCapacity: updatedSession.rsvpCapacity,
+				rsvpEnabled: updatedSession.rsvpEnabled,
 				rsvpWaitlistEnabled: updatedSession.rsvpWaitlistEnabled,
 				isPublic: updatedSession.isPublic,
 				astroPath: updatedSession.astroPath,
+				externalUrl: updatedSession.externalUrl,
 				updatedAt: updatedSession.updatedAt
 			})
-			.where(eq(sessions.id, row.id));
+			.where(and(eq(sessions.id, row.id), eq(sessions.updatedAt, row.updatedAt)))
+			.returning({ id: sessions.id });
 
+		const saved =
+			updatedSession.status !== 'draft' && updatedSession.themeId
+				? (
+						await locals.db.batch([
+							selectThemeStatement(
+								locals.db,
+								updatedSession.themeId,
+								sql`EXISTS (SELECT 1 FROM sessions target WHERE target.id = ${row.id} AND target.updated_at = ${row.updatedAt})`
+							),
+							update
+						])
+					)[1]
+				: (await locals.db.batch([update]))[0];
+		if (!saved.length)
+			return fail(409, {
+				error: 'This session changed while you were saving. Reload the page and try again.'
+			});
 		return { updated: true };
 	},
 
@@ -355,39 +380,13 @@ export const actions: Actions = {
 		if (staleFailure) return staleFailure;
 
 		const requestedStatus = data.get('status')?.toString();
-		if (!sessionStatuses.has(requestedStatus ?? '')) {
+		if (!isSessionStatus(requestedStatus))
 			return fail(400, { error: 'Choose a valid session status.' });
-		}
-		const status = requestedStatus as 'draft' | 'current' | 'past';
-
-		const allSessions =
-			status === 'current' ? await locals.db.select().from(sessions).all() : [row];
-		const statusChanges = allSessions
-			.map((session) => {
-				if (session.id === row.id) return { session, status };
-				const isEarlier = !!row.startsAt && !!session.startsAt && session.startsAt < row.startsAt;
-				if (session.status === 'current' || (isEarlier && session.status !== 'past')) {
-					return { session, status: 'past' as const };
-				}
-				return null;
-			})
-			.filter((change): change is NonNullable<typeof change> => change !== null)
-			.filter((change) => change.session.status !== change.status);
-
-		if (statusChanges.length === 0) {
-			return { statusUpdated: true, promotedPreviousCount: 0 };
-		}
-
-		const updatedAt = new Date().toISOString();
-		const statusUpdates = statusChanges.map((change) =>
-			locals.db
-				.update(sessions)
-				.set({ status: change.status, updatedAt })
-				.where(eq(sessions.id, change.session.id))
-		);
-		await locals.db.batch(
-			statusUpdates as [(typeof statusUpdates)[number], ...(typeof statusUpdates)[number][]]
-		);
+		const status = requestedStatus;
+		const publicationError = sessionPublicationError({ ...row, status });
+		if (publicationError) return fail(400, { error: publicationError });
+		const result = await changeSessionStatus(locals.db, row, status);
+		if (result.error) return fail(409, { error: result.error });
 
 		if (row.status !== 'current' && status === 'current') {
 			const primaryThread = await getPrimaryThreadForSession(locals.db, row.id);
@@ -398,9 +397,8 @@ export const actions: Actions = {
 
 		return {
 			statusUpdated: true,
-			promotedPreviousCount: statusChanges.filter(
-				(change) => change.session.id !== row.id && change.status === 'past'
-			).length
+			previousPastCount: result.previousPastCount,
+			previousUpcomingCount: result.previousUpcomingCount
 		};
 	},
 

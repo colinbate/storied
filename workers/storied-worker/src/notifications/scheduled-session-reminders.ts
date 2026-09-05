@@ -16,6 +16,7 @@ interface ReminderSession {
 	timezone: string;
 	location_name: string | null;
 	astro_path: string | null;
+	is_public: number;
 }
 
 interface ReminderRecipient {
@@ -24,6 +25,7 @@ interface ReminderRecipient {
 	attendee_name: string;
 	email: string;
 	confirmation_token: string | null;
+	user_id: string | null;
 }
 
 function escapeHtml(value: string): string {
@@ -48,7 +50,9 @@ export function formatSessionDate(
 	return formatSessionDateInTimeZone(session.starts_at, session.timezone);
 }
 
-function publicSessionUrl(session: ReminderSession): string {
+function publicSessionUrl(session: ReminderSession, recipient: ReminderRecipient): string {
+	if (recipient.user_id || !session.is_public)
+		return new URL(`/sessions/${session.slug}`, PRIMARY_ORIGIN).toString();
 	return new URL(
 		session.astro_path?.trim() || `/sessions/${session.slug}`,
 		PUBLIC_ORIGIN
@@ -63,7 +67,7 @@ function cancellationUrl(recipient: ReminderRecipient): string | null {
 
 function renderReminderEmail(session: ReminderSession, recipient: ReminderRecipient) {
 	const when = formatSessionDate(session);
-	const sessionUrl = publicSessionUrl(session);
+	const sessionUrl = publicSessionUrl(session, recipient);
 	const cancelUrl = cancellationUrl(recipient);
 	const locationLine = session.location_name ? `\nLocation: ${session.location_name}` : '';
 	const cancelLine = cancelUrl ? `\n\nCan’t make it? Cancel your registration: ${cancelUrl}` : '';
@@ -81,11 +85,11 @@ function renderReminderEmail(session: ReminderSession, recipient: ReminderRecipi
 	};
 }
 
-async function selectCurrentSessions(env: Env): Promise<ReminderSession[]> {
+async function selectPublishedSessions(env: Env): Promise<ReminderSession[]> {
 	const result = await env.DB.prepare(
-		`SELECT id, slug, title, starts_at, timezone, location_name, astro_path
+		`SELECT id, slug, title, starts_at, timezone, location_name, astro_path, is_public
 		   FROM sessions
-		  WHERE status = 'current' AND starts_at IS NOT NULL`
+		  WHERE status IN ('current', 'scheduled') AND starts_at IS NOT NULL`
 	).all<ReminderSession>();
 	return result.results ?? [];
 }
@@ -99,6 +103,7 @@ async function selectAttendingRecipients(
 		        attendee.id AS attendee_id,
 		        attendee.name AS attendee_name,
 		        attendee.email AS email,
+		        attendee.user_id AS user_id,
 		        participant.confirmation_token AS confirmation_token
 		   FROM session_participants participant
 		   INNER JOIN attendee_identities attendee ON attendee.id = participant.attendee_id
@@ -172,7 +177,7 @@ async function sendReminder(
 export async function runSessionReminders({ env }: HandlerContext): Promise<void> {
 	const now = new Date();
 	const nowIso = now.toISOString();
-	const sessions = (await selectCurrentSessions(env)).filter((session) =>
+	const sessions = (await selectPublishedSessions(env)).filter((session) =>
 		sessionOccursTomorrow(session, now)
 	);
 	console.log(`[SESSION REMINDER] ${sessions.length} session(s) occur tomorrow at ${nowIso}.`);

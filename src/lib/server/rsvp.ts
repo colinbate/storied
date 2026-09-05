@@ -1,5 +1,5 @@
 import { fail, type ActionFailure } from '@sveltejs/kit';
-import { and, asc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
 import {
 	attendeeIdentities,
 	sessionParticipants,
@@ -10,9 +10,19 @@ import {
 } from '$lib/server/db/schema';
 import type { ORM } from '$lib/server/db';
 import { newId } from '$lib/server/ids';
-import { DEFAULT_TIMEZONE, isOffsetlessDateTime, zonedDateTimeToDate } from '$lib/timezone';
+import { canAcceptSessionRsvps, canDeclineSessionRsvp } from '$shared/session-lifecycle';
+export {
+	canAcceptSessionRsvps,
+	canDeclineSessionRsvp,
+	isFutureSession,
+	sessionStartDate
+} from '$shared/session-lifecycle';
 import { PRIMARY_ORIGIN } from '$shared/brand';
-import { sendWaitlistPromotionEmail } from '$lib/server/rsvp-email';
+import {
+	sendWaitlistPromotionEmail,
+	sendRegistrationConfirmationEmail,
+	sendWaitlistConfirmationEmail
+} from '$lib/server/rsvp-email';
 
 type StoriedSession = typeof sessions.$inferSelect;
 type StoriedUser = typeof users.$inferSelect;
@@ -44,33 +54,6 @@ export function isValidRsvpEmail(email: string) {
 
 export function getSessionRsvpSlug(session: Pick<StoriedSession, 'slug' | 'rsvpSlug'>) {
 	return session.rsvpSlug?.trim() || session.slug;
-}
-
-export function sessionStartDate(
-	session: Pick<StoriedSession, 'startsAt'> & Partial<Pick<StoriedSession, 'timezone'>>
-) {
-	if (!session.startsAt) return null;
-	if (isOffsetlessDateTime(session.startsAt)) {
-		return zonedDateTimeToDate(session.startsAt, session.timezone ?? DEFAULT_TIMEZONE);
-	}
-	const startsAt = new Date(session.startsAt);
-	return Number.isFinite(startsAt.valueOf()) ? startsAt : null;
-}
-
-export function isFutureSession(
-	session: Pick<StoriedSession, 'startsAt'> & Partial<Pick<StoriedSession, 'timezone'>>,
-	now = new Date()
-) {
-	const startsAt = sessionStartDate(session);
-	return startsAt !== null && startsAt > now;
-}
-
-/** RSVP availability follows the existing current-to-past session transition automatically. */
-export function canAcceptSessionRsvps(
-	session: Pick<StoriedSession, 'status' | 'startsAt'> & Partial<Pick<StoriedSession, 'timezone'>>,
-	now = new Date()
-) {
-	return session.status === 'current' && isFutureSession(session, now);
 }
 
 export async function getSessionByRsvpSlug(db: ORM, slug: string) {
@@ -209,8 +192,7 @@ export async function setAttendeeRsvp({
 	response,
 	source,
 	confirmationToken,
-	note,
-	duplicateIsSuccess = false
+	note
 }: {
 	db: ORM;
 	session: StoriedSession;
@@ -219,16 +201,23 @@ export async function setAttendeeRsvp({
 	source: SessionParticipantSource;
 	confirmationToken?: string | null;
 	note?: string | null;
-	duplicateIsSuccess?: boolean;
 }): Promise<RsvpMutationResult> {
-	const existing = await getParticipantForAttendee(db, session.id, attendee.id);
+	let existing = await getParticipantForAttendee(db, session.id, attendee.id);
+	if (existing && !existing.confirmationToken) {
+		existing = await db
+			.update(sessionParticipants)
+			.set({ confirmationToken: crypto.randomUUID() })
+			.where(eq(sessionParticipants.id, existing.id))
+			.returning()
+			.get();
+	}
 	const activeStatuses: SessionAttendanceStatus[] = ['attending', 'waitlisted', 'attended'];
 
 	if (response === 'attending' && existing && activeStatuses.includes(existing.attendanceStatus)) {
 		return {
 			participant: existing,
 			status: existing.attendanceStatus === 'waitlisted' ? 'waitlisted' : 'registered',
-			duplicate: !duplicateIsSuccess,
+			duplicate: true,
 			promoted: null
 		};
 	}
@@ -247,7 +236,7 @@ export async function setAttendeeRsvp({
 
 	const wasAttending = existing?.attendanceStatus === 'attending';
 	const now = new Date().toISOString();
-	const token = existing?.confirmationToken ?? confirmationToken ?? null;
+	const token = existing?.confirmationToken ?? confirmationToken ?? crypto.randomUUID();
 	const values = {
 		nameSnapshot: attendee.name,
 		emailSnapshot: attendee.email,
@@ -415,6 +404,51 @@ export async function cancelParticipantByToken(db: ORM, token: string) {
 	return { ...row, participant, alreadyCancelled: false, promoted };
 }
 
+/** Both member and public submissions share confirmation and promotion delivery. */
+export async function submitSessionRsvp(
+	args: Parameters<typeof setAttendeeRsvp>[0] & {
+		platform: App.Platform | undefined;
+		baseUrl: string;
+	}
+) {
+	if (
+		!(args.response === 'declined'
+			? canDeclineSessionRsvp(args.session)
+			: canAcceptSessionRsvps(args.session))
+	)
+		throw new Error('This session is not accepting RSVPs.');
+	const result = await setAttendeeRsvp(args);
+	let confirmationEmailFailed = false;
+	try {
+		if (result.promoted)
+			await sendWaitlistPromotionEmail(
+				args.platform,
+				args.session,
+				result.promoted.participant,
+				result.promoted.attendee,
+				args.baseUrl
+			);
+		if (!result.duplicate && result.status !== 'declined') {
+			const send =
+				result.status === 'waitlisted'
+					? sendWaitlistConfirmationEmail
+					: sendRegistrationConfirmationEmail;
+			const delivery = await send(
+				args.platform,
+				args.session,
+				result.participant,
+				args.attendee,
+				args.baseUrl
+			);
+			confirmationEmailFailed = !delivery.success;
+		}
+	} catch (error) {
+		console.error('RSVP email delivery failed', error);
+		confirmationEmailFailed = true;
+	}
+	return { ...result, confirmationEmailFailed };
+}
+
 export async function setMemberRsvp({
 	db,
 	platform,
@@ -427,33 +461,27 @@ export async function setMemberRsvp({
 	user: StoriedUser;
 	session: StoriedSession;
 	status: 'registered' | 'declined';
-}): Promise<{ status: RsvpResponseStatus } | ActionFailure<{ error: string }>> {
-	if (!canAcceptSessionRsvps(session)) {
-		return fail(400, { error: 'RSVPs are only available for the current upcoming session.' });
+}): Promise<
+	| { status: RsvpResponseStatus; confirmationEmailFailed: boolean }
+	| ActionFailure<{ error: string }>
+> {
+	if (!(status === 'declined' ? canDeclineSessionRsvp(session) : canAcceptSessionRsvps(session))) {
+		return fail(400, { error: 'This session is not currently accepting RSVPs.' });
 	}
 
 	try {
 		const attendee = await getOrCreateMemberAttendee(db, user);
-		const result = await setAttendeeRsvp({
+		const result = await submitSessionRsvp({
 			db,
+			platform,
+			baseUrl: PRIMARY_ORIGIN,
 			session,
 			attendee,
 			response: status === 'registered' ? 'attending' : 'declined',
-			source: 'member',
-			duplicateIsSuccess: true
+			source: 'member'
 		});
 
-		if (result.promoted?.attendee.email) {
-			await sendWaitlistPromotionEmail(
-				platform,
-				session,
-				result.promoted.participant,
-				result.promoted.attendee,
-				PRIMARY_ORIGIN
-			);
-		}
-
-		return { status: result.status };
+		return { status: result.status, confirmationEmailFailed: result.confirmationEmailFailed };
 	} catch (error) {
 		if (error instanceof RsvpIdentityConflictError || error instanceof RsvpCapacityError) {
 			return fail(409, { error: error.message });
@@ -467,7 +495,22 @@ export async function getCurrentUserSessionRsvp(db: ORM, sessionId: string, user
 		.select({ participant: sessionParticipants })
 		.from(sessionParticipants)
 		.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
-		.where(and(eq(sessionParticipants.sessionId, sessionId), eq(attendeeIdentities.userId, userId)))
+		.where(
+			and(
+				eq(sessionParticipants.sessionId, sessionId),
+				or(
+					eq(attendeeIdentities.userId, userId),
+					and(
+						isNull(attendeeIdentities.userId),
+						eq(
+							attendeeIdentities.emailNormalized,
+							sql`(SELECT lower(trim(email)) FROM users WHERE id = ${userId})`
+						)
+					)
+				)
+			)
+		)
+		.orderBy(sql`CASE WHEN ${attendeeIdentities.userId} = ${userId} THEN 0 ELSE 1 END`)
 		.get();
 	return row?.participant ?? null;
 }

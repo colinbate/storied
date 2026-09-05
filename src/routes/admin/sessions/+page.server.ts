@@ -1,12 +1,14 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { sessions, subscriptions } from '$lib/server/db/schema';
+import { sessions } from '$lib/server/db/schema';
 import { desc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
 import { renderMarkdown } from '$lib/server/markdown';
-import { createPrimarySessionThread } from '$lib/server/discussions';
+import { subscribeActiveMembersToSessionThread } from '$lib/server/discussions';
+import { createClubSession } from '$lib/server/session-lifecycle';
+import { isSessionStatus, sessionPublicationError } from '$shared/session-lifecycle';
 import {
 	DEFAULT_TIMEZONE,
 	getOrCreateNotificationPreferences,
@@ -14,15 +16,8 @@ import {
 } from '$lib/server/notification-preferences';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
 
-const sessionStatuses = new Set(['draft', 'current', 'past']);
-
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
-}
-
-function getSessionStatus(data: FormData) {
-	const status = data.get('status')?.toString();
-	return sessionStatuses.has(status ?? '') ? (status as 'draft' | 'current' | 'past') : 'draft';
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -50,26 +45,40 @@ export const actions: Actions = {
 
 		const slug = slugify(getOptionalString(data, 'slug') ?? title);
 		const rsvpSlug = getOptionalString(data, 'rsvpSlug') ?? slug;
-		const status = getSessionStatus(data);
-		if (status === 'current') {
-			return fail(400, {
-				error: 'Create the session as a draft, then promote it from its session page.'
-			});
-		}
+		const status = data.get('status')?.toString() ?? 'draft';
+		if (!isSessionStatus(status)) return fail(400, { error: 'Choose a valid session status.' });
+		if (!slug) return fail(400, { error: 'Enter a title or slug containing letters or numbers.' });
+		const existing = await locals.db
+			.select({ slug: sessions.slug, rsvpSlug: sessions.rsvpSlug })
+			.from(sessions)
+			.all();
+		if (
+			existing.some(
+				(item) =>
+					item.slug === slug ||
+					item.rsvpSlug === rsvpSlug ||
+					item.slug === rsvpSlug ||
+					item.rsvpSlug === slug
+			)
+		)
+			return fail(400, { error: 'That session or RSVP slug is already in use.' });
 		const startsAt = getOptionalString(data, 'startsAt');
 		const timezone = getOptionalString(data, 'timezone') ?? DEFAULT_TIMEZONE;
 		if (!isValidTimezone(timezone)) {
 			return fail(400, { error: 'Timezone must be a valid IANA timezone.' });
 		}
-		if (!startsAt) {
-			return fail(400, { error: 'Starts At is required to create a session.' });
-		}
 		const sessionTheme = await resolveSessionTheme(locals.db, {
 			themeId: getOptionalString(data, 'themeId')
 		});
-		if (!sessionTheme.themeId || !sessionTheme.themeName) {
-			return fail(400, { error: 'Choose a theme from the library before creating the session.' });
-		}
+		if (getOptionalString(data, 'themeId') && !sessionTheme.themeId)
+			return fail(400, { error: 'Choose an existing theme.' });
+		const publicationError = sessionPublicationError({
+			status,
+			startsAt,
+			timezone,
+			themeId: sessionTheme.themeId
+		});
+		if (publicationError) return fail(400, { error: publicationError });
 		const themeTitle = sessionTheme.themeName;
 		const sessionId = newId();
 		const newSession = {
@@ -92,30 +101,22 @@ export const actions: Actions = {
 				1,
 				Number.parseInt(data.get('rsvpCapacity')?.toString() ?? '12', 10) || 12
 			),
+			rsvpEnabled: data.get('rsvpEnabled') === 'on',
 			rsvpWaitlistEnabled: data.get('rsvpWaitlistEnabled') === 'on',
 			isPublic: data.get('isPublic') === 'on',
 			astroPath: getOptionalString(data, 'astroPath'),
 			externalUrl: getOptionalString(data, 'externalUrl')
 		};
 
-		await locals.db.insert(sessions).values(newSession);
-
-		const primaryThread = await createPrimarySessionThread({
-			db: locals.db,
-			session: { id: sessionId, title, themeTitle },
-			authorUserId: locals.user!.id
-		});
-
 		const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user!.id);
-		if (prefs.autoSubscribeOwn) {
-			await locals.db.insert(subscriptions).values({
-				id: newId(),
-				userId: locals.user!.id,
-				threadId: primaryThread.id,
-				mode: prefs.defaultSubMode
-			});
-		}
-		return { created: true };
+		const { threadId } = await createClubSession(
+			locals.db,
+			newSession,
+			locals.user!.id,
+			prefs.autoSubscribeOwn ? prefs.defaultSubMode : null
+		);
+		if (status === 'current') await subscribeActiveMembersToSessionThread(locals.db, threadId);
+		throw redirect(303, `/admin/sessions/${slug}`);
 	},
 
 	createTheme: async ({ request, locals }) => {
