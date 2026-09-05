@@ -7,7 +7,12 @@ import {
 	type ThreadListSqlRow,
 	SESSION_DISCUSSIONS_CATEGORY_ID
 } from '$lib/server/discussions';
-import { canAcceptSessionRsvps, getCurrentUserSessionRsvp, setMemberRsvp } from '$lib/server/rsvp';
+import {
+	attendingCount,
+	canAcceptSessionRsvps,
+	getCurrentUserSessionRsvp,
+	setMemberRsvp
+} from '$lib/server/rsvp';
 import {
 	threadAccessBindings,
 	threadAccessCondition,
@@ -105,6 +110,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 		currentSessions.find((session) => session.status === 'current') ??
 		currentSessions.find((session) => session.status === 'draft') ??
 		null;
+	const canManageSessions =
+		locals.permissions.has('admin:view') && locals.permissions.has('sessions:edit');
+	const upcomingSession = canManageSessions
+		? currentSessions.find(
+				(session) =>
+					session.id !== featuredSession?.id &&
+					(session.status === 'current' || session.status === 'draft') &&
+					session.startsAt !== null &&
+					new Date(session.startsAt).getTime() > Date.now()
+			)
+		: null;
+	const [currentSessionAttendingCount, upcomingSessionAttendingCount] = await Promise.all([
+		canManageSessions && featuredSession ? attendingCount(locals.db, featuredSession.id) : null,
+		upcomingSession ? attendingCount(locals.db, upcomingSession.id) : null
+	]);
 
 	const { results: featuredDiscussionRows = [] } = featuredSession
 		? await locals.db.$client
@@ -168,6 +188,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		categories: allCategories,
 		recentThreads,
 		currentSession: featuredSession,
+		currentSessionAttendingCount,
+		upcomingSession: upcomingSession
+			? { title: upcomingSession.title, slug: upcomingSession.slug }
+			: null,
+		upcomingSessionAttendingCount,
 		canRsvpToCurrentSession: featuredSession ? canAcceptSessionRsvps(featuredSession) : false,
 		currentSessionRsvp:
 			featuredSession && locals.user

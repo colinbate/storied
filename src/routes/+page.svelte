@@ -145,9 +145,37 @@
 						>
 							View Session
 						</Button>
+						{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
+							<Button
+								variant="outline"
+								href={resolve('/admin/sessions/[slug]/attendees', {
+									slug: data.currentSession.slug
+								})}
+							>
+								View RSVPs ({data.currentSessionAttendingCount} attending)
+							</Button>
+						{/if}
 					</div>
 				</Card.Content>
 			</Card.Root>
+		</section>
+	{/if}
+
+	{#if data.upcomingSession && data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
+		<section class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+			<div>
+				<p class="text-sm text-muted-foreground">Upcoming session</p>
+				<a
+					href={resolve('/sessions/[slug]', { slug: data.upcomingSession.slug })}
+					class="font-medium hover:underline">{data.upcomingSession.title}</a
+				>
+			</div>
+			<Button
+				variant="outline"
+				href={resolve('/admin/sessions/[slug]/attendees', { slug: data.upcomingSession.slug })}
+			>
+				View RSVPs ({data.upcomingSessionAttendingCount} attending)
+			</Button>
 		</section>
 	{/if}
 

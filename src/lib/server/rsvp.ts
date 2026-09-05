@@ -181,7 +181,7 @@ export async function getParticipantForAttendee(db: ORM, sessionId: string, atte
 		.get();
 }
 
-async function attendingCount(db: ORM, sessionId: string) {
+export async function attendingCount(db: ORM, sessionId: string) {
 	const row = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(sessionParticipants)

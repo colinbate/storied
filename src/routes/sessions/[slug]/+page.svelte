@@ -181,6 +181,14 @@
 		{#if data.session.themeSummary}
 			<p class="max-w-3xl text-base leading-7">{data.session.themeSummary}</p>
 		{/if}
+		{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
+			<Button
+				variant="outline"
+				href={resolve('/admin/sessions/[slug]', { slug: data.session.slug })}
+			>
+				Manage Session
+			</Button>
+		{/if}
 		{#if data.canRsvp}
 			<form
 				method="POST"
