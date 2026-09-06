@@ -33,6 +33,8 @@ export type SessionReadingStatus =
 	| 'finished'
 	| 'did_not_finish';
 export type SessionReminderDeliveryStatus = 'sending' | 'sent' | 'failed';
+export type SessionMessageKind = 'custom' | 'update' | 'cancellation';
+export type SessionMessageDeliveryStatus = 'sending' | 'sent' | 'failed';
 export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 
 // ──────────────────────────────────────────────
@@ -1066,5 +1068,63 @@ export const sessionReadingChoices = sqliteTable(
 		primaryKey({ columns: [table.sessionId, table.attendeeId, table.bookId] }),
 		index('idx_session_reading_choices_session_book').on(table.sessionId, table.bookId),
 		index('idx_session_reading_choices_attendee').on(table.attendeeId, table.createdAt)
+	]
+);
+
+// ──────────────────────────────────────────────
+// session_messages  (emails sent to a session's attendees, with delivery audit)
+// ──────────────────────────────────────────────
+export const sessionMessages = sqliteTable(
+	'session_messages',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		senderUserId: text('sender_user_id').references(() => users.id, { onDelete: 'set null' }),
+		kind: text('kind').notNull().default('custom').$type<SessionMessageKind>(),
+		/** Comma-separated audience keys, see shared/session-messages.ts. */
+		audiences: text('audiences').notNull(),
+		subject: text('subject').notNull(),
+		bodySource: text('body_source').notNull(),
+		bodyHtml: text('body_html').notNull(),
+		recipientCount: integer('recipient_count').notNull().default(0),
+		sentCount: integer('sent_count').notNull().default(0),
+		failedCount: integer('failed_count').notNull().default(0),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_session_messages_session_created').on(table.sessionId, table.createdAt)]
+);
+
+export const sessionMessageDeliveries = sqliteTable(
+	'session_message_deliveries',
+	{
+		id: text('id').primaryKey(),
+		messageId: text('message_id')
+			.notNull()
+			.references(() => sessionMessages.id, { onDelete: 'cascade' }),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		// Snapshot rather than a foreign key so the audit survives identity reconciliation.
+		attendeeId: text('attendee_id').notNull(),
+		recipientName: text('recipient_name').notNull(),
+		recipientEmail: text('recipient_email').notNull(),
+		audience: text('audience').notNull(),
+		status: text('status').notNull().default('sending').$type<SessionMessageDeliveryStatus>(),
+		failureReason: text('failure_reason'),
+		attemptCount: integer('attempt_count').notNull().default(0),
+		attemptedAt: text('attempted_at'),
+		sentAt: text('sent_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('session_message_deliveries_message_attendee_unique').on(
+			table.messageId,
+			table.attendeeId
+		),
+		index('idx_session_message_deliveries_message_status').on(table.messageId, table.status)
 	]
 );

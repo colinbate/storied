@@ -8,7 +8,7 @@ type StoriedSession = typeof sessions.$inferSelect;
 type Participant = typeof sessionParticipants.$inferSelect;
 type Attendee = typeof attendeeIdentities.$inferSelect;
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
 	return value
 		.replaceAll('&', '&amp;')
 		.replaceAll('<', '&lt;')
@@ -17,7 +17,7 @@ function escapeHtml(value: string) {
 		.replaceAll("'", '&#039;');
 }
 
-function sessionPublicUrl(session: StoriedSession, attendee: Attendee) {
+export function sessionPublicUrl(session: StoriedSession, attendee: Pick<Attendee, 'userId'>) {
 	if (attendee.userId || !session.isPublic)
 		return new URL(`/sessions/${session.slug}`, PRIMARY_ORIGIN).toString();
 	return new URL(
@@ -26,7 +26,7 @@ function sessionPublicUrl(session: StoriedSession, attendee: Attendee) {
 	).toString();
 }
 
-function formatSessionDate(session: StoriedSession) {
+export function formatSessionDate(session: StoriedSession) {
 	const date = !session.startsAt
 		? null
 		: isOffsetlessDateTime(session.startsAt)
@@ -45,7 +45,7 @@ function formatSessionDate(session: StoriedSession) {
 	}).format(date);
 }
 
-function details(session: StoriedSession, attendee: Attendee) {
+export function sessionDetailsHtml(session: StoriedSession, attendee: Pick<Attendee, 'userId'>) {
 	const location = session.locationName
 		? `<p><strong>Location:</strong> ${escapeHtml(session.locationName)}</p>`
 		: '';
@@ -77,7 +77,7 @@ function calendarLinksHtml(session: StoriedSession, attendee: Attendee) {
 		: '';
 }
 
-function wrapper(content: string) {
+export function emailWrapper(content: string) {
 	return `<div style="font-family:system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">${content}</div>`;
 }
 
@@ -111,8 +111,8 @@ export async function sendRegistrationConfirmationEmail(
 		attendee.email,
 		`RSVP confirmed: ${session.title}`,
 		`Hi ${attendee.name},\n\nYour RSVP for ${session.title} is confirmed.\n${formatSessionDate(session)}\n${session.locationName ?? ''}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
-		wrapper(
-			`<h2>You're registered!</h2><p>Hi ${escapeHtml(attendee.name)},</p>${details(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
+		emailWrapper(
+			`<h2>You're registered!</h2><p>Hi ${escapeHtml(attendee.name)},</p>${sessionDetailsHtml(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
 		)
 	);
 }
@@ -130,8 +130,8 @@ export async function sendWaitlistConfirmationEmail(
 		attendee.email,
 		`Waitlisted: ${session.title}`,
 		`Hi ${attendee.name},\n\nThis session is full, so you have been added to the waitlist. We'll email you when your place is confirmed.\n${formatSessionDate(session)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
-		wrapper(
-			`<h2>You're on the waitlist</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>We'll let you know if a spot opens.</p>${details(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Leave the waitlist</a></p>` : ''}`
+		emailWrapper(
+			`<h2>You're on the waitlist</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>We'll let you know if a spot opens.</p>${sessionDetailsHtml(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Leave the waitlist</a></p>` : ''}`
 		)
 	);
 }
@@ -149,8 +149,8 @@ export async function sendWaitlistPromotionEmail(
 		attendee.email,
 		`A spot opened up: ${session.title}`,
 		`Hi ${attendee.name},\n\nA spot opened up and your RSVP is now confirmed.\n${formatSessionDate(session)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
-		wrapper(
-			`<h2>A spot opened up!</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your RSVP is now confirmed.</p>${details(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
+		emailWrapper(
+			`<h2>A spot opened up!</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your RSVP is now confirmed.</p>${sessionDetailsHtml(session, attendee)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
 		)
 	);
 }
@@ -165,8 +165,8 @@ export async function sendCancellationConfirmationEmail(
 		attendee.email,
 		`Registration cancelled: ${session.title}`,
 		`Hi ${attendee.name},\n\nYour registration for ${session.title} has been cancelled.`,
-		wrapper(
-			`<h2>Registration cancelled</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your registration has been cancelled.</p>${details(session, attendee)}`
+		emailWrapper(
+			`<h2>Registration cancelled</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your registration has been cancelled.</p>${sessionDetailsHtml(session, attendee)}`
 		)
 	);
 }

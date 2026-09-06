@@ -5,12 +5,13 @@ import {
 	authors,
 	attendeeIdentities,
 	series,
+	sessionParticipants,
 	sessionReadingChoices,
 	sessions,
 	sessionSubjects,
 	users
 } from '$lib/server/db/schema';
-import { eq, and, desc, asc, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, isNull, inArray, count } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
 import { ensureSubjectSource } from '$lib/server/subject-sources';
 import { detectSubjectLinks, type DetectedSubjectLink } from '$lib/server/book-links';
@@ -29,6 +30,7 @@ import {
 	removeSessionReadingChoice,
 	upsertSessionReadingChoice
 } from '$lib/server/session-reading';
+import { detectSessionDetailChanges } from '$shared/session-messages';
 
 type SubjectKind = 'book' | 'series' | 'author';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -115,6 +117,21 @@ function rejectStaleSession(data: FormData, updatedAt: string) {
 
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
+}
+
+/** People who would expect to hear about a change: confirmed, waitlisted, or maybe. */
+async function responsiveParticipantCount(db: App.Locals['db'], sessionId: string) {
+	const row = await db
+		.select({ total: count() })
+		.from(sessionParticipants)
+		.where(
+			and(
+				eq(sessionParticipants.sessionId, sessionId),
+				inArray(sessionParticipants.attendanceStatus, ['attending', 'waitlisted', 'maybe'])
+			)
+		)
+		.get();
+	return row?.total ?? 0;
 }
 
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
@@ -358,7 +375,20 @@ export const actions: Actions = {
 			return fail(409, {
 				error: 'This session changed while you were saving. Reload the page and try again.'
 			});
-		return { updated: true };
+
+		// Offer a prepared attendee update when the time or place of a published session moves.
+		const detailChanges = detectSessionDetailChanges(row, updatedSession);
+		const notifyAttendees =
+			detailChanges.length > 0 &&
+			(row.status === 'scheduled' || row.status === 'current') &&
+			(await responsiveParticipantCount(locals.db, row.id)) > 0;
+		return {
+			updated: true,
+			detailChanges: notifyAttendees ? detailChanges : [],
+			previousDetails: notifyAttendees
+				? { startsAt: row.startsAt, timezone: row.timezone, locationName: row.locationName }
+				: null
+		};
 	},
 
 	updateStatus: async ({ request, params, locals }) => {
@@ -387,8 +417,14 @@ export const actions: Actions = {
 			}
 		}
 
+		const cancelled =
+			status === 'cancelled' &&
+			row.status !== 'cancelled' &&
+			(await responsiveParticipantCount(locals.db, row.id)) > 0;
+
 		return {
 			statusUpdated: true,
+			cancelled,
 			previousPastCount: result.previousPastCount,
 			previousUpcomingCount: result.previousUpcomingCount
 		};

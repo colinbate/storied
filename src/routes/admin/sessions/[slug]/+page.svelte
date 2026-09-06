@@ -21,7 +21,10 @@
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import UserIcon from '@lucide/svelte/icons/user';
 	import UsersIcon from '@lucide/svelte/icons/users';
+	import MailIcon from '@lucide/svelte/icons/mail';
 	import { toast } from 'svelte-sonner';
+	import { buttonVariants } from '$lib/components/ui/button/index.js';
+	import type { SessionDetailChange } from '$shared/session-messages';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { SESSION_STATUSES, SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
 	import { supportedTimeZones } from '$lib/timezone-options';
@@ -29,6 +32,28 @@
 	let { data, form } = $props();
 	let saving = $state(false);
 	let savingStatus = $state(false);
+	let detailChangePrompt = $state<{
+		changes: SessionDetailChange[];
+		previous: { startsAt: string | null; timezone: string; locationName: string | null };
+	} | null>(null);
+	let cancellationPrompt = $state(false);
+	const messagesHref = $derived(
+		resolve('/admin/sessions/[slug]/messages', { slug: data.session.slug })
+	);
+	const detailUpdateHref = $derived.by(() => {
+		if (!detailChangePrompt) return messagesHref;
+		const { previous } = detailChangePrompt;
+		const query = [
+			['template', 'update'],
+			['prevStartsAt', previous.startsAt ?? ''],
+			['prevTimezone', previous.timezone],
+			['prevLocation', previous.locationName ?? '']
+		]
+			.filter(([, value]) => value !== '' || true)
+			.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+			.join('&');
+		return `${messagesHref}?${query}`;
+	});
 	let selectedThemeId = $state('');
 	let sessionTimezone = $state('');
 	let allTimezones = $state<string[]>([]);
@@ -133,20 +158,73 @@
 		{#if data.session.themeTitle ?? data.session.theme}
 			<Badge variant="secondary">{data.session.themeTitle ?? data.session.theme}</Badge>
 		{/if}
-		<Button
-			class="ml-auto"
-			variant="outline"
-			href={resolve('/admin/sessions/[slug]/attendees', { slug: data.session.slug })}
-		>
-			<UsersIcon class="h-4 w-4" />
-			Manage Attendees
-		</Button>
+		<div class="ml-auto flex flex-wrap gap-2">
+			<Button variant="outline" href={messagesHref}>
+				<MailIcon class="h-4 w-4" />
+				Message Attendees
+			</Button>
+			<Button
+				variant="outline"
+				href={resolve('/admin/sessions/[slug]/attendees', { slug: data.session.slug })}
+			>
+				<UsersIcon class="h-4 w-4" />
+				Manage Attendees
+			</Button>
+		</div>
 	</div>
 
 	{#if form?.error}
 		<div class="rounded border border-destructive p-3 text-destructive">
 			{form.error}
 		</div>
+	{/if}
+
+	{#if detailChangePrompt}
+		<Card.Root class="border-primary/40 bg-primary/5">
+			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-1 text-sm">
+					<p class="font-medium">Details changed. Let attendees know?</p>
+					<ul class="text-muted-foreground">
+						{#each detailChangePrompt.changes as change (change.field)}
+							<li>
+								{change.label}: {change.to} <span class="opacity-70">(was {change.from})</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+				<div class="flex shrink-0 gap-2">
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a query string -->
+					<a class={buttonVariants()} href={detailUpdateHref}>
+						<MailIcon class="h-4 w-4" />
+						Send Update
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					<Button variant="ghost" onclick={() => (detailChangePrompt = null)}>Not now</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	{#if cancellationPrompt}
+		<Card.Root class="border-destructive/40 bg-destructive/5">
+			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="space-y-1 text-sm">
+					<p class="font-medium">Session cancelled. Tell the people who replied?</p>
+					<p class="text-muted-foreground">
+						A prepared cancellation notice goes to confirmed, waitlisted, and maybe responses.
+					</p>
+				</div>
+				<div class="flex shrink-0 gap-2">
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a query string -->
+					<a class={buttonVariants()} href="{messagesHref}?template=cancelled">
+						<MailIcon class="h-4 w-4" />
+						Send Notice
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					<Button variant="ghost" onclick={() => (cancellationPrompt = false)}>Not now</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	<Card.Root>
@@ -157,7 +235,7 @@
 				also features the session on Home. When you choose a new current session, the previous one
 				stays Upcoming until it has happened. Upcoming sessions need a date. Current and Past
 				sessions also need a theme. Save required details below before changing the status.
-				Cancelling closes RSVPs; contact attendees separately about the change.
+				Cancelling closes RSVPs and offers a prepared notice for the people who replied.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -171,6 +249,7 @@
 						await update({ reset: false });
 						if (result.type === 'success' && result.data?.statusUpdated) {
 							toast.success('Session status updated.');
+							cancellationPrompt = Boolean(result.data.cancelled);
 						}
 					};
 				}}
@@ -211,6 +290,12 @@
 							if (result.type === 'success') {
 								if (result.data?.updated) toast.success('Session updated.');
 								if (result.data?.error) toast.error(String(result.data.error));
+								const changes = (result.data?.detailChanges ?? []) as SessionDetailChange[];
+								const previous = result.data?.previousDetails as
+									| { startsAt: string | null; timezone: string; locationName: string | null }
+									| null
+									| undefined;
+								detailChangePrompt = changes.length > 0 && previous ? { changes, previous } : null;
 							}
 						};
 					}}
@@ -381,7 +466,7 @@
 									<p class="text-sm text-muted-foreground">{book.title}</p>
 								</div>
 								<NativeSelect
-								    class="h-10"
+									class="h-10"
 									name="readingStatus"
 									aria-label={`Reading status for ${attendee.name}`}
 									value={choice.readingStatus}
@@ -412,7 +497,8 @@
 									}}
 								>
 									<input type="hidden" name="bookId" value={book.id} />
-									<Button type="submit" variant="outline" class="h-10" disabled={saving}>Link as Featured</Button
+									<Button type="submit" variant="outline" class="h-10" disabled={saving}
+										>Link as Featured</Button
 									>
 								</form>
 							{/if}

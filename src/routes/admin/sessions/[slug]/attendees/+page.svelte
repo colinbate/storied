@@ -13,6 +13,7 @@
 	import DownloadIcon from '@lucide/svelte/icons/download';
 	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
 	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
+	import MailIcon from '@lucide/svelte/icons/mail';
 	import { toast } from 'svelte-sonner';
 	import { pageTitle } from '$shared/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -108,6 +109,12 @@
 			<p class="text-sm text-muted-foreground">{data.session.title}</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
+			<Button
+				variant="outline"
+				href={resolve('/admin/sessions/[slug]/messages', { slug: data.session.slug })}
+			>
+				<MailIcon class="h-4 w-4" /> Message attendees
+			</Button>
 			<Button variant="outline" href={resolve('/admin/attendees')}>
 				<UsersRoundIcon class="h-4 w-4" /> Manage attendees
 			</Button>
@@ -261,6 +268,24 @@
 													timeZone
 												})}
 											</p>
+											{#if data.reminderDeliveries[row.attendee.id]}
+												{@const reminder = data.reminderDeliveries[row.attendee.id]}
+												<p class="text-xs text-muted-foreground">
+													{#if reminder.status === 'sent'}
+														Reminder sent {formatDate(reminder.sentAt ?? reminder.attemptedAt, {
+															dateStyle: 'medium',
+															time: 'never',
+															timeZone
+														})}
+													{:else if reminder.status === 'failed'}
+														<span class="text-destructive">
+															Reminder failed: {reminder.failureReason ?? 'unknown error'}
+														</span>
+													{:else}
+														Reminder in progress
+													{/if}
+												</p>
+											{/if}
 										</div>
 										<div class="flex items-center gap-2">
 											<form

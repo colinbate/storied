@@ -28,6 +28,7 @@ import {
 	sendWaitlistPromotionEmail
 } from '$lib/server/rsvp-email';
 import { PRIMARY_ORIGIN } from '$shared/brand';
+import { listReminderDeliveriesByAttendee } from '$lib/server/session-messages';
 
 const statuses = new Set<SessionAttendanceStatus>([
 	'attending',
@@ -53,7 +54,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.get();
 	if (!session) throw error(404, 'Session not found');
 
-	const [participants, allUsers, identities] = await Promise.all([
+	const [participants, allUsers, identities, reminderDeliveries] = await Promise.all([
 		locals.db
 			.select({
 				participant: sessionParticipants,
@@ -76,7 +77,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			.where(eq(users.status, 'active'))
 			.orderBy(asc(users.displayName))
 			.all(),
-		locals.db.select().from(attendeeIdentities).orderBy(asc(attendeeIdentities.name)).all()
+		locals.db.select().from(attendeeIdentities).orderBy(asc(attendeeIdentities.name)).all(),
+		listReminderDeliveriesByAttendee(locals.db, session.id)
 	]);
 	const participantIdentityIds = new Set(participants.map((row) => row.attendee.id));
 	const participantUserIds = new Set(
@@ -86,6 +88,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		session,
 		participants,
+		reminderDeliveries,
 		users: allUsers,
 		addableUsers: allUsers.filter((user) => !participantUserIds.has(user.id)),
 		availableIdentities: identities.filter((identity) => !participantIdentityIds.has(identity.id)),
