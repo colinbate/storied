@@ -201,7 +201,7 @@ test('members see only accepted member-visible items plus their own pending sugg
 });
 
 test('the runner records attendance without touching RSVPs and ends with optional absences', async () => {
-	const { db, addSession, rsvp, facilitator } = await fixture();
+	const { db, addSession, rsvp, facilitator, member } = await fixture();
 	const session = await addSession('meeting');
 	const ada = await rsvp(session, 'Ada', 'ada@example.test', 'attending');
 	const bea = await rsvp(session, 'Bea', 'bea@example.test', 'attending');
@@ -265,6 +265,7 @@ test('the runner records attendance without touching RSVPs and ends with optiona
 		depends: () => {}
 	});
 	// Guests without accounts stay in the list; the absent member drops out.
+	await rsvp(session, 'Guest Gil', null, 'attending');
 	assert.deepEqual(
 		summary.participants.map((person) => [person.name, person.status, person.userId]),
 		[
@@ -273,7 +274,26 @@ test('the runner records attendance without touching RSVPs and ends with optiona
 			['Walk-in Wes', 'present', null]
 		]
 	);
-	assert.equal(await markUnrecordedExpectedAbsent(db, session.id, 'host'), 0);
+	const facilitatorView = await sessionPage({
+		locals: facilitator,
+		params: { slug: 'meeting' },
+		platform: undefined,
+		depends: () => {}
+	});
+	assert.ok(facilitatorView.participants.some((person) => person.name === 'Guest Gil'));
+	// Members never see a guest who has only RSVP'd (Cy and Gil here); present guests are fair game.
+	const readerView = await sessionPage({
+		locals: member,
+		params: { slug: 'meeting' },
+		platform: undefined,
+		depends: () => {}
+	});
+	assert.deepEqual(
+		readerView.participants.map((person) => person.name),
+		['Ada', 'Walk-in Wes']
+	);
+	// Only Guest Gil, added after the meeting ended, is still unrecorded.
+	assert.equal(await markUnrecordedExpectedAbsent(db, session.id, 'host'), 1);
 	await endLiveSession(db, session.id);
 	await markPresent(db, session.id, bea.id, 'host');
 	assert.equal(

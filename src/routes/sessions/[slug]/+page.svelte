@@ -279,6 +279,24 @@
 				{calendarLinks}
 				participants={rsvpParticipants}
 			/>
+			{#if data.canGiveFeedback}
+				<p class="text-sm text-muted-foreground">
+					<SparklesIcon class="mr-1 inline h-3.5 w-3.5" />
+					{#if data.hasOwnFeedback}
+						Thanks for your feedback on this session.
+					{:else if data.viewerAttended}
+						You were there.
+					{:else}
+						Were you there?
+					{/if}
+					<a
+						href={resolve('/sessions/[slug]/feedback', { slug: data.session.slug })}
+						class="text-primary hover:underline"
+					>
+						{data.hasOwnFeedback ? 'Edit your private feedback' : 'Give the host private feedback'}
+					</a>
+				</p>
+			{/if}
 		</div>
 
 		{#if data.session.bodyHtml}
@@ -287,111 +305,6 @@
 				{@html data.session.bodyHtml}
 			</section>
 		{/if}
-
-		<section class="space-y-4">
-			<Card.Root>
-				<Card.Header>
-					<div class="flex flex-wrap items-start justify-between gap-3">
-						<div class="space-y-1.5">
-							<Card.Title class="text-base">Reading Choices</Card.Title>
-							<Card.Description>
-								{#if readingChoiceGroups.length > 0}
-									{readingChoiceSummary}
-								{:else}
-									What members are reading for this session.
-								{/if}
-							</Card.Description>
-						</div>
-						<Button size="sm" onclick={() => openReadingDialog()}>
-							<PlusIcon class="h-4 w-4" />
-							Add Mine
-						</Button>
-					</div>
-				</Card.Header>
-				<Card.Content>
-					{#if readingChoiceGroups.length > 0}
-						<div class="grid gap-4 md:grid-cols-2">
-							{#each readingChoiceGroups as group (group.subject.id)}
-								<div class="min-w-0 space-y-1">
-									<BookCard book={group.subject} compact />
-									<ul class="space-y-1 px-2">
-										{#each group.readers as { choice, attendee } (attendee.id)}
-											<li class="flex items-center gap-2 text-sm">
-												<span class="min-w-0 flex-1 truncate">
-													{#if attendee.userId}
-														<MemberName userId={attendee.userId} name={attendee.name} />
-													{:else}
-														{attendee.name}
-													{/if}
-													<span class="text-xs text-muted-foreground">
-														· {readingStatusLabels[choice.readingStatus ?? ''] ??
-															'Status not recorded'}
-													</span>
-												</span>
-												{#if attendee.userId === data.user?.id}
-													<span class="flex shrink-0 gap-1">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															onclick={() => openReadingDialog(choice.bookId)}
-															aria-label={`Edit ${group.subject.title}`}
-														>
-															<PencilIcon class="h-3.5 w-3.5" />
-														</Button>
-														<ConfirmButton
-															confirmText="Remove this reading choice?"
-															formAction="?/removeReadingChoice"
-															formData={{ bookId: choice.bookId }}
-															enhance={removeReadingChoice}
-															variant="ghost"
-															size="icon-sm"
-															title={`Remove ${group.subject.title}`}
-														>
-															<Trash2Icon class="h-3.5 w-3.5" />
-														</ConfirmButton>
-													</span>
-												{/if}
-											</li>
-										{/each}
-									</ul>
-								</div>
-							{/each}
-						</div>
-					{:else}
-						<p class="text-sm text-muted-foreground">No reading choices yet.</p>
-					{/if}
-				</Card.Content>
-			</Card.Root>
-
-			{#each subjectGroups as group (group.title)}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title class="text-base">{group.title}</Card.Title>
-						<Card.Description>{subjectCount(group.items)}</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<div class="grid gap-2 md:grid-cols-2">
-							{#each group.items as item (item.link.subjectType + item.link.subjectId)}
-								<div class="min-w-0">
-									{#if item.kind === 'book'}
-										<BookCard book={item.book} compact />
-									{:else if item.kind === 'series'}
-										<SeriesCard series={item.series} compact />
-									{:else}
-										<AuthorCard author={item.author} compact />
-									{/if}
-									{#if item.link.note}
-										<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">
-											{item.link.note}
-										</p>
-									{/if}
-								</div>
-							{/each}
-						</div>
-					</Card.Content>
-				</Card.Root>
-			{/each}
-		</section>
 
 		{#if readyAgenda.length > 0 || mySuggestions.length > 0 || agendaOpen}
 			<Card.Root>
@@ -520,6 +433,111 @@
 			</Card.Root>
 		{/if}
 
+		<section class="space-y-4">
+			<Card.Root>
+				<Card.Header>
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div class="space-y-1.5">
+							<Card.Title class="text-base">Reading Choices</Card.Title>
+							<Card.Description>
+								{#if readingChoiceGroups.length > 0}
+									{readingChoiceSummary}
+								{:else}
+									What members are reading for this session.
+								{/if}
+							</Card.Description>
+						</div>
+						<Button size="sm" onclick={() => openReadingDialog()}>
+							<PlusIcon class="h-4 w-4" />
+							Add Mine
+						</Button>
+					</div>
+				</Card.Header>
+				<Card.Content>
+					{#if readingChoiceGroups.length > 0}
+						<div class="grid gap-4 md:grid-cols-2">
+							{#each readingChoiceGroups as group (group.subject.id)}
+								<div class="min-w-0 space-y-1">
+									<BookCard book={group.subject} compact />
+									<ul class="space-y-1 px-2">
+										{#each group.readers as { choice, attendee } (attendee.id)}
+											<li class="flex items-center gap-2 text-sm">
+												<span class="min-w-0 flex-1 truncate">
+													{#if attendee.userId}
+														<MemberName userId={attendee.userId} name={attendee.name} />
+													{:else}
+														{attendee.name}
+													{/if}
+													<span class="text-xs text-muted-foreground">
+														· {readingStatusLabels[choice.readingStatus ?? ''] ??
+															'Status not recorded'}
+													</span>
+												</span>
+												{#if attendee.userId === data.user?.id}
+													<span class="flex shrink-0 gap-1">
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															onclick={() => openReadingDialog(choice.bookId)}
+															aria-label={`Edit ${group.subject.title}`}
+														>
+															<PencilIcon class="h-3.5 w-3.5" />
+														</Button>
+														<ConfirmButton
+															confirmText="Remove this reading choice?"
+															formAction="?/removeReadingChoice"
+															formData={{ bookId: choice.bookId }}
+															enhance={removeReadingChoice}
+															variant="ghost"
+															size="icon-sm"
+															title={`Remove ${group.subject.title}`}
+														>
+															<Trash2Icon class="h-3.5 w-3.5" />
+														</ConfirmButton>
+													</span>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<p class="text-sm text-muted-foreground">No reading choices yet.</p>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+
+			{#each subjectGroups as group (group.title)}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title class="text-base">{group.title}</Card.Title>
+						<Card.Description>{subjectCount(group.items)}</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<div class="grid gap-2 md:grid-cols-2">
+							{#each group.items as item (item.link.subjectType + item.link.subjectId)}
+								<div class="min-w-0">
+									{#if item.kind === 'book'}
+										<BookCard book={item.book} compact />
+									{:else if item.kind === 'series'}
+										<SeriesCard series={item.series} compact />
+									{:else}
+										<AuthorCard author={item.author} compact />
+									{/if}
+									{#if item.link.note}
+										<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">
+											{item.link.note}
+										</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</section>
+
 		{#if data.session.memberRecapHtml}
 			<Card.Root class="border-primary/30">
 				<Card.Header>
@@ -534,19 +552,6 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
-		{/if}
-
-		{#if data.canGiveFeedback}
-			<p class="text-sm text-muted-foreground">
-				<SparklesIcon class="mr-1 inline h-3.5 w-3.5" />
-				{data.hasOwnFeedback ? 'Thanks for your feedback on this session.' : 'Were you there?'}
-				<a
-					href={resolve('/sessions/[slug]/feedback', { slug: data.session.slug })}
-					class="text-primary hover:underline"
-				>
-					{data.hasOwnFeedback ? 'Edit your private feedback' : 'Give the host private feedback'}
-				</a>
-			</p>
 		{/if}
 	</div>
 

@@ -290,9 +290,22 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 		if (!participantMap.has(row.attendee.id))
 			participantMap.set(row.attendee.id, { ...identity(row), status: 'present' });
 	}
-	const participantSummary = [...participantMap.values()].sort((a, b) =>
-		a.name.localeCompare(b.name)
-	);
+	// Guests who only RSVP'd stay private until they have actually attended.
+	const participantSummary = [...participantMap.values()]
+		.filter((person) => person.userId || facilitator || person.status === 'present')
+		.sort((a, b) => a.name.localeCompare(b.name));
+	const viewerAttendeeId =
+		[...participantMap.values()].find((person) => person.userId === locals.user?.id)?.attendeeId ??
+		(
+			await locals.db
+				.select({ id: attendeeIdentities.id })
+				.from(attendeeIdentities)
+				.where(eq(attendeeIdentities.userId, locals.user.id))
+				.get()
+		)?.id;
+	const viewerAttended = viewerAttendeeId
+		? attendance[viewerAttendeeId]?.status === 'present'
+		: false;
 
 	let discussion = null;
 	if (primaryThreadRow) {
@@ -323,6 +336,7 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 		phase: workflowPhase(session),
 		canGiveFeedback: canGiveFeedback(session),
 		hasOwnFeedback: Boolean(ownFeedback),
+		viewerAttended,
 		canDeclineRsvp: canDeclineSessionRsvp(session),
 		canRsvp: canAcceptSessionRsvps(session),
 		attendingCount: await attendingCount(locals.db, session.id),
