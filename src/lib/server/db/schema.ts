@@ -17,6 +17,8 @@ import type { SessionStatus } from '$shared/session-lifecycle';
 export type { SessionStatus } from '$shared/session-lifecycle';
 export type SessionThreadRole = 'primary' | 'related';
 export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
+export type BookAccessProviderType = 'library' | 'retailer' | 'subscription' | 'other';
+export type BookAccessFormat = 'print' | 'ebook' | 'audiobook' | 'other';
 export type SessionAttendanceStatus =
 	| 'attending'
 	| 'waitlisted'
@@ -637,6 +639,10 @@ export const books = sqliteTable(
 		goodreadsUrl: text('goodreads_url'),
 		hardcoverUrl: text('hardcover_url'),
 		firstPublishYear: integer('first_publish_year'),
+		editionLabel: text('edition_label'),
+		language: text('language'),
+		pageCount: integer('page_count'),
+		audiobookMinutes: integer('audiobook_minutes'),
 		description: text('description'),
 		deletedAt: text('deleted_at'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
@@ -646,6 +652,35 @@ export const books = sqliteTable(
 		index('idx_books_slug').on(table.slug),
 		index('idx_books_title').on(table.title),
 		index('idx_books_deleted_at').on(table.deletedAt)
+	]
+);
+
+// ──────────────────────────────────────────────
+// book_access_options  (manually maintained ways to obtain a book)
+// ──────────────────────────────────────────────
+export const bookAccessOptions = sqliteTable(
+	'book_access_options',
+	{
+		id: text('id').primaryKey(),
+		bookId: text('book_id')
+			.notNull()
+			.references(() => books.id, { onDelete: 'cascade' }),
+		providerName: text('provider_name').notNull(),
+		providerType: text('provider_type')
+			.notNull()
+			.default('library')
+			.$type<BookAccessProviderType>(),
+		format: text('format').notNull().default('print').$type<BookAccessFormat>(),
+		url: text('url'),
+		note: text('note'),
+		createdByUserId: text('created_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_book_access_options_book').on(table.bookId, table.providerName, table.format)
 	]
 );
 

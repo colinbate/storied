@@ -9,4 +9,12 @@
 	<title>{pageTitle('Library')}</title>
 </svelte:head>
 
-<LibraryList books={data.books} series={data.series} authors={data.authors} />
+<LibraryList
+	books={data.books}
+	series={data.series}
+	authors={data.authors}
+	organized
+	sessionOptions={data.sessionOptions}
+	themeOptions={data.themeOptions}
+	nextSession={data.nextSession}
+/>

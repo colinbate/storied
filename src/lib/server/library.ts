@@ -1,8 +1,23 @@
-import { authors, books, series } from '$lib/server/db/schema';
-import { asc, isNull } from 'drizzle-orm';
+import {
+	authors,
+	bookAccessOptions,
+	books,
+	series,
+	sessions,
+	sessionSubjects,
+	themes,
+	userSubjects
+} from '$lib/server/db/schema';
+import { and, asc, eq, inArray, isNull, type SQL } from 'drizzle-orm';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
+import { sessionStartDate } from '$shared/session-lifecycle';
 
-export async function loadLibrarySubjects(db: App.Locals['db']) {
+type LibraryContextOptions = {
+	userId: string;
+	sessionAccess: SQL;
+};
+
+export async function loadLibrarySubjects(db: App.Locals['db'], context?: LibraryContextOptions) {
 	const [bookRows, seriesRows, authorRows] = await Promise.all([
 		db
 			.select({
@@ -15,6 +30,10 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 				goodreadsUrl: books.goodreadsUrl,
 				hardcoverUrl: books.hardcoverUrl,
 				firstPublishYear: books.firstPublishYear,
+				editionLabel: books.editionLabel,
+				language: books.language,
+				pageCount: books.pageCount,
+				audiobookMinutes: books.audiobookMinutes,
 				description: books.description
 			})
 			.from(books)
@@ -53,29 +72,193 @@ export async function loadLibrarySubjects(db: App.Locals['db']) {
 			.orderBy(asc(authors.name))
 			.all()
 	]);
+	const bookIds = bookRows.map((book) => book.id);
 
-	const [bookClassifications, seriesClassifications] = await Promise.all([
-		loadClassificationsBySubject(
-			db,
-			'book',
-			bookRows.map((book) => book.id)
-		),
+	const [
+		bookClassifications,
+		seriesClassifications,
+		relationRows,
+		sessionRows,
+		accessRows,
+		allSessionRows
+	] = await Promise.all([
+		loadClassificationsBySubject(db, 'book', bookIds),
 		loadClassificationsBySubject(
 			db,
 			'series',
 			seriesRows.map((entry) => entry.id)
-		)
+		),
+		context && bookIds.length
+			? db
+					.select({
+						subjectId: userSubjects.subjectId,
+						readingStatus: userSubjects.readingStatus,
+						isRecommended: userSubjects.isRecommended
+					})
+					.from(userSubjects)
+					.where(
+						and(
+							eq(userSubjects.userId, context.userId),
+							eq(userSubjects.subjectType, 'book'),
+							inArray(userSubjects.subjectId, bookIds)
+						)
+					)
+					.all()
+			: Promise.resolve([]),
+		context && bookIds.length
+			? db
+					.select({
+						bookId: sessionSubjects.subjectId,
+						role: sessionSubjects.status,
+						sessionId: sessions.id,
+						slug: sessions.slug,
+						title: sessions.title,
+						startsAt: sessions.startsAt,
+						timezone: sessions.timezone,
+						status: sessions.status,
+						themeId: sessions.themeId,
+						themeName: themes.name,
+						legacyTheme: sessions.themeTitle,
+						legacyThemeFallback: sessions.theme
+					})
+					.from(sessionSubjects)
+					.innerJoin(sessions, eq(sessionSubjects.sessionId, sessions.id))
+					.leftJoin(themes, eq(sessions.themeId, themes.id))
+					.where(
+						and(
+							eq(sessionSubjects.subjectType, 'book'),
+							inArray(sessionSubjects.subjectId, bookIds),
+							context.sessionAccess
+						)
+					)
+					.orderBy(asc(sessions.startsAt), asc(sessions.title))
+					.all()
+			: Promise.resolve([]),
+		context && bookIds.length
+			? db
+					.select({ bookId: bookAccessOptions.bookId, format: bookAccessOptions.format })
+					.from(bookAccessOptions)
+					.where(inArray(bookAccessOptions.bookId, bookIds))
+					.all()
+			: Promise.resolve([]),
+		context
+			? db
+					.select({
+						sessionId: sessions.id,
+						slug: sessions.slug,
+						title: sessions.title,
+						startsAt: sessions.startsAt,
+						timezone: sessions.timezone,
+						status: sessions.status
+					})
+					.from(sessions)
+					.where(context.sessionAccess)
+					.all()
+			: Promise.resolve([])
 	]);
+
+	const relations = new Map(relationRows.map((row) => [row.subjectId, row]));
+	type SessionLink = (typeof sessionRows)[number] & {
+		themeName: string | null;
+		themeKey: string | null;
+	};
+	const sessionsByBook = new Map<string, SessionLink[]>();
+	for (const row of sessionRows) {
+		const themeName = row.themeName ?? row.legacyTheme ?? row.legacyThemeFallback;
+		const normalizedTheme =
+			themeName
+				?.trim()
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-') ?? null;
+		const entry = {
+			...row,
+			themeName,
+			themeKey: row.themeId ?? (normalizedTheme ? `legacy:${normalizedTheme}` : null)
+		};
+		const existing = sessionsByBook.get(row.bookId) ?? [];
+		existing.push(entry);
+		sessionsByBook.set(row.bookId, existing);
+	}
+
+	const accessByBook = new Map<string, { count: number; formats: string[] }>();
+	for (const row of accessRows) {
+		const existing = accessByBook.get(row.bookId) ?? { count: 0, formats: [] };
+		existing.count += 1;
+		if (!existing.formats.includes(row.format)) existing.formats.push(row.format);
+		accessByBook.set(row.bookId, existing);
+	}
+
+	const nextSession =
+		allSessionRows.find((session) => session.status === 'current') ??
+		allSessionRows
+			.filter((session) => session.status === 'scheduled')
+			.filter((session) => {
+				const start = sessionStartDate(session);
+				return start === null || start >= new Date();
+			})
+			.sort((a, b) => {
+				const aStart = sessionStartDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+				const bStart = sessionStartDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+				return aStart - bStart;
+			})[0] ??
+		null;
+
+	const sessionOptions = allSessionRows
+		.slice()
+		.sort((a, b) => {
+			const aStart = sessionStartDate(a)?.getTime() ?? 0;
+			const bStart = sessionStartDate(b)?.getTime() ?? 0;
+			return bStart - aStart;
+		})
+		.map((session) => ({
+			id: session.sessionId,
+			slug: session.slug,
+			title: session.title,
+			startsAt: session.startsAt,
+			timezone: session.timezone,
+			status: session.status
+		}));
+	const themeOptions = Array.from(
+		new Map(
+			sessionRows
+				.map((row) => {
+					const name = row.themeName ?? row.legacyTheme ?? row.legacyThemeFallback;
+					const normalized = name
+						?.trim()
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '-');
+					const key = row.themeId ?? (normalized ? `legacy:${normalized}` : null);
+					return key && name ? ([key, { key, name }] as const) : null;
+				})
+				.filter((entry): entry is readonly [string, { key: string; name: string }] => !!entry)
+		).values()
+	).sort((a, b) => a.name.localeCompare(b.name));
 
 	return {
 		books: bookRows.map((book) => ({
 			...book,
-			classifications: bookClassifications[book.id] ?? []
+			classifications: bookClassifications[book.id] ?? [],
+			readingStatus: relations.get(book.id)?.readingStatus ?? null,
+			isRecommended: relations.get(book.id)?.isRecommended ?? false,
+			sessionLinks: sessionsByBook.get(book.id) ?? [],
+			accessCount: accessByBook.get(book.id)?.count ?? 0,
+			accessFormats: accessByBook.get(book.id)?.formats ?? []
 		})),
 		series: seriesRows.map((entry) => ({
 			...entry,
 			classifications: seriesClassifications[entry.id] ?? []
 		})),
-		authors: authorRows
+		authors: authorRows,
+		sessionOptions,
+		themeOptions,
+		nextSession: nextSession
+			? {
+					id: nextSession.sessionId,
+					slug: nextSession.slug,
+					title: nextSession.title,
+					startsAt: nextSession.startsAt,
+					timezone: nextSession.timezone
+				}
+			: null
 	};
 }

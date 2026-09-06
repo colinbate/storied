@@ -2,19 +2,39 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	bookAccessOptions,
 	genres,
 	genreLinks,
+	sessions,
+	sessionSubjects,
+	themes,
 	userSubjects,
 	threadSubjects,
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne, inArray } from 'drizzle-orm';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
 import { renderMarkdown } from '$lib/server/markdown';
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
+import { hasSessionEnded } from '$shared/session-lifecycle';
 
 const SUBJECT = 'book';
+const SUGGESTIBLE_SESSION_STATUSES = ['draft', 'scheduled', 'current'] as const;
+
+function acceptsBookSuggestions(session: {
+	status: string;
+	startsAt: string | null;
+	timezone?: string | null;
+	durationMinutes?: number | null;
+}) {
+	return (
+		session.status === 'draft' ||
+		session.status === 'current' ||
+		(session.status === 'scheduled' && !hasSessionEnded(session))
+	);
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -143,6 +163,66 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(desc(userSubjects.isRecommended), desc(userSubjects.updatedAt))
 		.all();
 
+	const [sessionLinks, accessOptions, suggestionSessions] = await Promise.all([
+		locals.db
+			.select({
+				link: {
+					status: sessionSubjects.status,
+					note: sessionSubjects.note
+				},
+				session: {
+					id: sessions.id,
+					slug: sessions.slug,
+					title: sessions.title,
+					startsAt: sessions.startsAt,
+					timezone: sessions.timezone,
+					status: sessions.status,
+					theme: sessions.theme,
+					themeTitle: sessions.themeTitle
+				},
+				themeName: themes.name
+			})
+			.from(sessionSubjects)
+			.innerJoin(sessions, eq(sessionSubjects.sessionId, sessions.id))
+			.leftJoin(themes, eq(sessions.themeId, themes.id))
+			.where(
+				and(
+					eq(sessionSubjects.subjectType, SUBJECT),
+					eq(sessionSubjects.subjectId, book.id),
+					sessionAccessCondition(locals)
+				)
+			)
+			.orderBy(desc(sessions.startsAt), desc(sessions.createdAt))
+			.all(),
+		locals.db
+			.select()
+			.from(bookAccessOptions)
+			.where(eq(bookAccessOptions.bookId, book.id))
+			.orderBy(asc(bookAccessOptions.providerName), asc(bookAccessOptions.format))
+			.all(),
+		locals.db
+			.select({
+				id: sessions.id,
+				slug: sessions.slug,
+				title: sessions.title,
+				startsAt: sessions.startsAt,
+				timezone: sessions.timezone,
+				status: sessions.status,
+				theme: sessions.theme,
+				themeTitle: sessions.themeTitle,
+				themeName: themes.name
+			})
+			.from(sessions)
+			.leftJoin(themes, eq(sessions.themeId, themes.id))
+			.where(
+				and(inArray(sessions.status, SUGGESTIBLE_SESSION_STATUSES), sessionAccessCondition(locals))
+			)
+			.orderBy(asc(sessions.startsAt), asc(sessions.title))
+			.all()
+	]);
+
+	const linkedSessionIds = new Set(sessionLinks.map((entry) => entry.session.id));
+
 	return {
 		book,
 		classifications: bookClassifications[book.id] ?? [],
@@ -157,6 +237,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			canViewProfile: true
 		})),
 		relatedThreads: uniqueThreads,
+		sessionLinks,
+		accessOptions,
+		suggestionSessions: suggestionSessions.filter(
+			(session) => !linkedSessionIds.has(session.id) && acceptsBookSuggestions(session)
+		),
 		stats: {
 			recommendations: recommendCount,
 			readers: readCount
@@ -225,6 +310,10 @@ export const actions: Actions = {
 			}
 
 			return { statusUpdated: true };
+		}
+
+		if (!['want_to_read', 'reading', 'read', 'did_not_finish'].includes(readingStatus)) {
+			return fail(400, { error: 'Choose a valid reading status.' });
 		}
 
 		await locals.db
@@ -339,5 +428,48 @@ export const actions: Actions = {
 			});
 
 		return { recommendToggled: true };
+	},
+
+	suggestForSession: async ({ request, locals, params }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+
+		const book = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(and(eq(books.slug, params.slug), isNull(books.deletedAt)))
+			.get();
+		if (!book) throw error(404, 'Book not found');
+
+		const data = await request.formData();
+		const sessionId = data.get('sessionId')?.toString();
+		if (!sessionId) return fail(400, { error: 'Choose a meeting.' });
+
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(
+				and(
+					eq(sessions.id, sessionId),
+					inArray(sessions.status, SUGGESTIBLE_SESSION_STATUSES),
+					sessionAccessCondition(locals)
+				)
+			)
+			.get();
+		if (!session || !acceptsBookSuggestions(session)) {
+			return fail(400, { error: 'That meeting is no longer accepting suggestions.' });
+		}
+
+		await locals.db
+			.insert(sessionSubjects)
+			.values({
+				sessionId,
+				subjectType: SUBJECT,
+				subjectId: book.id,
+				status: 'starter',
+				addedByUserId: locals.user.id
+			})
+			.onConflictDoNothing();
+
+		return { suggestedForSession: true };
 	}
 };

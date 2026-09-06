@@ -43,6 +43,7 @@
 	let addSessionStatus = $state<'starter' | 'featured' | 'discussed' | 'mentioned_off_theme'>(
 		'starter'
 	);
+	let showAddAccessForm = $state(false);
 
 	function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (status === 'resolved') return 'default';
@@ -163,6 +164,42 @@
 						/>
 					</div>
 					<div class="space-y-2">
+						<Label for="editionLabel">Edition</Label>
+						<Input
+							id="editionLabel"
+							name="editionLabel"
+							placeholder="e.g. 2024 paperback"
+							value={data.book.editionLabel ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="language">Language</Label>
+						<Input id="language" name="language" value={data.book.language ?? ''} />
+					</div>
+					<div class="space-y-2">
+						<Label for="pageCount">Page Count</Label>
+						<Input
+							id="pageCount"
+							name="pageCount"
+							type="number"
+							min="1"
+							step="1"
+							value={data.book.pageCount ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="audiobookMinutes">Audiobook Length</Label>
+						<Input
+							id="audiobookMinutes"
+							name="audiobookMinutes"
+							type="number"
+							min="1"
+							step="1"
+							placeholder="Minutes"
+							value={data.book.audiobookMinutes ?? ''}
+						/>
+					</div>
+					<div class="space-y-2">
 						<Label for="amazonAsin">Amazon ASIN</Label>
 						<Input id="amazonAsin" name="amazonAsin" value={data.book.amazonAsin ?? ''} />
 					</div>
@@ -270,6 +307,177 @@
 				<GenreMultiPicker genres={genrePickerItems} {selectedGenres} name="genreIds" />
 				<Button type="submit" disabled={saving}>Save Genres</Button>
 			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<!-- Availability -->
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base">Availability</Card.Title>
+			<Card.Description>
+				Manual links for libraries, retailers, and subscription services.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4 p-4">
+			{#if data.accessOptions.length > 0}
+				<div class="space-y-3">
+					{#each data.accessOptions as option (option.id)}
+						<div class="rounded-lg border p-3">
+							<form
+								method="POST"
+								action="?/updateAccessOption"
+								use:enhance={() => {
+									saving = true;
+									return async ({ result, update }) => {
+										saving = false;
+										await update({ reset: false });
+										if (result.type === 'success') toast.success('Availability updated.');
+										if (result.type === 'failure') {
+											toast.error(String(result.data?.error ?? 'Unable to update availability.'));
+										}
+									};
+								}}
+								class="grid gap-3 md:grid-cols-2"
+							>
+								<input type="hidden" name="accessOptionId" value={option.id} />
+								<div class="space-y-2">
+									<Label for="provider-{option.id}">Provider</Label>
+									<Input
+										id="provider-{option.id}"
+										name="providerName"
+										value={option.providerName}
+										required
+									/>
+								</div>
+								<div class="space-y-2">
+									<Label for="provider-type-{option.id}">Provider Type</Label>
+									<NativeSelect
+										id="provider-type-{option.id}"
+										name="providerType"
+										value={option.providerType}
+										class="w-full"
+									>
+										<NativeSelectOption value="library">Library</NativeSelectOption>
+										<NativeSelectOption value="retailer">Retailer</NativeSelectOption>
+										<NativeSelectOption value="subscription">Subscription</NativeSelectOption>
+										<NativeSelectOption value="other">Other</NativeSelectOption>
+									</NativeSelect>
+								</div>
+								<div class="space-y-2">
+									<Label for="format-{option.id}">Format</Label>
+									<NativeSelect
+										id="format-{option.id}"
+										name="format"
+										value={option.format}
+										class="w-full"
+									>
+										<NativeSelectOption value="print">Print</NativeSelectOption>
+										<NativeSelectOption value="ebook">Ebook</NativeSelectOption>
+										<NativeSelectOption value="audiobook">Audiobook</NativeSelectOption>
+										<NativeSelectOption value="other">Other</NativeSelectOption>
+									</NativeSelect>
+								</div>
+								<div class="space-y-2">
+									<Label for="access-url-{option.id}">Link</Label>
+									<Input
+										id="access-url-{option.id}"
+										name="url"
+										type="url"
+										value={option.url ?? ''}
+									/>
+								</div>
+								<div class="space-y-2 md:col-span-2">
+									<Label for="access-note-{option.id}">Note</Label>
+									<Input id="access-note-{option.id}" name="note" value={option.note ?? ''} />
+								</div>
+								<div class="flex items-center gap-2 md:col-span-2">
+									<Button type="submit" variant="outline" disabled={saving}>Save</Button>
+								</div>
+							</form>
+							<div class="mt-3 border-t pt-3">
+								<ConfirmButton
+									confirmText="Remove this availability option?"
+									formAction="?/removeAccessOption"
+									formData={{ accessOptionId: option.id }}
+									variant="ghost"
+									size="sm"
+								>
+									<XIcon class="h-4 w-4" />
+									Remove
+								</ConfirmButton>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No availability has been recorded.</p>
+			{/if}
+
+			{#if showAddAccessForm}
+				<form
+					method="POST"
+					action="?/addAccessOption"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update();
+							if (result.type === 'success') {
+								toast.success('Availability added.');
+								showAddAccessForm = false;
+							}
+							if (result.type === 'failure') {
+								toast.error(String(result.data?.error ?? 'Unable to add availability.'));
+							}
+						};
+					}}
+					class="grid gap-3 border-t pt-4 md:grid-cols-2"
+				>
+					<div class="space-y-2">
+						<Label for="new-provider">Provider</Label>
+						<Input id="new-provider" name="providerName" required />
+					</div>
+					<div class="space-y-2">
+						<Label for="new-provider-type">Provider Type</Label>
+						<NativeSelect id="new-provider-type" name="providerType" value="library" class="w-full">
+							<NativeSelectOption value="library">Library</NativeSelectOption>
+							<NativeSelectOption value="retailer">Retailer</NativeSelectOption>
+							<NativeSelectOption value="subscription">Subscription</NativeSelectOption>
+							<NativeSelectOption value="other">Other</NativeSelectOption>
+						</NativeSelect>
+					</div>
+					<div class="space-y-2">
+						<Label for="new-format">Format</Label>
+						<NativeSelect id="new-format" name="format" value="print" class="w-full">
+							<NativeSelectOption value="print">Print</NativeSelectOption>
+							<NativeSelectOption value="ebook">Ebook</NativeSelectOption>
+							<NativeSelectOption value="audiobook">Audiobook</NativeSelectOption>
+							<NativeSelectOption value="other">Other</NativeSelectOption>
+						</NativeSelect>
+					</div>
+					<div class="space-y-2">
+						<Label for="new-access-url">Link</Label>
+						<Input id="new-access-url" name="url" type="url" />
+					</div>
+					<div class="space-y-2 md:col-span-2">
+						<Label for="new-access-note">Note</Label>
+						<Input id="new-access-note" name="note" placeholder="Optional access details" />
+					</div>
+					<div class="flex gap-2 md:col-span-2">
+						<Button type="submit" disabled={saving}>Add Availability</Button>
+						<Button type="button" variant="ghost" onclick={() => (showAddAccessForm = false)}
+							>Cancel</Button
+						>
+					</div>
+				</form>
+			{:else}
+				<div class="border-t pt-3">
+					<Button variant="outline" onclick={() => (showAddAccessForm = true)}>
+						<PlusIcon class="h-4 w-4" />
+						Add Availability
+					</Button>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
+	bookAccessOptions,
 	series,
 	seriesBooks,
 	genres,
@@ -9,6 +10,8 @@ import {
 	sessions,
 	sessionSubjects,
 	subjectSources,
+	type BookAccessFormat,
+	type BookAccessProviderType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -21,13 +24,50 @@ import {
 	loadClassificationEditor,
 	replaceSubjectClassifications
 } from '$lib/server/classifications';
+import { newId } from '$lib/server/ids';
 
 const SUBJECT = 'book' as const;
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
+const accessProviderTypes = new Set(['library', 'retailer', 'subscription', 'other']);
+const accessFormats = new Set(['print', 'ebook', 'audiobook', 'other']);
 
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	const status = data.get('status')?.toString();
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
+}
+
+function optionalPositiveInteger(data: FormData, name: string) {
+	const raw = data.get(name)?.toString().trim() ?? '';
+	if (!raw) return null;
+	const value = Number(raw);
+	return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function accessValues(data: FormData) {
+	const providerName = data.get('providerName')?.toString().trim() ?? '';
+	const providerType = data.get('providerType')?.toString() ?? '';
+	const format = data.get('format')?.toString() ?? '';
+	const url = data.get('url')?.toString().trim() || null;
+	const note = data.get('note')?.toString().trim() || null;
+	if (!providerName) return { error: 'Enter a provider name.' } as const;
+	if (!accessProviderTypes.has(providerType))
+		return { error: 'Choose a valid provider type.' } as const;
+	if (!accessFormats.has(format)) return { error: 'Choose a valid format.' } as const;
+	if (url) {
+		try {
+			const parsed = new URL(url);
+			if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid protocol');
+		} catch {
+			return { error: 'Enter a valid web address.' } as const;
+		}
+	}
+	return {
+		providerName,
+		providerType: providerType as BookAccessProviderType,
+		format: format as BookAccessFormat,
+		url,
+		note
+	};
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -92,6 +132,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(desc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
+	const accessOptions = await locals.db
+		.select()
+		.from(bookAccessOptions)
+		.where(eq(bookAccessOptions.bookId, book.id))
+		.orderBy(asc(bookAccessOptions.providerName), asc(bookAccessOptions.format))
+		.all();
+
 	// Subject sources tied to this book
 	const sources = await locals.db
 		.select()
@@ -109,6 +156,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		allSeries,
 		sessionLinks: sessionRows,
 		allSessions,
+		accessOptions,
 		sources
 	};
 };
@@ -128,6 +176,16 @@ export const actions: Actions = {
 
 		const firstPublishYearStr = data.get('firstPublishYear')?.toString()?.trim() || '';
 		const firstPublishYear = firstPublishYearStr ? Number(firstPublishYearStr) : null;
+		const pageCountRaw = data.get('pageCount')?.toString().trim() ?? '';
+		const audiobookMinutesRaw = data.get('audiobookMinutes')?.toString().trim() ?? '';
+		const pageCount = optionalPositiveInteger(data, 'pageCount');
+		const audiobookMinutes = optionalPositiveInteger(data, 'audiobookMinutes');
+		if (pageCountRaw && pageCount === null) {
+			return fail(400, { error: 'Page count must be a positive whole number.' });
+		}
+		if (audiobookMinutesRaw && audiobookMinutes === null) {
+			return fail(400, { error: 'Audiobook length must be a positive whole number.' });
+		}
 
 		await locals.db
 			.update(books)
@@ -144,6 +202,10 @@ export const actions: Actions = {
 				hardcoverUrl: data.get('hardcoverUrl')?.toString()?.trim() || null,
 				firstPublishYear:
 					firstPublishYear && Number.isFinite(firstPublishYear) ? firstPublishYear : null,
+				editionLabel: data.get('editionLabel')?.toString()?.trim() || null,
+				language: data.get('language')?.toString()?.trim() || null,
+				pageCount,
+				audiobookMinutes,
 				description: data.get('description')?.toString()?.trim() || null,
 				updatedAt: new Date().toISOString()
 			})
@@ -365,6 +427,64 @@ export const actions: Actions = {
 			);
 
 		return { sessionLinkRemoved: true };
+	},
+
+	addAccessOption: async ({ request, params, locals }) => {
+		requirePermission(locals, 'book:edit');
+		const book = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(eq(books.slug, params.slug))
+			.get();
+		if (!book) return fail(404, { error: 'Book not found' });
+		const values = accessValues(await request.formData());
+		if ('error' in values) return fail(400, values);
+
+		await locals.db.insert(bookAccessOptions).values({
+			id: newId(),
+			bookId: book.id,
+			...values,
+			createdByUserId: locals.user?.id ?? null
+		});
+		return { accessOptionAdded: true };
+	},
+
+	updateAccessOption: async ({ request, params, locals }) => {
+		requirePermission(locals, 'book:edit');
+		const book = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(eq(books.slug, params.slug))
+			.get();
+		if (!book) return fail(404, { error: 'Book not found' });
+		const data = await request.formData();
+		const accessOptionId = data.get('accessOptionId')?.toString();
+		if (!accessOptionId) return fail(400, { error: 'Missing access option ID.' });
+		const values = accessValues(data);
+		if ('error' in values) return fail(400, values);
+
+		await locals.db
+			.update(bookAccessOptions)
+			.set({ ...values, updatedAt: new Date().toISOString() })
+			.where(and(eq(bookAccessOptions.id, accessOptionId), eq(bookAccessOptions.bookId, book.id)));
+		return { accessOptionUpdated: true };
+	},
+
+	removeAccessOption: async ({ request, params, locals }) => {
+		requirePermission(locals, 'book:edit');
+		const book = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(eq(books.slug, params.slug))
+			.get();
+		if (!book) return fail(404, { error: 'Book not found' });
+		const data = await request.formData();
+		const accessOptionId = data.get('accessOptionId')?.toString();
+		if (!accessOptionId) return fail(400, { error: 'Missing access option ID.' });
+		await locals.db
+			.delete(bookAccessOptions)
+			.where(and(eq(bookAccessOptions.id, accessOptionId), eq(bookAccessOptions.bookId, book.id)));
+		return { accessOptionRemoved: true };
 	},
 
 	softDelete: async ({ params, locals }) => {

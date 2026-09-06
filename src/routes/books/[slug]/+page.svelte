@@ -12,6 +12,9 @@
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import HeartIcon from '@lucide/svelte/icons/heart';
 	import UsersIcon from '@lucide/svelte/icons/users';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import ClockIcon from '@lucide/svelte/icons/clock';
+	import LibraryIcon from '@lucide/svelte/icons/library';
 	import { toast } from 'svelte-sonner';
 	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
@@ -29,14 +32,47 @@
 		want_to_read: 'Want to Read',
 		reading: 'Reading',
 		read: 'Read',
-		dnf: 'Did Not Finish',
-		pass: 'Pass'
+		did_not_finish: 'Did Not Finish'
+	};
+	const meetingRoleLabels: Record<string, string> = {
+		starter: 'Suggested',
+		featured: 'Featured',
+		discussed: 'Discussed',
+		mentioned_off_theme: 'Mentioned off theme'
+	};
+	const accessFormatLabels: Record<string, string> = {
+		print: 'Print',
+		ebook: 'Ebook',
+		audiobook: 'Audiobook',
+		other: 'Other format'
+	};
+	const accessProviderLabels: Record<string, string> = {
+		library: 'Library',
+		retailer: 'Retailer',
+		subscription: 'Subscription',
+		other: 'Other source'
 	};
 
 	const statusOptions = Object.entries(statusLabels);
 
 	function statusLabel(status: string) {
 		return statusLabels[status] ?? status;
+	}
+
+	function audiobookLength(minutes: number) {
+		const hours = Math.floor(minutes / 60);
+		const remainder = minutes % 60;
+		return hours ? `${hours} hr${remainder ? ` ${remainder} min` : ''}` : `${remainder} min`;
+	}
+
+	function meetingStatusLabel(status: string) {
+		return (
+			{
+				draft: 'Draft',
+				scheduled: 'Upcoming',
+				current: 'Current'
+			}[status] ?? status
+		);
 	}
 </script>
 
@@ -83,6 +119,21 @@
 					{/if}
 					{#if data.book.isbn13}
 						<Badge variant="outline">ISBN {data.book.isbn13}</Badge>
+					{/if}
+					{#if data.book.editionLabel}
+						<Badge variant="outline">{data.book.editionLabel}</Badge>
+					{/if}
+					{#if data.book.language}
+						<Badge variant="outline">{data.book.language}</Badge>
+					{/if}
+					{#if data.book.pageCount}
+						<Badge variant="outline">{data.book.pageCount} pages</Badge>
+					{/if}
+					{#if data.book.audiobookMinutes}
+						<Badge variant="outline">
+							<ClockIcon class="h-3.5 w-3.5" />
+							Audio {audiobookLength(data.book.audiobookMinutes)}
+						</Badge>
 					{/if}
 					{#if externalSourceUrl}
 						<a
@@ -146,12 +197,7 @@
 							name="readingStatus"
 							onchange={(e) => e.currentTarget.form?.requestSubmit()}
 						>
-							<NativeSelectOption
-								value=""
-								disabled
-								selected={!data.myBookRelation ||
-									data.myBookRelation.readingStatus === 'want_to_read'}
-							>
+							<NativeSelectOption value="" disabled selected={!data.myBookRelation}>
 								Track this book...
 							</NativeSelectOption>
 							{#each statusOptions as [value, label] (value)}
@@ -231,6 +277,138 @@
 			</Card.Header>
 			<Card.Content>
 				<p class="text-sm leading-relaxed text-muted-foreground">{data.book.description}</p>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base">Club Meetings</Card.Title>
+			<Card.Description>
+				See when this book appeared in the club, or suggest it as a starter for an eligible meeting.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			{#if data.sessionLinks.length > 0}
+				<div class="divide-y rounded-lg border">
+					{#each data.sessionLinks as item (item.session.id)}
+						<a
+							href={resolve('/sessions/[slug]', { slug: item.session.slug })}
+							class="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+						>
+							<div class="min-w-0">
+								<p class="font-medium">{item.session.title}</p>
+								<p class="text-sm text-muted-foreground">
+									{formatDate(item.session.startsAt, {
+										time: 'never',
+										timeZone: item.session.timezone
+									})}
+									{#if item.themeName ?? item.session.themeTitle ?? item.session.theme}
+										· {item.themeName ?? item.session.themeTitle ?? item.session.theme}
+									{/if}
+								</p>
+								{#if item.link.note}
+									<p class="mt-1 text-sm text-muted-foreground">{item.link.note}</p>
+								{/if}
+							</div>
+							<Badge variant={item.link.status === 'featured' ? 'default' : 'secondary'}>
+								{meetingRoleLabels[item.link.status] ?? item.link.status}
+							</Badge>
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">This book has not been linked to a meeting yet.</p>
+			{/if}
+
+			{#if data.suggestionSessions.length > 0}
+				<div class="space-y-3 border-t pt-4">
+					<div>
+						<h3 class="text-sm font-medium">Suggest as a starter book</h3>
+						<p class="mt-1 text-sm text-muted-foreground">
+							Adding this book makes it a starter book for the selected meeting. If that meeting is
+							public, the starter book is also included on the public site.
+						</p>
+					</div>
+					<form
+						method="POST"
+						action="?/suggestForSession"
+						use:enhance={() => {
+							return async ({ result, update }) => {
+								await update();
+								if (result.type === 'success') {
+									toast.success('Book added as a starter for the meeting.');
+								}
+								if (result.type === 'failure') {
+									toast.error(String(result.data?.error ?? 'Unable to suggest this book.'));
+								}
+							};
+						}}
+						class="flex flex-col gap-2 sm:flex-row sm:items-end"
+					>
+						<div class="min-w-0 flex-1 space-y-2">
+							<label for="suggest-session" class="text-sm font-medium">Meeting</label>
+							<NativeSelect id="suggest-session" name="sessionId" class="w-full" required>
+								<NativeSelectOption value="" disabled selected>Choose a meeting</NativeSelectOption>
+								{#each data.suggestionSessions as session (session.id)}
+									<NativeSelectOption value={session.id}>
+										{session.title} · {meetingStatusLabel(session.status)} · {formatDate(
+											session.startsAt,
+											{
+												time: 'never',
+												timeZone: session.timezone
+											}
+										)}
+									</NativeSelectOption>
+								{/each}
+							</NativeSelect>
+						</div>
+						<Button type="submit" class="h-10">
+							<CalendarIcon class="h-4 w-4" />
+							Add Starter Book
+						</Button>
+					</form>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	{#if data.accessOptions.length > 0}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">Where to Find It</Card.Title>
+				<Card.Description>Availability maintained by the club.</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-3 sm:grid-cols-2">
+				{#each data.accessOptions as option (option.id)}
+					<div class="rounded-lg border p-3">
+						<div class="flex items-start gap-2">
+							<LibraryIcon class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+							<div class="min-w-0 flex-1">
+								{#if option.url}
+									<a
+										href={option.url}
+										target="_blank"
+										rel="noopener noreferrer external"
+										class="font-medium hover:underline"
+									>
+										{option.providerName}
+										<ExternalLinkIcon class="ml-1 inline h-3.5 w-3.5" />
+									</a>
+								{:else}
+									<p class="font-medium">{option.providerName}</p>
+								{/if}
+								<div class="mt-1 flex flex-wrap gap-1.5">
+									<Badge variant="secondary">{accessFormatLabels[option.format]}</Badge>
+									<Badge variant="outline">{accessProviderLabels[option.providerType]}</Badge>
+								</div>
+								{#if option.note}<p class="mt-2 text-sm text-muted-foreground">
+										{option.note}
+									</p>{/if}
+							</div>
+						</div>
+					</div>
+				{/each}
 			</Card.Content>
 		</Card.Root>
 	{/if}
