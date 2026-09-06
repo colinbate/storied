@@ -32,6 +32,7 @@ export async function createThreadReply(args: {
 	bodySource: string;
 	baseUrl: string;
 	parentPostId?: string | null;
+	containsSpoilers?: boolean;
 	processSubjectLinks?: boolean;
 	imageFile?: File | null;
 }) {
@@ -57,6 +58,7 @@ export async function createThreadReply(args: {
 			parentPostId: args.parentPostId ?? null,
 			bodySource: args.bodySource,
 			bodyHtml: renderMarkdown(args.bodySource, { mentionableUsers }),
+			containsSpoilers: args.containsSpoilers ?? false,
 			imageKey
 		});
 	} catch (error) {

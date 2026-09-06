@@ -349,6 +349,7 @@ export function createThreadActions(options: {
 			const data = await request.formData();
 			const bodySource = data.get('body')?.toString()?.trim();
 			const parentPostId = data.get('parentPostId')?.toString() || null;
+			const containsSpoilers = data.get('containsSpoilers') === 'on';
 			const imageInput = readPostImage(data);
 
 			if (!bodySource) return fail(400, { error: 'Reply cannot be empty.' });
@@ -365,6 +366,7 @@ export function createThreadActions(options: {
 					authorUserId: locals.user.id,
 					bodySource,
 					parentPostId,
+					containsSpoilers,
 					baseUrl: url.origin,
 					processSubjectLinks: true,
 					imageFile: imageInput.file
@@ -649,7 +651,9 @@ export function createThreadActions(options: {
 			const { locals, request } = event;
 			if (!locals.user) throw redirect(302, '/auth/login');
 
-			const body = (await request.formData()).get('body')?.toString()?.trim();
+			const data = await request.formData();
+			const body = data.get('body')?.toString()?.trim();
+			const containsSpoilers = data.get('containsSpoilers') === 'on';
 			if (!body) return fail(400, { error: 'Content cannot be empty.' });
 
 			const thread = await requireThread(event);
@@ -663,7 +667,7 @@ export function createThreadActions(options: {
 			const now = new Date().toISOString();
 			await locals.db
 				.update(threads)
-				.set({ bodySource: body, bodyHtml, updatedAt: now })
+				.set({ bodySource: body, bodyHtml, containsSpoilers, updatedAt: now })
 				.where(eq(threads.id, thread.id));
 
 			return { edited: true };
@@ -676,6 +680,7 @@ export function createThreadActions(options: {
 			const data = await request.formData();
 			const postId = data.get('postId')?.toString();
 			const body = data.get('body')?.toString()?.trim();
+			const containsSpoilers = data.get('containsSpoilers') === 'on';
 			if (!postId) return fail(400, { error: 'Missing post ID.' });
 			if (!body) return fail(400, { error: 'Content cannot be empty.' });
 
@@ -697,7 +702,13 @@ export function createThreadActions(options: {
 			const now = new Date().toISOString();
 			await locals.db
 				.update(posts)
-				.set({ bodySource: body, bodyHtml, editCount: post.editCount + 1, updatedAt: now })
+				.set({
+					bodySource: body,
+					bodyHtml,
+					containsSpoilers,
+					editCount: post.editCount + 1,
+					updatedAt: now
+				})
 				.where(eq(posts.id, postId));
 
 			return { edited: true };

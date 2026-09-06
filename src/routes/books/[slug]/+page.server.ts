@@ -12,6 +12,7 @@ import {
 import { eq, and, isNull, isNotNull, desc, asc, sql, or, ne } from 'drizzle-orm';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
+import { renderMarkdown } from '$lib/server/markdown';
 
 const SUBJECT = 'book';
 
@@ -147,7 +148,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		classifications: bookClassifications[book.id] ?? [],
 		bookGenres,
 		myBookRelation: myBookRelation ?? null,
-		memberConnections: memberConnections.map((entry) => ({ ...entry, canViewProfile: true })),
+		memberConnections: memberConnections.map((entry) => ({
+			...entry,
+			relation: {
+				...entry.relation,
+				noteHtml: entry.relation.note ? renderMarkdown(entry.relation.note) : null
+			},
+			canViewProfile: true
+		})),
 		relatedThreads: uniqueThreads,
 		stats: {
 			recommendations: recommendCount,

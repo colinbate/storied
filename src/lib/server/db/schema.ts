@@ -391,6 +391,8 @@ export const threads = sqliteTable(
 		slug: text('slug').notNull().unique(),
 		bodySource: text('body_source').notNull(),
 		bodyHtml: text('body_html').notNull(),
+		/** 0 = ordinary content, 1 = the entire opening post may contain spoilers */
+		containsSpoilers: integer('contains_spoilers', { mode: 'boolean' }).notNull().default(false),
 		imageKey: text('image_key'),
 		/** Allowed values: 'public' | 'members' | 'admins' */
 		visibility: text('visibility').notNull().default('members'),
@@ -434,6 +436,8 @@ export const posts = sqliteTable(
 		parentPostId: text('parent_post_id'),
 		bodySource: text('body_source').notNull(),
 		bodyHtml: text('body_html').notNull(),
+		/** 0 = ordinary content, 1 = the entire reply may contain spoilers */
+		containsSpoilers: integer('contains_spoilers', { mode: 'boolean' }).notNull().default(false),
 		imageKey: text('image_key'),
 		editCount: integer('edit_count').notNull().default(0),
 		deletedAt: text('deleted_at'),

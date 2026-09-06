@@ -13,6 +13,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
 import { getOrCreateDirectConversation } from '$lib/server/private-messages';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
+import { renderMarkdown } from '$lib/server/markdown';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
@@ -115,17 +116,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const subjects = [
 		...bookSubjectRows.map(({ relation, book }) => ({
 			kind: 'book' as const,
-			relation,
+			relation: {
+				...relation,
+				noteHtml: relation.note ? renderMarkdown(relation.note) : null
+			},
 			book: { ...book, classifications: bookClassifications[book.id] ?? [] }
 		})),
 		...seriesSubjectRows.map(({ relation, series }) => ({
 			kind: 'series' as const,
-			relation,
+			relation: {
+				...relation,
+				noteHtml: relation.note ? renderMarkdown(relation.note) : null
+			},
 			series: { ...series, classifications: seriesClassifications[series.id] ?? [] }
 		})),
 		...authorSubjectRows.map(({ relation, author }) => ({
 			kind: 'author' as const,
-			relation,
+			relation: {
+				...relation,
+				noteHtml: relation.note ? renderMarkdown(relation.note) : null
+			},
 			author
 		}))
 	].sort((a, b) => {

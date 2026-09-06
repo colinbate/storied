@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -233,6 +234,7 @@
 					<div class="space-y-2">
 						<Label for="body">Message</Label>
 						<Textarea id="body" name="body" rows={10} bind:value={body} required />
+						<MarkdownHint />
 						<p class="text-xs text-muted-foreground">
 							Start with the news itself. The greeting, session details, and link are added
 							automatically.

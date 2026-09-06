@@ -1,4 +1,5 @@
 import type { ThreadReplyFanoutPayload } from '$shared/worker-messages';
+import { spoilerSafeExcerpt } from '$shared/spoilers';
 import type { HandlerContext } from '../dispatch';
 import { generateId } from '../shared/ids';
 import { sendEmail, renderMentionNotificationEmail, renderReplyNotificationEmail } from './email';
@@ -56,18 +57,26 @@ export async function handleThreadReplyFanout(
 	if (!thread) return;
 
 	const post = await env.DB.prepare(
-		`SELECT id, body_source FROM posts WHERE id = ? AND deleted_at IS NULL`
+		`SELECT id, body_source, contains_spoilers FROM posts WHERE id = ? AND deleted_at IS NULL`
 	)
 		.bind(postId)
-		.first<{ id: string; body_source: string }>();
+		.first<{ id: string; body_source: string; contains_spoilers: number }>();
 	if (!post) return;
 
 	const author = await env.DB.prepare(`SELECT display_name FROM users WHERE id = ?`)
 		.bind(replyAuthorUserId)
 		.first<{ display_name: string }>();
 	if (!author) return;
-	const replyPreview = post.body_source.substring(0, 200);
-	const pushoverPreview = post.body_source.substring(0, 400);
+	const replyPreview =
+		spoilerSafeExcerpt(post.body_source, {
+			containsSpoilers: Boolean(post.contains_spoilers),
+			maxLength: 200
+		}) ?? '';
+	const pushoverPreview =
+		spoilerSafeExcerpt(post.body_source, {
+			containsSpoilers: Boolean(post.contains_spoilers),
+			maxLength: 400
+		}) ?? '';
 	const postUrl = `${baseUrl}/thread/${thread.slug}#post-${post.id}`;
 
 	// Respect per-user email_enabled. Users who haven't set a preferences row

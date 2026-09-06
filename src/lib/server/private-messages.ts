@@ -13,6 +13,7 @@ import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { removePostImage, uploadPostImage } from '$lib/server/post-images';
+import { spoilerSafeExcerpt } from '$shared/spoilers';
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
@@ -42,9 +43,7 @@ function directKey(userId: string, otherUserId: string) {
 }
 
 function messageSnippet(source: string | null) {
-	if (!source) return null;
-	const snippet = source.replace(/\s+/g, ' ').trim();
-	return snippet.length > 160 ? `${snippet.slice(0, 157)}...` : snippet;
+	return spoilerSafeExcerpt(source, { maxLength: 160 });
 }
 
 export async function requireActiveUser(db: ORM, userId: string) {

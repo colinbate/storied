@@ -140,9 +140,18 @@
 						bind:files={imageFiles}
 					/>
 					<p class="text-xs text-muted-foreground">
-						Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
-						Goodreads book, series, and author URLs are linked to the thread after posting.
+						Hardcover and Goodreads book, series, and author URLs are linked to the thread after
+						posting.
 					</p>
+					<label class="flex items-center gap-2 text-sm text-muted-foreground">
+						<input
+							type="checkbox"
+							name="containsSpoilers"
+							class="rounded border-input"
+							checked={form?.containsSpoilers ?? false}
+						/>
+						This entire post contains spoilers
+					</label>
 				</div>
 
 				{#if showAnnouncementBroadcast}

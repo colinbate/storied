@@ -1,6 +1,7 @@
 import type { PrivateMessageNotificationPayload } from '$shared/worker-messages';
 
 import type { HandlerContext } from '../dispatch';
+import { spoilerSafeExcerpt } from '$shared/spoilers';
 import { generateId } from '../shared/ids';
 import { renderPrivateMessageNotificationEmail, sendEmail } from './email';
 
@@ -70,7 +71,7 @@ export async function handlePrivateMessageNotification(
 
 	const template = renderPrivateMessageNotificationEmail({
 		authorDisplayName: author.display_name,
-		messagePreview: message.body_source.substring(0, 200),
+		messagePreview: spoilerSafeExcerpt(message.body_source, { maxLength: 200 }) ?? '',
 		conversationUrl: `${baseUrl}/messages/${conversationId}`
 	});
 	const sent = await sendEmail(env, {

@@ -136,6 +136,9 @@
 									{#if thread.isLocked}
 										<LockIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 									{/if}
+									{#if thread.containsSpoilers}
+										<Badge variant="secondary" class="shrink-0 px-1.5 py-0 text-xs">Spoilers</Badge>
+									{/if}
 								</div>
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									<span>{author.displayName}</span>

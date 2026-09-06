@@ -13,6 +13,7 @@
 	import HeartIcon from '@lucide/svelte/icons/heart';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
 	import LibraryNav from '$lib/components/library-nav.svelte';
@@ -204,6 +205,7 @@
 							placeholder="Add a review or note about your experience with this book"
 							value={data.myBookRelation?.note ?? ''}
 						/>
+						<MarkdownHint />
 						<label class="flex items-center gap-2 text-sm text-muted-foreground">
 							<input
 								type="checkbox"
@@ -287,9 +289,12 @@
 								<summary class="cursor-pointer list-none font-medium text-foreground">
 									{item.relation.containsSpoilers ? 'Show spoiler note' : 'Show note'}
 								</summary>
-								<p class="mt-2 rounded-md bg-muted/40 p-3 whitespace-pre-wrap">
-									{item.relation.note}
-								</p>
+								<div
+									class="prose mt-2 max-w-none rounded-md bg-muted/40 p-3 text-sm dark:prose-invert"
+								>
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									{@html item.relation.noteHtml}
+								</div>
 							</details>
 						{/if}
 					</div>

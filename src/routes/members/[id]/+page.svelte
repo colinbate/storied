@@ -120,7 +120,10 @@
 							{#if item.relation.note}
 								<details class="px-2 text-xs text-muted-foreground">
 									<summary>{item.relation.containsSpoilers ? 'Spoiler note' : 'Note'}</summary>
-									<p class="mt-1 whitespace-pre-wrap">{item.relation.note}</p>
+									<div class="prose mt-1 max-w-none text-xs dark:prose-invert">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html item.relation.noteHtml}
+									</div>
 								</details>
 							{/if}
 						</div>

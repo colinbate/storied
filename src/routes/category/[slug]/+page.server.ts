@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				t.slug AS threadSlug,
 				t.body_source AS threadBodySource,
 				t.body_html AS threadBodyHtml,
+				t.contains_spoilers AS threadContainsSpoilers,
 				t.visibility AS threadVisibility,
 				t.is_locked AS threadIsLocked,
 				t.is_pinned AS threadIsPinned,

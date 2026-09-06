@@ -15,6 +15,7 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { formatDate } from '$lib/date-format';
 	import { supportedTimeZones } from '$lib/timezone-options';
 	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
@@ -165,6 +166,7 @@
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="create-bodySource">Session description</Label>
 							<Textarea id="create-bodySource" name="bodySource" rows={6} />
+							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
 							<Label for="create-rsvpSlug">RSVP Slug</Label>

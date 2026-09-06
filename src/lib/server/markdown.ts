@@ -1,4 +1,4 @@
-import { Marked, marked } from 'marked';
+import { Marked, marked, type Token, type Tokens } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 
 type MentionableUser = {
@@ -37,14 +37,26 @@ const ALLOWED_TAGS = [
 	'a',
 	'blockquote',
 	'code',
-	'pre'
+	'pre',
+	'details',
+	'summary',
+	'div',
+	'span'
 ];
 
 const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
 	a: ['href', 'title', 'rel', 'target', 'class'],
 	code: ['class'],
-	pre: ['class']
+	pre: ['class'],
+	details: ['class'],
+	summary: ['class'],
+	div: ['class'],
+	span: ['class', 'role', 'tabindex', 'aria-label', 'aria-expanded']
 };
+
+const spoilerExtensions = [createSpoilerBlockExtension(), createInlineSpoilerExtension()];
+
+marked.use({ extensions: spoilerExtensions });
 
 /** Render markdown source to sanitized HTML */
 export function renderMarkdown(source: string, options: RenderMarkdownOptions = {}): string {
@@ -52,7 +64,7 @@ export function renderMarkdown(source: string, options: RenderMarkdownOptions = 
 		? new Marked({
 				gfm: true,
 				breaks: true,
-				extensions: [createMentionExtension(options.mentionableUsers)]
+				extensions: [...spoilerExtensions, createMentionExtension(options.mentionableUsers)]
 			})
 		: marked;
 	const raw = parser.parse(source, { async: false }) as string;
@@ -73,6 +85,62 @@ export function renderMarkdown(source: string, options: RenderMarkdownOptions = 
 			})
 		}
 	});
+}
+
+function createInlineSpoilerExtension() {
+	return {
+		name: 'inlineSpoiler',
+		level: 'inline' as const,
+		start(src: string) {
+			return src.indexOf('||');
+		},
+		tokenizer(this: { lexer: { inlineTokens: (source: string) => Token[] } }, src: string) {
+			const match = /^\|\|([^\n]+?)\|\|/.exec(src);
+			if (!match || !match[1].trim()) return;
+
+			return {
+				type: 'inlineSpoiler',
+				raw: match[0],
+				text: match[1],
+				tokens: this.lexer.inlineTokens(match[1])
+			};
+		},
+		renderer(
+			this: { parser: { parseInline: (tokens: Token[]) => string } },
+			token: Tokens.Generic
+		) {
+			return `<span class="spoiler-inline" role="button" tabindex="0" aria-label="Spoiler, select to reveal" aria-expanded="false"><span class="spoiler-inline-content">${this.parser.parseInline(token.tokens ?? [])}</span></span>`;
+		},
+		childTokens: ['tokens']
+	};
+}
+
+function createSpoilerBlockExtension() {
+	return {
+		name: 'spoilerBlock',
+		level: 'block' as const,
+		start(src: string) {
+			const match = src.match(/^:::spoiler(?:[ \t]|$)/m);
+			return match?.index;
+		},
+		tokenizer(this: { lexer: { blockTokens: (source: string) => Token[] } }, src: string) {
+			const match = /^:::spoiler(?:[ \t]+([^\n]*?))?[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(
+				src
+			);
+			if (!match) return;
+
+			return {
+				type: 'spoilerBlock',
+				raw: match[0],
+				title: match[1]?.trim() || 'Spoiler',
+				tokens: this.lexer.blockTokens(match[2])
+			};
+		},
+		renderer(this: { parser: { parse: (tokens: Token[]) => string } }, token: Tokens.Generic) {
+			return `<details class="spoiler-block"><summary>${escapeHtml(token.title)}</summary><div class="spoiler-block-content">${this.parser.parse(token.tokens ?? [])}</div></details>`;
+		},
+		childTokens: ['tokens']
+	};
 }
 
 function createMentionExtension(mentionableUsers: MentionableUser[]) {

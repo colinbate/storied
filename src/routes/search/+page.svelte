@@ -13,16 +13,14 @@
 	import UserIcon from '@lucide/svelte/icons/user';
 	import LibraryIcon from '@lucide/svelte/icons/library';
 	import { formatDate } from '$lib/date-format';
+	import { spoilerSafeExcerpt } from '$shared/spoilers';
 
 	let { data } = $props();
 
 	const total = $derived(data.threads.length + data.sessions.length + data.subjects.length);
 
-	function summaryText(text?: string | null, maxLength = 220) {
-		if (!text) return null;
-		const normalized = text.replace(/\s+/g, ' ').trim();
-		if (normalized.length <= maxLength) return normalized;
-		return `${normalized.slice(0, maxLength).trimEnd()}...`;
+	function summaryText(text?: string | null, maxLength = 220, containsSpoilers = false) {
+		return spoilerSafeExcerpt(text, { maxLength, containsSpoilers });
 	}
 
 	function subjectHref(result: (typeof data.subjects)[number]) {
@@ -103,6 +101,7 @@
 										Thread
 									</Badge>
 									<Badge variant="secondary">{category.name}</Badge>
+									{#if thread.containsSpoilers}<Badge variant="secondary">Spoilers</Badge>{/if}
 								</div>
 								<div>
 									<h3 class="text-base font-semibold">{thread.title}</h3>
@@ -119,9 +118,9 @@
 										</span>
 									</div>
 								</div>
-								{#if summaryText(thread.bodySource)}
+								{#if summaryText(thread.bodySource, 220, thread.containsSpoilers)}
 									<p class="line-clamp-2 text-sm leading-6 text-muted-foreground">
-										{summaryText(thread.bodySource)}
+										{summaryText(thread.bodySource, 220, thread.containsSpoilers)}
 									</p>
 								{/if}
 							</Card.Content>

@@ -1,5 +1,6 @@
 import { PRIMARY_ORIGIN } from '$shared/brand';
 import type { HandlerContext } from '../dispatch';
+import { spoilerSafeExcerpt } from '$shared/spoilers';
 import { generateId } from '../shared/ids';
 import {
 	renderDigestEmail,
@@ -111,7 +112,7 @@ async function loadFollowedThreadPosts(
 ): Promise<DigestFollowedThread[]> {
 	const result = await env.DB.prepare(
 		`SELECT t.id AS thread_id, t.slug AS thread_slug, t.title AS thread_title,
-		        p.id AS post_id, p.body_source AS body_source, p.created_at AS created_at,
+		        p.id AS post_id, p.body_source AS body_source, p.contains_spoilers AS contains_spoilers, p.created_at AS created_at,
 		        u.display_name AS author_display_name
 		   FROM posts p
 		   INNER JOIN subscriptions s ON s.thread_id = p.thread_id
@@ -133,6 +134,7 @@ async function loadFollowedThreadPosts(
 			thread_title: string;
 			post_id: string;
 			body_source: string;
+			contains_spoilers: number;
 			created_at: string;
 			author_display_name: string;
 		}>();
@@ -152,7 +154,11 @@ async function loadFollowedThreadPosts(
 		}
 		const post: DigestThreadPost = {
 			authorDisplayName: row.author_display_name,
-			bodyPreview: row.body_source.slice(0, POST_PREVIEW_CHARS),
+			bodyPreview:
+				spoilerSafeExcerpt(row.body_source, {
+					containsSpoilers: Boolean(row.contains_spoilers),
+					maxLength: POST_PREVIEW_CHARS
+				}) ?? '',
 			createdAt: row.created_at
 		};
 		thread.posts.push(post);

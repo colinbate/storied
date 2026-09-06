@@ -23,6 +23,7 @@
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import MailIcon from '@lucide/svelte/icons/mail';
 	import { toast } from 'svelte-sonner';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import type { SessionDetailChange } from '$shared/session-messages';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
@@ -373,6 +374,7 @@
 								rows={8}
 								value={data.session.bodySource ?? ''}
 							/>
+							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
 							<Label for="rsvpSlug">RSVP Slug</Label>

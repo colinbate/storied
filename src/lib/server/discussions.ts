@@ -68,6 +68,7 @@ export async function listRecentDiscussionThreads(db: ORM, viewer: ThreadViewer,
 				t.slug AS threadSlug,
 				t.body_source AS threadBodySource,
 				t.body_html AS threadBodyHtml,
+				t.contains_spoilers AS threadContainsSpoilers,
 				t.visibility AS threadVisibility,
 				t.is_locked AS threadIsLocked,
 				t.is_pinned AS threadIsPinned,
@@ -259,6 +260,7 @@ export type ThreadListSqlRow = {
 	threadSlug: string;
 	threadBodySource: string;
 	threadBodyHtml: string;
+	threadContainsSpoilers: number;
 	threadVisibility: string;
 	threadIsLocked: number;
 	threadIsPinned: number;
@@ -286,6 +288,7 @@ export function mapThreadListSqlRow(row: ThreadListSqlRow) {
 			slug: row.threadSlug,
 			bodySource: row.threadBodySource,
 			bodyHtml: row.threadBodyHtml,
+			containsSpoilers: Boolean(row.threadContainsSpoilers),
 			visibility: row.threadVisibility,
 			isLocked: Boolean(row.threadIsLocked),
 			isPinned: Boolean(row.threadIsPinned),

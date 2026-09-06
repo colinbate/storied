@@ -10,6 +10,7 @@
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { cn } from '$lib/utils.js';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 
 	let {
 		id,
@@ -117,6 +118,9 @@
 	aria-label="Post text and image attachment"
 >
 	<Textarea bind:ref {name} {placeholder} {rows} {required} {disabled} bind:value />
+	<div class="mt-2">
+		<MarkdownHint />
+	</div>
 
 	<div class="mt-2 flex flex-wrap items-center gap-2">
 		<label

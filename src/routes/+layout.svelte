@@ -68,10 +68,51 @@
 				return pathname === '/members' || pathname.startsWith('/members/');
 		}
 	}
+
+	function inlineSpoilerFromTarget(target: EventTarget | null) {
+		return target instanceof Element ? target.closest<HTMLElement>('.spoiler-inline') : null;
+	}
+
+	function setInlineSpoilerRevealed(spoiler: HTMLElement, revealed: boolean) {
+		spoiler.dataset.revealed = String(revealed);
+		spoiler.setAttribute('aria-expanded', String(revealed));
+		spoiler.setAttribute(
+			'aria-label',
+			revealed ? 'Spoiler revealed, select to conceal' : 'Spoiler, select to reveal'
+		);
+	}
+
+	function handleSpoilerClick(event: MouseEvent) {
+		const spoiler = inlineSpoilerFromTarget(event.target);
+		if (!spoiler) return;
+
+		const revealed = spoiler.dataset.revealed === 'true';
+		if (revealed && event.target instanceof Element && event.target.closest('a')) return;
+
+		event.preventDefault();
+		setInlineSpoilerRevealed(spoiler, !revealed);
+	}
+
+	function handleSpoilerKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		const spoiler = inlineSpoilerFromTarget(event.target);
+		if (!spoiler) return;
+		if (
+			spoiler.dataset.revealed === 'true' &&
+			event.target instanceof Element &&
+			event.target.closest('a')
+		) {
+			return;
+		}
+
+		event.preventDefault();
+		setInlineSpoilerRevealed(spoiler, spoiler.dataset.revealed !== 'true');
+	}
 </script>
 
 <ModeWatcher />
 <Toaster richColors />
+<svelte:window onclick={handleSpoilerClick} onkeydown={handleSpoilerKeydown} />
 
 <div data-dyslexic={data.dyslexicFont} class="flex min-h-screen flex-col">
 	<header class="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-sm">

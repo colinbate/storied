@@ -94,40 +94,33 @@ export const actions: Actions = {
 		const audienceGroupId = data.get('audienceGroupId')?.toString() || null;
 		const sessionId = data.get('sessionId')?.toString() || null;
 		const notifyAllMembersByEmail = data.get('notifyAllMembersByEmail') === 'on';
+		const containsSpoilers = data.get('containsSpoilers') === 'on';
 		const imageInput = readPostImage(data);
+		const submitted = { title, body: bodySource, categoryId, audienceGroupId, containsSpoilers };
 
 		if (imageInput.error) {
 			return fail(400, {
 				error: imageInput.error,
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 
 		if (!title || title.length < 3 || title.length > 200) {
 			return fail(400, {
 				error: 'Title must be between 3 and 200 characters.',
-				title,
-				body: bodySource,
-				categoryId,
-				audienceGroupId
+				...submitted
 			});
 		}
 		if (!bodySource || bodySource.length < 1) {
 			return fail(400, {
 				error: 'Thread body cannot be empty.',
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 		if (!categoryId) {
 			return fail(400, {
 				error: 'Please select a category.',
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 		if (
@@ -136,19 +129,13 @@ export const actions: Actions = {
 		) {
 			return fail(403, {
 				error: 'You cannot create a thread for that group.',
-				title,
-				body: bodySource,
-				categoryId,
-				audienceGroupId
+				...submitted
 			});
 		}
 		if (audienceGroupId && notifyAllMembersByEmail) {
 			return fail(400, {
 				error: 'Group threads cannot be emailed to all members.',
-				title,
-				body: bodySource,
-				categoryId,
-				audienceGroupId
+				...submitted
 			});
 		}
 
@@ -162,27 +149,21 @@ export const actions: Actions = {
 		if (!category) {
 			return fail(400, {
 				error: 'Invalid category.',
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 
 		if (isSessionDiscussionsCategory(category.id)) {
 			return fail(400, {
 				error: 'Session discussion threads are created automatically from sessions.',
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 
 		if (isAnnouncementsCategory(category.id) && !locals.permissions.has('moderate')) {
 			return fail(403, {
 				error: 'Only moderators and admins can start announcement threads.',
-				title,
-				body: bodySource,
-				categoryId
+				...submitted
 			});
 		}
 
@@ -190,10 +171,7 @@ export const actions: Actions = {
 		if (sessionId && !linkedSession) {
 			return fail(404, {
 				error: 'That session could not be found.',
-				title,
-				body: bodySource,
-				categoryId,
-				audienceGroupId
+				...submitted
 			});
 		}
 
@@ -216,9 +194,7 @@ export const actions: Actions = {
 			} catch {
 				return fail(500, {
 					error: 'The image could not be uploaded. Please try again.',
-					title,
-					body: bodySource,
-					categoryId
+					...submitted
 				});
 			}
 		}
@@ -235,6 +211,7 @@ export const actions: Actions = {
 				slug,
 				bodySource,
 				bodyHtml,
+				containsSpoilers,
 				imageKey,
 				lastPostAt: now
 			});

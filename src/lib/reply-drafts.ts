@@ -1,6 +1,7 @@
 export type ReplyDraft = {
 	body: string;
 	parentPostId: string | null;
+	containsSpoilers: boolean;
 };
 
 const REPLY_DRAFT_PREFIX = 'storied:reply-draft:v1';
@@ -26,8 +27,12 @@ export function loadReplyDraft(userId: string, composerId: string): ReplyDraft |
 
 		const parentPostId =
 			'parentPostId' in draft && typeof draft.parentPostId === 'string' ? draft.parentPostId : null;
+		const containsSpoilers =
+			'containsSpoilers' in draft && typeof draft.containsSpoilers === 'boolean'
+				? draft.containsSpoilers
+				: false;
 
-		return { body: draft.body, parentPostId };
+		return { body: draft.body, parentPostId, containsSpoilers };
 	} catch {
 		return null;
 	}

@@ -1,4 +1,5 @@
 import type { NewThreadFanoutPayload } from '$shared/worker-messages';
+import { spoilerSafeExcerpt } from '$shared/spoilers';
 
 import type { HandlerContext } from '../dispatch';
 import { generateId } from '../shared/ids';
@@ -16,7 +17,7 @@ export async function handleNewThreadFanout(
 	const { threadId, threadAuthorUserId, baseUrl, broadcastToAllMembers } = payload;
 
 	const thread = await env.DB.prepare(
-		`SELECT t.id, t.slug, t.title, t.body_source, t.category_id,
+		`SELECT t.id, t.slug, t.title, t.body_source, t.contains_spoilers, t.category_id,
 		        t.visibility, t.audience_group_id, c.name AS category_name
 		 FROM threads t
 		 INNER JOIN categories c ON c.id = t.category_id
@@ -29,6 +30,7 @@ export async function handleNewThreadFanout(
 			slug: string;
 			title: string;
 			body_source: string;
+			contains_spoilers: number;
 			category_id: string;
 			visibility: string;
 			audience_group_id: string | null;
@@ -40,6 +42,16 @@ export async function handleNewThreadFanout(
 		.bind(threadAuthorUserId)
 		.first<{ display_name: string }>();
 	if (!author) return;
+	const threadPreview =
+		spoilerSafeExcerpt(thread.body_source, {
+			containsSpoilers: Boolean(thread.contains_spoilers),
+			maxLength: 200
+		}) ?? '';
+	const pushoverPreview =
+		spoilerSafeExcerpt(thread.body_source, {
+			containsSpoilers: Boolean(thread.contains_spoilers),
+			maxLength: 400
+		}) ?? '';
 
 	if (broadcastToAllMembers) {
 		const recipientsResult = await env.DB.prepare(
@@ -71,7 +83,7 @@ export async function handleNewThreadFanout(
 			threadTitle: thread.title,
 			threadSlug: thread.slug,
 			threadAuthor: author.display_name,
-			threadPreview: thread.body_source.substring(0, 200),
+			threadPreview,
 			baseUrl
 		});
 
@@ -104,7 +116,7 @@ export async function handleNewThreadFanout(
 
 		await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
 			title: `New announcement: ${thread.title}`,
-			message: `${author.display_name}: ${thread.body_source.substring(0, 400)}`,
+			message: `${author.display_name}: ${pushoverPreview}`,
 			url: `${baseUrl}/thread/${thread.slug}`,
 			urlTitle: 'Open thread',
 			priority: 0,
@@ -168,7 +180,7 @@ export async function handleNewThreadFanout(
 		threadSlug: thread.slug,
 		threadAuthor: author.display_name,
 		categoryName: thread.category_name,
-		threadPreview: thread.body_source.substring(0, 200),
+		threadPreview,
 		baseUrl
 	});
 
@@ -206,7 +218,7 @@ export async function handleNewThreadFanout(
 
 	await queuePushoverForRecipients(env, pushoverRecipientsResult.results ?? [], {
 		title: `New thread: ${thread.title}`,
-		message: `${author.display_name} in ${thread.category_name}: ${thread.body_source.substring(0, 400)}`,
+		message: `${author.display_name} in ${thread.category_name}: ${pushoverPreview}`,
 		url: `${baseUrl}/thread/${thread.slug}`,
 		urlTitle: 'Open thread',
 		priority: 0,

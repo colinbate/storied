@@ -14,6 +14,7 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import PostComposer from '$lib/components/post-composer.svelte';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import PostImage from '$lib/components/post-image.svelte';
 	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
@@ -45,6 +46,7 @@
 	import { cn } from '$lib/utils.js';
 	import type { SubjectSourceType } from '$shared/worker-messages';
 	import type { ThreadViewData } from '$lib/server/thread-view';
+	import { spoilerSafeExcerpt } from '$shared/spoilers';
 	import type { ResolvedPathname } from '$app/types';
 
 	type QueuedSubjectLink = {
@@ -101,6 +103,7 @@
 	let replyingTo = $state<string | null>(null);
 	let replyTextarea = $state<HTMLTextAreaElement | null>(null);
 	let replyImageFiles = $state<FileList | undefined>();
+	let replyContainsSpoilers = $state(false);
 	let activeReplyDraftId = $state<string | null>(null);
 	let queuedSubjectLinks = $state<QueuedSubjectLink[]>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -109,6 +112,7 @@
 	/** Post id currently being edited (empty string = editing the thread opener) */
 	let editingId = $state<string | null>(null);
 	let editBody = $state('');
+	let editContainsSpoilers = $state(false);
 	let editSaving = $state(false);
 
 	const currentUserId = $derived(viewer?.id ?? null);
@@ -178,6 +182,7 @@
 		if (activeReplyDraftId !== nextDraftId) {
 			const draft = loadReplyDraft(currentUserId, replyDraftComposerId);
 			replyBody = draft?.body ?? '';
+			replyContainsSpoilers = draft?.containsSpoilers ?? false;
 			replyingTo =
 				draft?.parentPostId && postsById.has(draft.parentPostId) ? draft.parentPostId : null;
 			activeReplyDraftId = nextDraftId;
@@ -186,7 +191,8 @@
 
 		saveReplyDraft(currentUserId, replyDraftComposerId, {
 			body: replyBody,
-			parentPostId: replyingTo
+			parentPostId: replyingTo,
+			containsSpoilers: replyContainsSpoilers
 		});
 	});
 
@@ -200,20 +206,23 @@
 	function startEditThread() {
 		editingId = '';
 		editBody = view.thread.bodySource;
+		editContainsSpoilers = view.thread.containsSpoilers;
 	}
 
-	function startEditPost(postId: string, bodySource: string) {
+	function startEditPost(postId: string, bodySource: string, containsSpoilers: boolean) {
 		editingId = postId;
 		editBody = bodySource;
+		editContainsSpoilers = containsSpoilers;
 	}
 
 	function cancelEdit() {
 		editingId = null;
 		editBody = '';
+		editContainsSpoilers = false;
 	}
 
-	function getPostPreview(body: string) {
-		return body.replace(/\s+/g, ' ').trim();
+	function getPostPreview(body: string, containsSpoilers: boolean) {
+		return spoilerSafeExcerpt(body, { containsSpoilers }) ?? '';
 	}
 
 	async function selectReplyTarget(postId: string) {
@@ -347,6 +356,7 @@
 				}
 				replyBody = '';
 				replyImageFiles = undefined;
+				replyContainsSpoilers = false;
 				replyingTo = null;
 				toast.success(
 					Array.isArray(queued) && queued.length > 0
@@ -368,6 +378,7 @@
 				toast.success('Updated.');
 				editingId = null;
 				editBody = '';
+				editContainsSpoilers = false;
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
@@ -522,6 +533,16 @@
 			<input type="hidden" name="postId" value={postId} />
 		{/if}
 		<Textarea name="body" {rows} bind:value={editBody} required />
+		<MarkdownHint />
+		<label class="flex items-center gap-2 text-sm text-muted-foreground">
+			<input
+				type="checkbox"
+				name="containsSpoilers"
+				class="rounded border-input"
+				bind:checked={editContainsSpoilers}
+			/>
+			This entire {postId ? 'reply' : 'post'} contains spoilers
+		</label>
 		<div class="flex justify-end gap-2">
 			<Button type="button" variant="ghost" size="sm" onclick={cancelEdit} disabled={editSaving}>
 				<XIcon class="h-4 w-4" />
@@ -815,14 +836,35 @@
 								</button>
 							{/if}
 						</div>
-						{#if threadImageUrl}
-							<div class="mb-4">
-								<PostImage src={threadImageUrl} alt="Image attached by {view.author.displayName}" />
-							</div>
-						{/if}
 						{#if editingId === ''}
 							{@render editForm('?/editThread', null, 6)}
+						{:else if view.thread.containsSpoilers}
+							<details class="spoiler-whole">
+								<summary>Show post with spoilers</summary>
+								<div class="spoiler-whole-content">
+									{#if threadImageUrl}
+										<div class="mb-4">
+											<PostImage
+												src={threadImageUrl}
+												alt="Image attached by {view.author.displayName}"
+											/>
+										</div>
+									{/if}
+									<div class="prose max-w-none wrap-anywhere dark:prose-invert">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html view.thread.bodyHtml}
+									</div>
+								</div>
+							</details>
 						{:else}
+							{#if threadImageUrl}
+								<div class="mb-4">
+									<PostImage
+										src={threadImageUrl}
+										alt="Image attached by {view.author.displayName}"
+									/>
+								</div>
+							{/if}
 							<div class="prose max-w-none wrap-anywhere dark:prose-invert">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 								{@html view.thread.bodyHtml}
@@ -885,7 +927,10 @@
 													<span class="shrink-0">in reply to {parentPost.author.displayName}</span>
 													<span class="shrink-0 text-muted-foreground">·</span>
 													<span class="line-clamp-1 min-w-0 text-muted-foreground">
-														{getPostPreview(parentPost.post.bodySource)}
+														{getPostPreview(
+															parentPost.post.bodySource,
+															parentPost.post.containsSpoilers
+														)}
 													</span>
 												{:else}
 													<span>in reply</span>
@@ -893,18 +938,41 @@
 											</a>
 										{/if}
 									</div>
-									{#if postImageUrl}
-										<div class="mb-4">
-											<PostImage src={postImageUrl} alt="Image attached by {author.displayName}" />
-										</div>
-									{/if}
 									{#if editingId === post.id}
 										{@render editForm('?/editPost', post.id, 4)}
+									{:else if post.containsSpoilers}
+										<details class="spoiler-whole">
+											<summary>Show reply with spoilers</summary>
+											<div class="spoiler-whole-content">
+												{#if postImageUrl}
+													<div class="mb-4">
+														<PostImage
+															src={postImageUrl}
+															alt="Image attached by {author.displayName}"
+														/>
+													</div>
+												{/if}
+												<div class="prose max-w-none wrap-anywhere dark:prose-invert">
+													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+													{@html post.bodyHtml}
+												</div>
+											</div>
+										</details>
 									{:else}
+										{#if postImageUrl}
+											<div class="mb-4">
+												<PostImage
+													src={postImageUrl}
+													alt="Image attached by {author.displayName}"
+												/>
+											</div>
+										{/if}
 										<div class="prose max-w-none wrap-anywhere dark:prose-invert">
 											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											{@html post.bodyHtml}
 										</div>
+									{/if}
+									{#if editingId !== post.id}
 										<div class="mt-2 flex flex-wrap items-center gap-3">
 											{#if !view.thread.isLocked}
 												<button
@@ -920,7 +988,8 @@
 												<button
 													type="button"
 													class="text-xs text-muted-foreground transition-colors hover:text-foreground"
-													onclick={() => startEditPost(post.id, post.bodySource)}
+													onclick={() =>
+														startEditPost(post.id, post.bodySource, post.containsSpoilers)}
 												>
 													<PencilIcon class="mr-1 inline h-3 w-3" />
 													Edit
@@ -986,9 +1055,18 @@
 							required
 						/>
 						<p class="text-xs text-muted-foreground">
-							Supports Markdown: **bold**, *italic*, [links](url), lists, and more. Hardcover and
-							Goodreads book, series, and author URLs are linked to the thread after posting.
+							Hardcover and Goodreads book, series, and author URLs are linked to the thread after
+							posting.
 						</p>
+						<label class="flex items-center gap-2 text-sm text-muted-foreground">
+							<input
+								type="checkbox"
+								name="containsSpoilers"
+								class="rounded border-input"
+								bind:checked={replyContainsSpoilers}
+							/>
+							This entire reply contains spoilers
+						</label>
 						{#if form?.error}
 							<p class="text-sm text-destructive">{form.error}</p>
 						{/if}

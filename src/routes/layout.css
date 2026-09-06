@@ -170,4 +170,66 @@
 	.prose a.mention-link:hover {
 		@apply bg-primary/15 underline!;
 	}
+
+	.spoiler-inline {
+		@apply cursor-pointer rounded-sm bg-foreground/85 px-1 py-0.5 transition-colors outline-none;
+		box-decoration-break: clone;
+		-webkit-box-decoration-break: clone;
+	}
+
+	.spoiler-inline:focus-visible {
+		@apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+	}
+
+	.spoiler-inline-content,
+	.spoiler-inline-content * {
+		color: transparent !important;
+		text-decoration-color: transparent !important;
+		text-shadow: none !important;
+	}
+
+	.spoiler-inline:not([data-revealed='true']) .spoiler-inline-content {
+		pointer-events: none;
+		user-select: none;
+	}
+
+	.spoiler-inline[data-revealed='true'] {
+		@apply bg-muted;
+	}
+
+	.spoiler-inline[data-revealed='true'] .spoiler-inline-content,
+	.spoiler-inline[data-revealed='true'] .spoiler-inline-content * {
+		color: inherit !important;
+		text-decoration-color: currentColor !important;
+	}
+
+	.spoiler-block,
+	.spoiler-whole {
+		@apply my-4 overflow-hidden rounded-lg border border-border bg-muted/20;
+	}
+
+	.spoiler-block > summary,
+	.spoiler-whole > summary {
+		@apply cursor-pointer bg-muted/50 px-4 py-3 font-medium text-foreground;
+	}
+
+	.spoiler-block > summary:hover,
+	.spoiler-whole > summary:hover {
+		@apply bg-muted;
+	}
+
+	.spoiler-block-content,
+	.spoiler-whole-content {
+		@apply border-t border-border px-4 py-3;
+	}
+
+	.prose .spoiler-block-content > :first-child,
+	.prose .spoiler-whole-content > :first-child {
+		margin-top: 0;
+	}
+
+	.prose .spoiler-block-content > :last-child,
+	.prose .spoiler-whole-content > :last-child {
+		margin-bottom: 0;
+	}
 }

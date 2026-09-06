@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
+	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -108,6 +109,7 @@
 						rows={10}
 						value={data.session.memberRecap ?? ''}
 					/>
+					<div class="mt-2"><MarkdownHint /></div>
 				</Card.Content>
 			</Card.Root>
 
@@ -127,6 +129,7 @@
 						rows={6}
 						value={data.session.publicRecap ?? ''}
 					/>
+					<div class="mt-2"><MarkdownHint /></div>
 				</Card.Content>
 			</Card.Root>
 
