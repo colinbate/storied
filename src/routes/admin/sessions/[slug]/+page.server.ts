@@ -5,15 +5,13 @@ import {
 	authors,
 	attendeeIdentities,
 	series,
-	sessionParticipantSubjects,
-	sessionParticipants,
+	sessionReadingChoices,
 	sessions,
 	sessionSubjects,
 	users
 } from '$lib/server/db/schema';
-import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, isNull } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth';
-import { newId } from '$lib/server/ids';
 import { ensureSubjectSource } from '$lib/server/subject-sources';
 import { detectSubjectLinks, type DetectedSubjectLink } from '$lib/server/book-links';
 import { renderMarkdown } from '$lib/server/markdown';
@@ -22,20 +20,20 @@ import {
 	getPrimaryThreadForSession,
 	subscribeActiveMembersToSessionThread
 } from '$lib/server/discussions';
-import {
-	getOrCreateMemberAttendee,
-	getParticipantForAttendee,
-	getSessionRsvpSlug
-} from '$lib/server/rsvp';
+import { getOrCreateMemberAttendee, getSessionRsvpSlug } from '$lib/server/rsvp';
 import { changeSessionStatus, selectThemeStatement } from '$lib/server/session-lifecycle';
 import { isSessionStatus, sessionPublicationError } from '$shared/session-lifecycle';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
+import {
+	isSessionReadingStatus,
+	removeSessionReadingChoice,
+	upsertSessionReadingChoice
+} from '$lib/server/session-reading';
 
 type SubjectKind = 'book' | 'series' | 'author';
 type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
-const participantSubjectRelations = new Set(['read_for_session', 'considered', 'mentioned']);
 
 const subjectUrlBatchFields = [
 	{ name: 'starterUrls', label: 'Starter', status: 'starter' },
@@ -124,13 +122,6 @@ function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	return sessionSubjectStatuses.has(status ?? '') ? (status as SessionSubjectStatus) : 'starter';
 }
 
-function getParticipantSubjectRelation(data: FormData) {
-	const relation = data.get('relationType')?.toString();
-	return participantSubjectRelations.has(relation ?? '')
-		? (relation as 'read_for_session' | 'considered' | 'mentioned')
-		: 'read_for_session';
-}
-
 export const load: PageServerLoad = async ({ params, locals }) => {
 	requirePermission(locals, 'sessions:edit');
 
@@ -186,23 +177,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const allThemes = await listThemes(locals.db);
 
-	const participantReads = await locals.db
+	const readingChoices = await locals.db
 		.select({
-			read: sessionParticipantSubjects,
-			user: {
-				id: users.id,
-				displayName: users.displayName
-			}
+			choice: sessionReadingChoices,
+			attendee: attendeeIdentities,
+			book: books
 		})
-		.from(sessionParticipantSubjects)
-		.innerJoin(
-			sessionParticipants,
-			eq(sessionParticipantSubjects.participantId, sessionParticipants.id)
-		)
-		.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
-		.innerJoin(users, eq(attendeeIdentities.userId, users.id))
-		.where(eq(sessionParticipants.sessionId, session.id))
-		.orderBy(asc(users.displayName), desc(sessionParticipantSubjects.isPrimaryPick))
+		.from(sessionReadingChoices)
+		.innerJoin(attendeeIdentities, eq(sessionReadingChoices.attendeeId, attendeeIdentities.id))
+		.innerJoin(books, eq(sessionReadingChoices.bookId, books.id))
+		.where(eq(sessionReadingChoices.sessionId, session.id))
+		.orderBy(asc(attendeeIdentities.name), asc(sessionReadingChoices.createdAt))
 		.all();
 
 	// For adding new links — all books/series not yet linked, excluding deleted.
@@ -249,16 +234,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.from(users)
 		.orderBy(asc(users.displayName))
 		.all();
+	const guestAttendees = await locals.db
+		.select()
+		.from(attendeeIdentities)
+		.where(isNull(attendeeIdentities.userId))
+		.orderBy(asc(attendeeIdentities.name))
+		.all();
 
 	return {
 		session,
 		themes: allThemes,
 		linkedSubjects,
-		participantReads,
+		readingChoices,
 		allBooks,
 		allSeries,
 		allAuthors,
-		allUsers
+		allUsers,
+		guestAttendees
 	};
 };
 
@@ -551,99 +543,126 @@ export const actions: Actions = {
 		return { linkRemoved: true };
 	},
 
-	upsertParticipantSubject: async ({ request, params, locals }) => {
+	upsertReadingChoice: async ({ request, params, locals, platform }) => {
 		requirePermission(locals, 'sessions:edit');
 		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
 		if (!row) return fail(404, { error: 'Session not found' });
 
 		const data = await request.formData();
-		const userId = data.get('userId')?.toString();
-		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
-		const subjectId = data.get('subjectId')?.toString();
-		if (!userId) return fail(400, { error: 'Select a member.' });
-		if (!kind || (kind !== 'book' && kind !== 'series'))
-			return fail(400, { error: 'Invalid subject kind.' });
-		if (!subjectId) return fail(400, { error: 'Select a subject.' });
-		const user = await locals.db.select().from(users).where(eq(users.id, userId)).get();
-		if (!user) return fail(404, { error: 'Member not found.' });
-		const attendee = await getOrCreateMemberAttendee(locals.db, user);
+		const readerId = data.get('readerId')?.toString();
+		const bookId = data.get('bookId')?.toString();
+		const bookUrl = data.get('url')?.toString().trim() ?? '';
+		const readingStatusValue = data.get('readingStatus')?.toString();
+		if (!readerId) return fail(400, { error: 'Select a reader.' });
+		if (!isSessionReadingStatus(readingStatusValue)) {
+			return fail(400, { error: 'Select a reading status.' });
+		}
+		let attendee;
+		if (readerId.startsWith('user:')) {
+			const user = await locals.db
+				.select()
+				.from(users)
+				.where(eq(users.id, readerId.slice(5)))
+				.get();
+			if (!user) return fail(404, { error: 'Member not found.' });
+			attendee = await getOrCreateMemberAttendee(locals.db, user);
+		} else if (readerId.startsWith('attendee:')) {
+			attendee = await locals.db
+				.select()
+				.from(attendeeIdentities)
+				.where(eq(attendeeIdentities.id, readerId.slice(9)))
+				.get();
+			if (!attendee) return fail(404, { error: 'Reader not found.' });
+		} else {
+			return fail(400, { error: 'Select a valid reader.' });
+		}
+
+		if (bookUrl) {
+			const links = detectSubjectLinks(bookUrl);
+			if (links.length !== 1 || links[0].subjectKind !== 'book') {
+				return fail(400, { error: 'Use one Goodreads or Hardcover book URL.' });
+			}
+			const result = await ensureSubjectSource(locals.db, links[0], platform?.env, {
+				sessionReadingChoice: {
+					sessionId: row.id,
+					attendeeId: attendee.id,
+					readingStatus: readingStatusValue
+				}
+			});
+			return result.resolvedSubjectId
+				? { readingChoiceSaved: true }
+				: { readingChoiceQueued: true };
+		}
+		if (!bookId) return fail(400, { error: 'Choose a book or enter a book URL.' });
+		const book = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(and(eq(books.id, bookId), isNull(books.deletedAt)))
+			.get();
+		if (!book) return fail(404, { error: 'That book is unavailable.' });
+
+		await upsertSessionReadingChoice(locals.db, {
+			sessionId: row.id,
+			attendeeId: attendee.id,
+			bookId,
+			readingStatus: readingStatusValue
+		});
+
+		return { readingChoiceSaved: true };
+	},
+
+	removeReadingChoice: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const attendeeId = data.get('attendeeId')?.toString();
+		const bookId = data.get('bookId')?.toString();
+		if (!attendeeId || !bookId) return fail(400, { error: 'Missing reading choice.' });
+		await removeSessionReadingChoice(locals.db, {
+			sessionId: row.id,
+			attendeeId,
+			bookId
+		});
+
+		return { readingChoiceRemoved: true };
+	},
+
+	promoteReadingChoice: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+
+		const data = await request.formData();
+		const bookId = data.get('bookId')?.toString();
+		if (!bookId) return fail(400, { error: 'Missing reading choice.' });
+		const choice = await locals.db
+			.select({ bookId: sessionReadingChoices.bookId })
+			.from(sessionReadingChoices)
+			.where(
+				and(eq(sessionReadingChoices.sessionId, row.id), eq(sessionReadingChoices.bookId, bookId))
+			)
+			.get();
+		if (!choice) return fail(404, { error: 'Reading choice not found.' });
 
 		await locals.db
-			.insert(sessionParticipants)
+			.insert(sessionSubjects)
 			.values({
-				id: newId(),
 				sessionId: row.id,
-				attendeeId: attendee.id,
-				nameSnapshot: attendee.name,
-				emailSnapshot: attendee.email,
-				attendanceStatus: 'attended',
-				rsvpSource: 'admin'
-			})
-			.onConflictDoNothing();
-		const participant = await getParticipantForAttendee(locals.db, row.id, attendee.id);
-		if (!participant) return fail(500, { error: 'Could not create participant.' });
-
-		await locals.db
-			.insert(sessionParticipantSubjects)
-			.values({
-				participantId: participant.id,
-				subjectType: kind,
-				subjectId,
-				relationType: getParticipantSubjectRelation(data),
-				isPrimaryPick: data.get('isPrimaryPick') === 'on',
-				isThemeRelated: data.get('isThemeRelated') === 'on',
-				note: getOptionalString(data, 'note')
+				subjectType: 'book',
+				subjectId: bookId,
+				status: 'featured',
+				addedByUserId: locals.user?.id ?? null
 			})
 			.onConflictDoUpdate({
-				target: [
-					sessionParticipantSubjects.participantId,
-					sessionParticipantSubjects.subjectType,
-					sessionParticipantSubjects.subjectId
-				],
+				target: [sessionSubjects.sessionId, sessionSubjects.subjectType, sessionSubjects.subjectId],
 				set: {
-					relationType: getParticipantSubjectRelation(data),
-					isPrimaryPick: data.get('isPrimaryPick') === 'on',
-					isThemeRelated: data.get('isThemeRelated') === 'on',
-					note: getOptionalString(data, 'note'),
+					status: 'featured',
 					updatedAt: new Date().toISOString()
 				}
 			});
 
-		return { participantSubjectSaved: true };
-	},
-
-	removeParticipantSubject: async ({ request, params, locals }) => {
-		requirePermission(locals, 'sessions:edit');
-		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
-		if (!row) return fail(404, { error: 'Session not found' });
-
-		const data = await request.formData();
-		const userId = data.get('userId')?.toString();
-		const kind = data.get('kind')?.toString() as SubjectKind | undefined;
-		const subjectId = data.get('subjectId')?.toString();
-		if (!userId || !kind || !subjectId) return fail(400, { error: 'Missing read reference.' });
-		if (kind !== 'book' && kind !== 'series') {
-			return fail(400, { error: 'Invalid subject kind.' });
-		}
-		const attendee = await locals.db
-			.select()
-			.from(attendeeIdentities)
-			.where(eq(attendeeIdentities.userId, userId))
-			.get();
-		if (!attendee) return fail(404, { error: 'Participant not found.' });
-		const participant = await getParticipantForAttendee(locals.db, row.id, attendee.id);
-		if (!participant) return fail(404, { error: 'Participant not found.' });
-
-		await locals.db
-			.delete(sessionParticipantSubjects)
-			.where(
-				and(
-					eq(sessionParticipantSubjects.participantId, participant.id),
-					eq(sessionParticipantSubjects.subjectType, kind),
-					eq(sessionParticipantSubjects.subjectId, subjectId)
-				)
-			);
-
-		return { participantSubjectRemoved: true };
+		return { readingChoicePromoted: true };
 	}
 };

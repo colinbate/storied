@@ -55,6 +55,13 @@ export interface SubjectUserFeatureLink {
 	featuredOrder?: number | null;
 }
 
+export interface SubjectSessionReadingChoice {
+	sessionId: string;
+	attendeeId: string;
+	readingStatus: 'considering' | 'planned' | 'reading' | 'finished' | 'did_not_finish';
+	previousBookId?: string | null;
+}
+
 export interface SubjectResolvePayload {
 	subjectSourceId: string;
 	sourceType: SubjectSourceType;
@@ -65,6 +72,7 @@ export interface SubjectResolvePayload {
 	sessionLink?: SubjectSessionLink;
 	seriesBookLink?: SubjectSeriesBookLink;
 	userFeatureLink?: SubjectUserFeatureLink;
+	sessionReadingChoice?: SubjectSessionReadingChoice;
 }
 
 // ────────────────────────────────────────────────

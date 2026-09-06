@@ -1,48 +1,19 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { userProfileLinks, userProfiles, userSubjects, users } from '$lib/server/db/schema';
-import { asc, count, eq, sql } from 'drizzle-orm';
+import { userProfiles, userSubjects, users } from '$lib/server/db/schema';
+import { asc, count, eq } from 'drizzle-orm';
 import { parseProfileGenres } from '$lib/profile-genres';
-import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
-
-function hasProfileContent(profile: typeof userProfiles.$inferSelect | null) {
-	return Boolean(
-		profile?.headline?.trim() ||
-		profile?.bio?.trim() ||
-		profile?.favoriteGenresText?.trim() ||
-		profile?.locationText?.trim() ||
-		profile?.websiteUrl?.trim()
-	);
-}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
-	const accessCondition = threadAccessCondition(locals.db, threadViewer(locals));
-
-	const [members, countResult, relations, profileLinks] = await locals.db.batch([
+	const [members, countResult, relations] = await locals.db.batch([
 		locals.db
 			.select({
 				id: users.id,
 				displayName: users.displayName,
 				avatarUrl: users.avatarUrl,
 				status: users.status,
-				profile: userProfiles,
-				threadCount: sql<number>`(
-					SELECT count(*)
-					FROM threads
-					WHERE threads.author_user_id = users.id
-						AND threads.deleted_at IS NULL
-						AND ${accessCondition}
-				)`,
-				postCount: sql<number>`(
-					SELECT count(*)
-					FROM posts
-					INNER JOIN threads ON threads.id = posts.thread_id
-					WHERE posts.author_user_id = users.id
-						AND posts.deleted_at IS NULL
-						AND threads.deleted_at IS NULL
-						AND ${accessCondition}
-				)`
+				profile: userProfiles
 			})
 			.from(users)
 			.leftJoin(userProfiles, eq(userProfiles.userId, users.id))
@@ -60,19 +31,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			})
 			.from(userSubjects)
 			.innerJoin(users, eq(users.id, userSubjects.userId))
-			.where(eq(users.status, 'active')),
-
-		locals.db
-			.select({ userId: userProfileLinks.userId })
-			.from(userProfileLinks)
-			.innerJoin(users, eq(users.id, userProfileLinks.userId))
 			.where(eq(users.status, 'active'))
 	]);
 
 	const activeMemberCount = countResult[0]?.count ?? members.length;
 
 	const statsMap = new Map<string, { recommendations: number; read: number; featured: number }>();
-	const membersWithProfileLinks = new Set(profileLinks.map((link) => link.userId));
 	for (const relation of relations) {
 		const existing = statsMap.get(relation.userId) ?? { recommendations: 0, read: 0, featured: 0 };
 		if (relation.isRecommended) existing.recommendations += 1;
@@ -82,21 +46,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const listedMembers = members
-		.map((member) => ({
-			...member,
-			profileGenres: parseProfileGenres(member.profile?.favoriteGenresText),
-			stats: statsMap.get(member.id) ?? { recommendations: 0, read: 0, featured: 0 }
-		}))
-		.filter((member) => {
-			const hasVisibleProfile =
-				member.profile?.showProfile !== false &&
-				(hasProfileContent(member.profile) ||
-					member.stats.featured > 0 ||
-					membersWithProfileLinks.has(member.id));
-			const hasPostedOrReplied = member.threadCount > 0 || member.postCount > 0;
-
-			return hasVisibleProfile || hasPostedOrReplied;
-		});
+		.map((member) => {
+			const stats = statsMap.get(member.id) ?? { recommendations: 0, read: 0, featured: 0 };
+			return {
+				...member,
+				profileGenres: parseProfileGenres(member.profile?.favoriteGenresText),
+				stats: {
+					...stats,
+					recommendations:
+						member.profile?.showRecommendations === false ? 0 : stats.recommendations,
+					read: member.profile?.showReadBooks === false ? 0 : stats.read
+				}
+			};
+		})
+		.filter((member) => member.profile?.showInMemberList !== false);
 
 	return {
 		members: listedMembers,

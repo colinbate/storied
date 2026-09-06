@@ -10,7 +10,6 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import AuthorPicker from '$lib/components/admin/author-picker.svelte';
 	import BookPicker from '$lib/components/admin/book-picker.svelte';
-	import MemberPicker from '$lib/components/admin/member-picker.svelte';
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
 	import SessionThemePicker from '$lib/components/admin/session-theme-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
@@ -43,10 +42,9 @@
 	let addAuthorId = $state<string | undefined>(undefined);
 	let addStatus = $state<SubjectStatus>('starter');
 	let showLinkForms = $state(false);
-	let readUserId = $state<string | undefined>(undefined);
-	let readKind = $state<LinkKind>('book');
+	let readReaderId = $state('');
 	let readBookId = $state<string | undefined>(undefined);
-	let readSeriesId = $state<string | undefined>(undefined);
+	let readBookUrl = $state<string | null>(null);
 
 	let starterUrls = $state('');
 	let featuredUrls = $state('');
@@ -103,30 +101,15 @@
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
 	const authorLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'author'));
-	const activeUsers = $derived(data.allUsers.filter((user) => user.status === 'active'));
-	const linkedBookPickerItems = $derived(
-		books.map((entry) => ({
-			id: entry.book.id,
-			title: entry.book.title,
-			authorText: entry.book.authorText
-		}))
-	);
-	const linkedSeriesPickerItems = $derived(
-		seriesLinks.map((entry) => ({
-			id: entry.series.id,
-			title: entry.series.title,
-			authorText: entry.series.authorText
-		}))
+	const readingBookPickerItems = $derived(
+		data.allBooks
+			.filter((book) => !book.deletedAt)
+			.map((book) => ({ id: book.id, title: book.title, authorText: book.authorText }))
 	);
 
-	function readSubjectTitle(read: { subjectType: string; subjectId: string }) {
-		if (read.subjectType === 'book') {
-			return books.find((entry) => entry.book.id === read.subjectId)?.book.title ?? 'Unknown book';
-		}
-		return (
-			seriesLinks.find((entry) => entry.series.id === read.subjectId)?.series.title ??
-			'Unknown series'
-		);
+	function linkedBookStatus(bookId: string) {
+		return data.linkedSubjects.find((entry) => entry.kind === 'book' && entry.book.id === bookId)
+			?.link.status;
 	}
 
 	const addSubjectSelected = $derived(
@@ -359,75 +342,87 @@
 		{/key}
 	</Card.Root>
 
-	<!-- Participant reads -->
+	<!-- Reading choices -->
 	<Card.Root>
 		<Card.Header>
 			<Card.Title class="text-base"
-				>Member Session Reads ({data.participantReads.length})</Card.Title
+				>Session Reading Choices ({data.readingChoices.length})</Card.Title
 			>
 			<Card.Description
-				>Record what each member read, considered, or mentioned for this session.</Card.Description
+				>Record what a member or guest considered or read. Reading choices do not change their
+				attendance.</Card.Description
 			>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			{#if data.participantReads.length > 0}
+			{#if data.readingChoices.length > 0}
 				<div class="divide-y rounded-md border">
-					{#each data.participantReads as { read, user } (user.id + read.subjectType + read.subjectId)}
+					{#each data.readingChoices as { choice, attendee, book } (attendee.id + choice.bookId)}
 						<div class="flex flex-wrap items-center gap-3 px-4 py-3">
 							<form
 								method="POST"
-								action="?/upsertParticipantSubject"
+								action="?/upsertReadingChoice"
 								use:enhance={() => {
 									saving = true;
 									return async ({ result, update }) => {
 										saving = false;
 										await update({ reset: false });
 										if (result.type === 'success') {
-											if (result.data?.participantSubjectSaved)
-												toast.success('Session read saved.');
+											if (result.data?.readingChoiceSaved) toast.success('Reading choice saved.');
 											if (result.data?.error) toast.error(String(result.data.error));
 										}
 									};
 								}}
 								class="contents"
 							>
-								<input type="hidden" name="userId" value={user.id} />
-								<input type="hidden" name="kind" value={read.subjectType} />
-								<input type="hidden" name="subjectId" value={read.subjectId} />
+								<input type="hidden" name="readerId" value={`attendee:${attendee.id}`} />
+								<input type="hidden" name="bookId" value={choice.bookId} />
 								<div class="min-w-52 flex-1">
-									<p class="font-medium">{user.displayName}</p>
-									<p class="text-sm text-muted-foreground">{readSubjectTitle(read)}</p>
+									<p class="font-medium">{attendee.name}</p>
+									<p class="text-sm text-muted-foreground">{book.title}</p>
 								</div>
-								<NativeSelect name="relationType" value={read.relationType}>
-									<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
-									<NativeSelectOption value="considered">considered</NativeSelectOption>
-									<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+								<NativeSelect
+								    class="h-10"
+									name="readingStatus"
+									aria-label={`Reading status for ${attendee.name}`}
+									value={choice.readingStatus}
+								>
+									<NativeSelectOption value="considering">Considering</NativeSelectOption>
+									<NativeSelectOption value="planned">Planning to read</NativeSelectOption>
+									<NativeSelectOption value="reading">Reading</NativeSelectOption>
+									<NativeSelectOption value="finished">Finished</NativeSelectOption>
+									<NativeSelectOption value="did_not_finish">Did not finish</NativeSelectOption>
 								</NativeSelect>
-								<label class="flex items-center gap-2 text-sm">
-									<input
-										name="isPrimaryPick"
-										type="checkbox"
-										checked={read.isPrimaryPick}
-										class="rounded border-input"
-									/>
-									Primary
-								</label>
-								<label class="flex items-center gap-2 text-sm">
-									<input
-										name="isThemeRelated"
-										type="checkbox"
-										checked={read.isThemeRelated}
-										class="rounded border-input"
-									/>
-									Theme
-								</label>
-								<Input name="note" class="w-44" placeholder="note" value={read.note ?? ''} />
 								<Button type="submit" class="h-10" variant="outline" disabled={saving}>Save</Button>
 							</form>
+							{#if linkedBookStatus(book.id) === 'featured'}
+								<Badge variant="secondary">Featured</Badge>
+							{:else}
+								<form
+									method="POST"
+									action="?/promoteReadingChoice"
+									use:enhance={() => {
+										saving = true;
+										return async ({ result, update }) => {
+											saving = false;
+											await update({ reset: false });
+											if (result.type === 'success' && result.data?.readingChoicePromoted) {
+												toast.success('Book linked as featured.');
+											}
+										};
+									}}
+								>
+									<input type="hidden" name="bookId" value={book.id} />
+									<Button type="submit" variant="outline" class="h-10" disabled={saving}>Link as Featured</Button
+									>
+								</form>
+							{/if}
 							<ConfirmButton
-								confirmText="Remove this session read?"
-								formAction="?/removeParticipantSubject"
-								formData={{ userId: user.id, kind: read.subjectType, subjectId: read.subjectId }}
+								confirmText="Remove this reading choice?"
+								formAction="?/removeReadingChoice"
+								formData={{
+									attendeeId: attendee.id,
+									bookId: choice.bookId
+								}}
 								variant="ghost"
 								size="icon"
 								class="h-10 w-10"
@@ -438,22 +433,25 @@
 					{/each}
 				</div>
 			{:else}
-				<p class="text-sm text-muted-foreground">No member reads recorded yet.</p>
+				<p class="text-sm text-muted-foreground">No reading choices recorded yet.</p>
 			{/if}
 
 			<form
 				method="POST"
-				action="?/upsertParticipantSubject"
+				action="?/upsertReadingChoice"
 				use:enhance={() => {
 					saving = true;
 					return async ({ result, update }) => {
 						saving = false;
-						await update();
+						await update({ reset: false });
 						if (result.type === 'success') {
-							if (result.data?.participantSubjectSaved) {
-								toast.success('Session read saved.');
+							if (result.data?.readingChoiceSaved) {
+								toast.success('Reading choice saved.');
 								readBookId = undefined;
-								readSeriesId = undefined;
+								readBookUrl = null;
+							} else if (result.data?.readingChoiceQueued) {
+								toast.success('The book is being added from the URL.');
+								readBookUrl = null;
 							}
 							if (result.data?.error) toast.error(String(result.data.error));
 						}
@@ -461,104 +459,50 @@
 				}}
 				class="space-y-4"
 			>
-				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
+				<div class="grid gap-4">
 					<div class="space-y-2">
-						<Label for="read-user">Member</Label>
-						<MemberPicker
-							members={activeUsers}
-							bind:selectedId={readUserId}
-							name="userId"
-							placeholder="Search members..."
-						/>
-					</div>
-					<div class="space-y-2">
-						<Label>Kind</Label>
-						<div
-							class="grid h-11 grid-cols-2 gap-1 rounded-lg bg-muted p-1"
-							role="group"
-							aria-label="Session read kind"
-						>
-							<Button
-								type="button"
-								size="sm"
-								class="h-9"
-								variant={readKind === 'book' ? 'default' : 'ghost'}
-								aria-pressed={readKind === 'book'}
-								onclick={() => (readKind = 'book')}
-							>
-								Book
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								class="h-9"
-								variant={readKind === 'series' ? 'default' : 'ghost'}
-								aria-pressed={readKind === 'series'}
-								onclick={() => (readKind = 'series')}
-							>
-								Series
-							</Button>
-						</div>
-					</div>
-				</div>
-				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_14rem]">
-					<input type="hidden" name="kind" value={readKind} />
-					<div class="space-y-2">
-						<Label>{readKind === 'book' ? 'Book' : 'Series'}</Label>
-						{#if readKind === 'book'}
-							<BookPicker
-								books={linkedBookPickerItems}
-								bind:selectedId={readBookId}
-								name="subjectId"
-								placeholder="Search session books..."
-							/>
-						{:else}
-							<SeriesPicker
-								series={linkedSeriesPickerItems}
-								bind:selectedId={readSeriesId}
-								name="subjectId"
-								placeholder="Search session series..."
-							/>
-						{/if}
-					</div>
-					<div class="space-y-2">
-						<Label for="read-relation">Relation</Label>
-						<NativeSelect
-							class="w-full"
-							id="read-relation"
-							name="relationType"
-							value="read_for_session"
-						>
-							<NativeSelectOption value="read_for_session">read for session</NativeSelectOption>
-							<NativeSelectOption value="considered">considered</NativeSelectOption>
-							<NativeSelectOption value="mentioned">mentioned</NativeSelectOption>
+						<Label for="read-reader">Reader</Label>
+						<NativeSelect id="read-reader" name="readerId" bind:value={readReaderId} class="w-full">
+							<NativeSelectOption value="">Choose a member or guest</NativeSelectOption>
+							{#each data.allUsers.filter((user) => user.status === 'active') as user (user.id)}
+								<NativeSelectOption value={`user:${user.id}`}>{user.displayName}</NativeSelectOption
+								>
+							{/each}
+							{#each data.guestAttendees as attendee (attendee.id)}
+								<NativeSelectOption value={`attendee:${attendee.id}`}
+									>{attendee.name} (guest)</NativeSelectOption
+								>
+							{/each}
 						</NativeSelect>
 					</div>
 					<div class="space-y-2">
-						<Label>Flags</Label>
-						<div
-							class="flex min-h-10 flex-wrap items-center gap-4 rounded-lg border px-3 py-2 text-sm"
-						>
-							<label class="flex items-center gap-2">
-								<input name="isPrimaryPick" type="checkbox" class="rounded border-input" />
-								Primary
-							</label>
-							<label class="flex items-center gap-2">
-								<input name="isThemeRelated" type="checkbox" checked class="rounded border-input" />
-								Theme
-							</label>
-						</div>
+						<Label>Book</Label>
+						<BookPicker
+							books={readingBookPickerItems}
+							bind:selectedId={readBookId}
+							bind:selectedUrl={readBookUrl}
+							name="bookId"
+							urlName="url"
+							allowUrl
+							placeholder="Search club books or enter a URL..."
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="read-status">Reading Status</Label>
+						<NativeSelect class="w-full" id="read-status" name="readingStatus" value="planned">
+							<NativeSelectOption value="considering">Considering</NativeSelectOption>
+							<NativeSelectOption value="planned">Planning to read</NativeSelectOption>
+							<NativeSelectOption value="reading">Reading</NativeSelectOption>
+							<NativeSelectOption value="finished">Finished</NativeSelectOption>
+							<NativeSelectOption value="did_not_finish">Did not finish</NativeSelectOption>
+						</NativeSelect>
 					</div>
 				</div>
-				<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-					<div class="space-y-2">
-						<Label for="read-note">Note</Label>
-						<Input id="read-note" name="note" placeholder="optional" />
-					</div>
+				<div class="flex justify-end">
 					<Button
 						type="submit"
 						class="h-10 w-full md:w-auto"
-						disabled={saving || !readUserId || (readKind === 'book' ? !readBookId : !readSeriesId)}
+						disabled={saving || !readReaderId || (!readBookId && !readBookUrl)}
 					>
 						<PlusIcon class="h-4 w-4" />
 						Record

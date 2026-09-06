@@ -54,6 +54,10 @@
 					By using this system, you agree that we may send you email related to the society and its
 					discussions.
 				</span>
+				<span class="block text-muted-foreground">
+					New accounts appear in the signed-in member list by default. You can change this in your
+					club profile settings.
+				</span>
 				{#if data.signupMode === 'moderated'}
 					<span class="block text-muted-foreground">
 						New member sign ups are reviewed before access is granted.

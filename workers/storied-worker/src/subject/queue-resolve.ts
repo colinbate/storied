@@ -3,6 +3,7 @@ import type { HandlerContext } from '../dispatch';
 import {
 	linkThreadSubject,
 	linkSessionSubject,
+	linkSessionReadingChoice,
 	linkSeriesBook,
 	linkUserFeaturedSubject,
 	markSourceFailed
@@ -28,7 +29,8 @@ export async function handleSubjectResolve(
 		postId,
 		sessionLink,
 		seriesBookLink,
-		userFeatureLink
+		userFeatureLink,
+		sessionReadingChoice
 	} = payload;
 
 	const source = await env.DB.prepare(
@@ -54,6 +56,7 @@ export async function handleSubjectResolve(
 		await linkSessionSubject(env.DB, resolvedType, source.subject_id, sessionLink);
 		await linkSeriesBook(env.DB, resolvedType, source.subject_id, seriesBookLink);
 		await linkUserFeaturedSubject(env.DB, resolvedType, source.subject_id, userFeatureLink);
+		await linkSessionReadingChoice(env.DB, resolvedType, source.subject_id, sessionReadingChoice);
 		await reindexSubject(env.DB, resolvedType, source.subject_id);
 		if (threadId) await reindexThread(env.DB, threadId);
 		if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);

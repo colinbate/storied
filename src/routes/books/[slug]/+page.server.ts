@@ -4,7 +4,6 @@ import {
 	books,
 	genres,
 	genreLinks,
-	userProfiles,
 	userSubjects,
 	threadSubjects,
 	threads,
@@ -27,7 +26,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(404, 'Book not found');
 	}
 
-	const viewerId = locals.user.id;
 	const bookClassifications = await loadClassificationsBySubject(locals.db, 'book', [book.id]);
 
 	const bookGenres = await locals.db
@@ -125,14 +123,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				note: userSubjects.note,
 				containsSpoilers: userSubjects.containsSpoilers,
 				updatedAt: userSubjects.updatedAt
-			},
-			profile: {
-				showProfile: userProfiles.showProfile
 			}
 		})
 		.from(userSubjects)
 		.innerJoin(users, eq(userSubjects.userId, users.id))
-		.leftJoin(userProfiles, eq(userProfiles.userId, users.id))
 		.where(
 			and(
 				eq(userSubjects.subjectType, SUBJECT),
@@ -153,10 +147,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		classifications: bookClassifications[book.id] ?? [],
 		bookGenres,
 		myBookRelation: myBookRelation ?? null,
-		memberConnections: memberConnections.map((entry) => ({
-			...entry,
-			canViewProfile: entry.profile?.showProfile !== false || entry.member.id === viewerId
-		})),
+		memberConnections: memberConnections.map((entry) => ({ ...entry, canViewProfile: true })),
 		relatedThreads: uniqueThreads,
 		stats: {
 			recommendations: recommendCount,

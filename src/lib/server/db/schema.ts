@@ -26,7 +26,12 @@ export type SessionAttendanceStatus =
 	| 'attended'
 	| 'no_show';
 export type SessionParticipantSource = 'member' | 'public_form' | 'admin' | 'legacy_import';
-export type SessionParticipantSubjectRelation = 'read_for_session' | 'considered' | 'mentioned';
+export type SessionReadingStatus =
+	| 'considering'
+	| 'planned'
+	| 'reading'
+	| 'finished'
+	| 'did_not_finish';
 export type SessionReminderDeliveryStatus = 'sending' | 'sent' | 'failed';
 export type ThemeStatus = 'idea' | 'shortlist' | 'selected' | 'archived';
 
@@ -230,7 +235,7 @@ export const userProfiles = sqliteTable('user_profiles', {
 	websiteUrl: text('website_url'),
 	showReadBooks: integer('show_read_books', { mode: 'boolean' }).notNull().default(true),
 	showRecommendations: integer('show_recommendations', { mode: 'boolean' }).notNull().default(true),
-	showProfile: integer('show_profile', { mode: 'boolean' }).notNull().default(true),
+	showInMemberList: integer('show_profile', { mode: 'boolean' }).notNull().default(true),
 	createdAt: text('created_at').notNull().default(timestampDefault),
 	updatedAt: text('updated_at').notNull().default(timestampDefault)
 });
@@ -1038,31 +1043,28 @@ export const sessionReminderDeliveries = sqliteTable(
 	]
 );
 
-export const sessionParticipantSubjects = sqliteTable(
-	'session_participant_subjects',
+export const sessionReadingChoices = sqliteTable(
+	'session_reading_choices',
 	{
-		participantId: text('participant_id')
+		sessionId: text('session_id')
 			.notNull()
-			.references(() => sessionParticipants.id, { onDelete: 'cascade' }),
-		subjectType: text('subject_type').notNull().$type<Extract<SubjectType, 'book' | 'series'>>(),
-		subjectId: text('subject_id').notNull(),
-		relationType: text('relation_type')
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		attendeeId: text('attendee_id')
 			.notNull()
-			.default('read_for_session')
-			.$type<SessionParticipantSubjectRelation>(),
-		isPrimaryPick: integer('is_primary_pick', { mode: 'boolean' }).notNull().default(false),
-		isThemeRelated: integer('is_theme_related', { mode: 'boolean' }).notNull().default(true),
-		note: text('note'),
+			.references(() => attendeeIdentities.id, { onDelete: 'cascade' }),
+		bookId: text('book_id')
+			.notNull()
+			.references(() => books.id, { onDelete: 'cascade' }),
+		readingStatus: text('reading_status')
+			.notNull()
+			.default('planned')
+			.$type<SessionReadingStatus>(),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		primaryKey({ columns: [table.participantId, table.subjectType, table.subjectId] }),
-		index('idx_session_participant_subjects_session_subject').on(
-			table.participantId,
-			table.subjectType,
-			table.subjectId
-		),
-		index('idx_session_participant_subjects_participant').on(table.participantId, table.createdAt)
+		primaryKey({ columns: [table.sessionId, table.attendeeId, table.bookId] }),
+		index('idx_session_reading_choices_session_book').on(table.sessionId, table.bookId),
+		index('idx_session_reading_choices_attendee').on(table.attendeeId, table.createdAt)
 	]
 );

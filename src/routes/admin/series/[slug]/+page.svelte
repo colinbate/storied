@@ -20,7 +20,6 @@
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import XIcon from '@lucide/svelte/icons/x';
-	import LinkIcon from '@lucide/svelte/icons/link';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import { toast } from 'svelte-sonner';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
@@ -34,7 +33,7 @@
 	);
 
 	let addBookId = $state<string | undefined>(undefined);
-	let addBookMode = $state<'existing' | 'url'>('existing');
+	let addBookUrl = $state<string | null>(null);
 	let showAddBookForm = $state(false);
 
 	let addSessionId = $state<string | undefined>(undefined);
@@ -352,139 +351,73 @@
 
 			{#if showAddBookForm}
 				<div class="border-t pt-3">
-					<div class="mb-4 flex items-center justify-between gap-2">
-						<div
-							class="grid h-10 w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:w-60"
-							role="group"
-							aria-label="Book source"
-						>
-							<Button
-								size="sm"
-								class="h-8"
-								variant={addBookMode === 'existing' ? 'default' : 'ghost'}
-								aria-pressed={addBookMode === 'existing'}
-								onclick={() => (addBookMode = 'existing')}
-							>
-								Existing
-							</Button>
-							<Button
-								size="sm"
-								class="h-8"
-								variant={addBookMode === 'url' ? 'default' : 'ghost'}
-								aria-pressed={addBookMode === 'url'}
-								onclick={() => (addBookMode = 'url')}
-							>
-								From URL
-							</Button>
-						</div>
+					<div class="mb-4 flex justify-end">
 						<Button variant="ghost" size="sm" onclick={() => (showAddBookForm = false)}>
 							Cancel
 						</Button>
 					</div>
 
-					{#if addBookMode === 'existing'}
-						<form
-							method="POST"
-							action="?/addBook"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.bookAdded) {
-											toast.success('Book added to series.');
-											addBookId = undefined;
-											showAddBookForm = false;
-										}
-										if (result.data?.error) toast.error(String(result.data.error));
+					<form
+						method="POST"
+						action="?/addBook"
+						use:enhance={() => {
+							saving = true;
+							return async ({ result, update }) => {
+								saving = false;
+								await update({ reset: false });
+								if (result.type === 'success') {
+									if (result.data?.bookAdded) toast.success('Book added to series.');
+									else if (result.data?.queuedBook)
+										toast.success('The book is being added from the URL.');
+									if (result.data?.bookAdded || result.data?.queuedBook) {
+										addBookId = undefined;
+										addBookUrl = null;
+										showAddBookForm = false;
 									}
-								};
-							}}
-							class="space-y-4"
-						>
-							<input type="hidden" name="mode" value="existing" />
-							<div class="min-w-0 space-y-2">
-								<Label>Book</Label>
-								<BookPicker
-									books={bookPickerItems}
-									bind:selectedId={addBookId}
-									name="bookId"
-									class="h-10"
-									placeholder="Search books to link..."
-								/>
+									if (result.data?.error) toast.error(String(result.data.error));
+								}
+							};
+						}}
+						class="space-y-4"
+					>
+						<div class="min-w-0 space-y-2">
+							<Label>Book</Label>
+							<BookPicker
+								books={bookPickerItems}
+								bind:selectedId={addBookId}
+								bind:selectedUrl={addBookUrl}
+								name="bookId"
+								urlName="url"
+								allowUrl
+								class="h-10"
+								placeholder="Search books or enter a URL..."
+							/>
+						</div>
+						<div class="grid gap-4 sm:grid-cols-[10rem_10rem_minmax(0,1fr)] sm:items-end">
+							<div class="space-y-2">
+								<Label for="add-position">Position</Label>
+								<Input id="add-position" name="position" placeholder="e.g. 1" />
 							</div>
-							<div class="grid gap-4 sm:grid-cols-[10rem_10rem_minmax(0,1fr)] sm:items-end">
-								<div class="space-y-2">
-									<Label for="add-position">Position</Label>
-									<Input id="add-position" name="position" placeholder="e.g. 1" />
-								</div>
-								<div class="space-y-2">
-									<Label for="add-positionSort">Sort</Label>
-									<Input
-										id="add-positionSort"
-										name="positionSort"
-										type="number"
-										step="0.5"
-										placeholder="1"
-									/>
-								</div>
-								<Button
-									type="submit"
-									class="h-10 w-full sm:w-auto sm:justify-self-end"
-									disabled={saving || !addBookId}
-								>
-									<PlusIcon class="h-4 w-4" />
-									Add
-								</Button>
-							</div>
-						</form>
-					{:else}
-						<form
-							method="POST"
-							action="?/addBook"
-							use:enhance={() => {
-								saving = true;
-								return async ({ result, update }) => {
-									saving = false;
-									await update();
-									if (result.type === 'success') {
-										if (result.data?.bookAdded) {
-											toast.success('Book added to series.');
-											showAddBookForm = false;
-										}
-										if (result.data?.queuedBook) {
-											toast.success(
-												'Book URL queued. It will be added to this series once resolved.'
-											);
-											showAddBookForm = false;
-										}
-										if (result.data?.error) toast.error(String(result.data.error));
-									}
-								};
-							}}
-							class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
-						>
-							<input type="hidden" name="mode" value="url" />
-							<div class="min-w-0 space-y-2">
-								<Label for="book-url">Goodreads Book URL</Label>
+							<div class="space-y-2">
+								<Label for="add-positionSort">Sort</Label>
 								<Input
-									id="book-url"
-									name="url"
-									type="url"
-									placeholder="https://www.goodreads.com/book/show/..."
-									required
+									id="add-positionSort"
+									name="positionSort"
+									type="number"
+									step="0.5"
+									placeholder="1"
 								/>
 							</div>
-							<Button type="submit" class="h-10 w-full md:w-auto" disabled={saving}>
-								<LinkIcon class="h-4 w-4" />
-								Queue
+							<Button
+								type="submit"
+								class="h-10 w-full sm:w-auto sm:justify-self-end"
+								disabled={saving || (!addBookId && !addBookUrl)}
+							>
+								<PlusIcon class="h-4 w-4" />
+								Add
 							</Button>
-						</form>
-						<p class="mt-2 text-xs text-muted-foreground">
-							The book will be auto-added to this series once the worker resolves it.
-						</p>
-					{/if}
+						</div>
+					</form>
 				</div>
 			{:else}
 				<div class="border-t pt-3">

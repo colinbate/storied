@@ -14,18 +14,21 @@ import {
 import { newId } from './ids';
 import { detectSubjectLinks, type DetectedSubjectLink } from './book-links';
 import { publishWorkerMessage, type WorkerServiceBinding } from './worker-queue';
+import { removeSessionReadingChoice, upsertSessionReadingChoice } from './session-reading';
 import type {
 	SubjectResolvePayload,
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
 	SubjectUserFeatureLink,
+	SubjectSessionReadingChoice,
 	SubjectSourceType
 } from '$shared/worker-messages';
 
 export type {
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
-	SubjectUserFeatureLink
+	SubjectUserFeatureLink,
+	SubjectSessionReadingChoice
 } from '$shared/worker-messages';
 
 /** Env subset we need to enqueue worker messages. */
@@ -70,6 +73,7 @@ export async function ensureSubjectSource(
 		sessionLink?: SubjectSessionLink;
 		seriesBookLink?: SubjectSeriesBookLink;
 		userFeatureLink?: SubjectUserFeatureLink;
+		sessionReadingChoice?: SubjectSessionReadingChoice;
 	} = {}
 ): Promise<ResolveOrEnqueueResult> {
 	const existing = await db
@@ -115,7 +119,8 @@ export async function ensureSubjectSource(
 			postId: sideEffects.postId,
 			sessionLink: sideEffects.sessionLink,
 			seriesBookLink: sideEffects.seriesBookLink,
-			userFeatureLink: sideEffects.userFeatureLink
+			userFeatureLink: sideEffects.userFeatureLink,
+			sessionReadingChoice: sideEffects.sessionReadingChoice
 		};
 		await publishWorkerMessage(env?.STORIED_WORKER, 'subject.resolve', payload);
 	}
@@ -216,6 +221,22 @@ export async function ensureSubjectSource(
 							updatedAt: new Date().toISOString()
 						}
 					});
+			}
+		}
+		if (sideEffects.sessionReadingChoice && resolvedSubjectType === 'book') {
+			const readingChoice = sideEffects.sessionReadingChoice;
+			await upsertSessionReadingChoice(db, {
+				sessionId: readingChoice.sessionId,
+				attendeeId: readingChoice.attendeeId,
+				bookId: resolvedSubjectId,
+				readingStatus: readingChoice.readingStatus
+			});
+			if (readingChoice.previousBookId && readingChoice.previousBookId !== resolvedSubjectId) {
+				await removeSessionReadingChoice(db, {
+					sessionId: readingChoice.sessionId,
+					attendeeId: readingChoice.attendeeId,
+					bookId: readingChoice.previousBookId
+				});
 			}
 		}
 	}

@@ -12,6 +12,7 @@ import {
 import {
 	linkThreadSubject,
 	linkSessionSubject,
+	linkSessionReadingChoice,
 	linkSeriesBook,
 	linkUserFeaturedSubject,
 	markSourceFailed
@@ -128,7 +129,8 @@ export async function resolveHardcoverBook(
 		postId,
 		sessionLink,
 		seriesBookLink,
-		userFeatureLink
+		userFeatureLink,
+		sessionReadingChoice
 	} = payload;
 
 	const metadata = await fetchHardcoverBook(env, sourceKey);
@@ -197,6 +199,7 @@ export async function resolveHardcoverBook(
 	await linkSessionSubject(env.DB, 'book', bookId, sessionLink);
 	await linkSeriesBook(env.DB, 'book', bookId, seriesBookLink);
 	await linkUserFeaturedSubject(env.DB, 'book', bookId, userFeatureLink);
+	await linkSessionReadingChoice(env.DB, 'book', bookId, sessionReadingChoice);
 	await reindexSubject(env.DB, 'book', bookId);
 	if (seriesBookLink?.seriesId) await reindexSubject(env.DB, 'series', seriesBookLink.seriesId);
 	if (threadId) await reindexThread(env.DB, threadId);
@@ -207,7 +210,15 @@ export async function resolveHardcoverAuthor(
 	payload: SubjectResolvePayload,
 	env: Env
 ): Promise<void> {
-	const { subjectSourceId, sourceKey, threadId, postId, sessionLink, userFeatureLink } = payload;
+	const {
+		subjectSourceId,
+		sourceKey,
+		threadId,
+		postId,
+		sessionLink,
+		userFeatureLink,
+		sessionReadingChoice
+	} = payload;
 
 	const metadata = await fetchHardcoverAuthor(env, sourceKey);
 	if (!metadata) {
@@ -258,6 +269,7 @@ export async function resolveHardcoverAuthor(
 	await linkThreadSubject(env.DB, 'author', authorId, threadId, postId);
 	await linkSessionSubject(env.DB, 'author', authorId, sessionLink);
 	await linkUserFeaturedSubject(env.DB, 'author', authorId, userFeatureLink);
+	await linkSessionReadingChoice(env.DB, 'author', authorId, sessionReadingChoice);
 	await reindexSubject(env.DB, 'author', authorId);
 	if (threadId) await reindexThread(env.DB, threadId);
 	if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);
@@ -274,7 +286,8 @@ export async function resolveHardcoverSeries(
 		postId,
 		sessionLink,
 		seriesBookLink,
-		userFeatureLink
+		userFeatureLink,
+		sessionReadingChoice
 	} = payload;
 
 	const metadata = await fetchHardcoverSeries(env, sourceKey);
@@ -337,6 +350,7 @@ export async function resolveHardcoverSeries(
 	await linkSessionSubject(env.DB, 'series', seriesId, sessionLink);
 	await linkSeriesBook(env.DB, 'series', seriesId, seriesBookLink);
 	await linkUserFeaturedSubject(env.DB, 'series', seriesId, userFeatureLink);
+	await linkSessionReadingChoice(env.DB, 'series', seriesId, sessionReadingChoice);
 	await reindexSubject(env.DB, 'series', seriesId);
 	if (seriesBookLink?.bookId) await reindexSubject(env.DB, 'book', seriesBookLink.bookId);
 	if (threadId) await reindexThread(env.DB, threadId);

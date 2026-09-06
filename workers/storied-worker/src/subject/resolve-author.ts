@@ -5,6 +5,7 @@ import { scrapeGoodreadsAuthor, type GoodreadsAuthorMetadata } from './scrapers'
 import {
 	linkThreadSubject,
 	linkSessionSubject,
+	linkSessionReadingChoice,
 	linkUserFeaturedSubject,
 	markSourceFailed
 } from './links';
@@ -31,7 +32,15 @@ export async function resolveGoodreadsAuthor(
 	payload: SubjectResolvePayload,
 	env: Env
 ): Promise<void> {
-	const { subjectSourceId, sourceUrl, threadId, postId, sessionLink, userFeatureLink } = payload;
+	const {
+		subjectSourceId,
+		sourceUrl,
+		threadId,
+		postId,
+		sessionLink,
+		userFeatureLink,
+		sessionReadingChoice
+	} = payload;
 
 	const metadata = await scrapeGoodreadsAuthor(sourceUrl);
 	if (!metadata) {
@@ -90,6 +99,7 @@ export async function resolveGoodreadsAuthor(
 	await linkThreadSubject(env.DB, 'author', authorId, threadId, postId);
 	await linkSessionSubject(env.DB, 'author', authorId, sessionLink);
 	await linkUserFeaturedSubject(env.DB, 'author', authorId, userFeatureLink);
+	await linkSessionReadingChoice(env.DB, 'author', authorId, sessionReadingChoice);
 	await reindexSubject(env.DB, 'author', authorId);
 	if (threadId) await reindexThread(env.DB, threadId);
 	if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);

@@ -293,7 +293,7 @@ export const actions: Actions = {
 				websiteUrl: data.get('websiteUrl')?.toString()?.trim() || null,
 				showReadBooks: data.get('showReadBooks') === 'on',
 				showRecommendations: data.get('showRecommendations') === 'on',
-				showProfile: data.get('showProfile') === 'on'
+				showInMemberList: data.get('showInMemberList') === 'on'
 			})
 			.onConflictDoUpdate({
 				target: userProfiles.userId,
@@ -307,7 +307,7 @@ export const actions: Actions = {
 					websiteUrl: data.get('websiteUrl')?.toString()?.trim() || null,
 					showReadBooks: data.get('showReadBooks') === 'on',
 					showRecommendations: data.get('showRecommendations') === 'on',
-					showProfile: data.get('showProfile') === 'on',
+					showInMemberList: data.get('showInMemberList') === 'on',
 					updatedAt: now
 				}
 			});

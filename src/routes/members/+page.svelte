@@ -18,14 +18,14 @@
 	<div>
 		<h1 class="text-2xl font-bold">Members</h1>
 		<p class="text-muted-foreground">
-			Members who have introduced themselves or joined the discussion.
+			Active club members who have chosen to appear in the member list.
 		</p>
 		<p class="mt-1 text-sm text-muted-foreground">
 			{data.members.length}
 			{data.members.length === 1 ? 'member is' : 'members are'} listed.
 			{#if data.membersNotYetListed > 0}
 				{data.membersNotYetListed}
-				{data.membersNotYetListed === 1 ? 'member is' : 'members are'} not yet.
+				{data.membersNotYetListed === 1 ? 'member has' : 'members have'} chosen not to appear.
 			{/if}
 		</p>
 	</div>
@@ -34,8 +34,8 @@
 		<Card.Root>
 			<Card.Content class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<p class="text-sm text-muted-foreground">
-					You're not listed here yet. Add profile details or join a discussion when you're ready to
-					be included.
+					You have chosen not to appear in the member list. You can change this in your club profile
+					settings.
 				</p>
 				<Button href={resolve('/settings')}>Edit Profile</Button>
 			</Card.Content>

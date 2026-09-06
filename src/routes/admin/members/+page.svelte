@@ -25,6 +25,7 @@
 	let creatingInvite = $state(false);
 	let updatingUserId = $state<string | null>(null);
 	let updatingStatusUserId = $state<string | null>(null);
+	let updatingVisibilityUserId = $state<string | null>(null);
 	let moderatingUserId = $state<string | null>(null);
 	let inviteEmailInput = $state<HTMLInputElement | null>(null);
 	let addEmailInput = $state<HTMLInputElement | null>(null);
@@ -380,7 +381,7 @@
 								</div>
 							</div>
 
-							<div class="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-96">
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-4 lg:w-[32rem]">
 								{#if member.status === 'active' && member.id !== data.user?.id}
 									<form method="POST" action="?/message" class="flex justify-end">
 										<input type="hidden" name="userId" value={member.id} />
@@ -431,6 +432,47 @@
 												>{opt.label}</NativeSelectOption
 											>
 										{/each}
+									</NativeSelect>
+								</form>
+								<form
+									method="POST"
+									action="?/updateMemberListVisibility"
+									use:enhance={() => {
+										updatingVisibilityUserId = member.id;
+										const originalVisibility = member.showInMemberList;
+										return async ({ result, update }) => {
+											await update({ reset: false });
+											updatingVisibilityUserId = null;
+											if (result.type === 'success' && result.data?.visibilityUpdated) {
+												toast.success(
+													result.data.showInMemberList
+														? 'Member shown in the member list.'
+														: 'Member hidden from the member list.'
+												);
+											} else if (result.type === 'failure' && result.data?.error) {
+												toast.error(String(result.data.error));
+												member.showInMemberList = originalVisibility;
+											}
+										};
+									}}
+								>
+									<input type="hidden" name="userId" value={member.id} />
+									<NativeSelect
+										name="showInMemberList"
+										value={String(member.showInMemberList)}
+										disabled={updatingVisibilityUserId === member.id}
+										onchange={(e) => {
+											(e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+										}}
+										aria-label="Member list visibility for {member.displayName}"
+										class="w-full"
+									>
+										<NativeSelectOption value="true" selected={member.showInMemberList}
+											>Listed</NativeSelectOption
+										>
+										<NativeSelectOption value="false" selected={!member.showInMemberList}
+											>Hidden</NativeSelectOption
+										>
 									</NativeSelect>
 								</form>
 								<form

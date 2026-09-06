@@ -3,7 +3,7 @@ import type { ORM } from '$lib/server/db';
 import {
 	attendeeIdentities,
 	sessionParticipants,
-	sessionParticipantSubjects,
+	sessionReadingChoices,
 	type SessionAttendanceStatus
 } from '$lib/server/db/schema';
 
@@ -22,8 +22,8 @@ export function mergedAttendanceStatus(a: SessionAttendanceStatus, b: SessionAtt
 
 /**
  * Move every session record from an unlinked guest identity to another identity.
- * When both identities already have a record for the same session, the records and
- * their reading subjects are combined before the source identity is removed.
+ * When both identities already have a record for the same session, the attendance
+ * records are combined. Reading choices move independently of attendance.
  */
 export async function mergeGuestIdentity(db: ORM, sourceId: string, targetId: string) {
 	if (sourceId === targetId) throw new Error('Choose a different attendee to merge into.');
@@ -41,6 +41,18 @@ export async function mergeGuestIdentity(db: ORM, sourceId: string, targetId: st
 		.from(sessionParticipants)
 		.where(eq(sessionParticipants.attendeeId, source.id))
 		.all();
+	const sourceChoices = await db
+		.select()
+		.from(sessionReadingChoices)
+		.where(eq(sessionReadingChoices.attendeeId, source.id))
+		.all();
+
+	for (const choice of sourceChoices) {
+		await db
+			.insert(sessionReadingChoices)
+			.values({ ...choice, attendeeId: target.id })
+			.onConflictDoNothing();
+	}
 
 	for (const sourceParticipant of sourceParticipations) {
 		const targetParticipant = await db
@@ -65,18 +77,6 @@ export async function mergeGuestIdentity(db: ORM, sourceId: string, targetId: st
 				})
 				.where(eq(sessionParticipants.id, sourceParticipant.id));
 			continue;
-		}
-
-		const sourceSubjects = await db
-			.select()
-			.from(sessionParticipantSubjects)
-			.where(eq(sessionParticipantSubjects.participantId, sourceParticipant.id))
-			.all();
-		for (const subject of sourceSubjects) {
-			await db
-				.insert(sessionParticipantSubjects)
-				.values({ ...subject, participantId: targetParticipant.id })
-				.onConflictDoNothing();
 		}
 
 		const takeSourceToken =
@@ -120,5 +120,10 @@ export async function mergeGuestIdentity(db: ORM, sourceId: string, targetId: st
 	}
 
 	await db.delete(attendeeIdentities).where(eq(attendeeIdentities.id, source.id));
-	return { source, target, recordsMoved: sourceParticipations.length };
+	return {
+		source,
+		target,
+		recordsMoved: sourceParticipations.length,
+		readingChoicesMoved: sourceChoices.length
+	};
 }

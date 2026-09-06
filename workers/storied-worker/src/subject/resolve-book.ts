@@ -5,6 +5,7 @@ import { scrapeGoodreadsBook, type GoodreadsBookMetadata } from './scrapers';
 import {
 	linkThreadSubject,
 	linkSessionSubject,
+	linkSessionReadingChoice,
 	linkSeriesBook,
 	linkUserFeaturedSubject,
 	markSourceFailed
@@ -43,7 +44,8 @@ export async function resolveGoodreadsBook(
 		postId,
 		sessionLink,
 		seriesBookLink,
-		userFeatureLink
+		userFeatureLink,
+		sessionReadingChoice
 	} = payload;
 
 	const metadata = await scrapeGoodreadsBook(sourceUrl);
@@ -106,6 +108,7 @@ export async function resolveGoodreadsBook(
 	await linkSessionSubject(env.DB, 'book', bookId, sessionLink);
 	await linkSeriesBook(env.DB, 'book', bookId, seriesBookLink);
 	await linkUserFeaturedSubject(env.DB, 'book', bookId, userFeatureLink);
+	await linkSessionReadingChoice(env.DB, 'book', bookId, sessionReadingChoice);
 	await reindexSubject(env.DB, 'book', bookId);
 	if (seriesBookLink?.seriesId) await reindexSubject(env.DB, 'series', seriesBookLink.seriesId);
 	if (threadId) await reindexThread(env.DB, threadId);

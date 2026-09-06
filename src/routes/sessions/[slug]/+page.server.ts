@@ -7,7 +7,7 @@ import {
 	attendeeIdentities,
 	posts,
 	series,
-	sessionParticipantSubjects,
+	sessionReadingChoices,
 	sessionParticipants,
 	sessionSubjects,
 	sessions,
@@ -23,11 +23,19 @@ import {
 	canAcceptSessionRsvps,
 	canDeclineSessionRsvp,
 	getCurrentUserSessionRsvp,
+	getOrCreateMemberAttendee,
 	setMemberRsvp
 } from '$lib/server/rsvp';
 import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
+import { detectSubjectLinks } from '$lib/server/book-links';
+import { ensureSubjectSource } from '$lib/server/subject-sources';
+import {
+	isSessionReadingStatus,
+	removeSessionReadingChoice,
+	upsertSessionReadingChoice
+} from '$lib/server/session-reading';
 
 export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	if (!locals.user) {
@@ -48,7 +56,8 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		authorSubjectRows,
 		sessionThreads,
 		participants,
-		participantSubjectRows
+		readingChoiceRows,
+		allBooks
 	] = await Promise.all([
 		locals.db
 			.select({
@@ -140,22 +149,35 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.all(),
 		locals.db
 			.select({
-				read: sessionParticipantSubjects,
+				choice: sessionReadingChoices,
+				attendee: attendeeIdentities,
 				user: {
 					id: users.id,
 					displayName: users.displayName,
 					avatarUrl: users.avatarUrl
-				}
+				},
+				subject: books
 			})
-			.from(sessionParticipantSubjects)
-			.innerJoin(
-				sessionParticipants,
-				eq(sessionParticipantSubjects.participantId, sessionParticipants.id)
-			)
-			.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
-			.innerJoin(users, eq(attendeeIdentities.userId, users.id))
-			.where(eq(sessionParticipants.sessionId, session.id))
-			.orderBy(desc(sessionParticipantSubjects.isPrimaryPick), asc(users.displayName))
+			.from(sessionReadingChoices)
+			.innerJoin(attendeeIdentities, eq(sessionReadingChoices.attendeeId, attendeeIdentities.id))
+			.leftJoin(users, eq(attendeeIdentities.userId, users.id))
+			.innerJoin(books, eq(sessionReadingChoices.bookId, books.id))
+			.where(and(eq(sessionReadingChoices.sessionId, session.id), isNull(books.deletedAt)))
+			.orderBy(asc(attendeeIdentities.name), asc(sessionReadingChoices.createdAt))
+			.all(),
+		locals.db
+			.select({
+				id: books.id,
+				slug: books.slug,
+				title: books.title,
+				authorText: books.authorText,
+				coverUrl: books.coverUrl,
+				goodreadsUrl: books.goodreadsUrl,
+				hardcoverUrl: books.hardcoverUrl
+			})
+			.from(books)
+			.where(isNull(books.deletedAt))
+			.orderBy(asc(books.title))
 			.all()
 	]);
 	const [bookClassifications, seriesClassifications] = await Promise.all([
@@ -222,14 +244,6 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			])
 		: [[], null];
 
-	const subjectReaders = participantSubjectRows.reduce((map, row) => {
-		const key = `${row.read.subjectType}:${row.read.subjectId}`;
-		const existing = map.get(key) ?? [];
-		existing.push(row);
-		map.set(key, existing);
-		return map;
-	}, new Map<string, typeof participantSubjectRows>());
-
 	return {
 		session,
 		primaryThread,
@@ -245,7 +259,9 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		canRsvp: canAcceptSessionRsvps(session),
 		attendingCount: await attendingCount(locals.db, session.id),
 		currentUserRsvp: await getCurrentUserSessionRsvp(locals.db, session.id, locals.user.id),
-		subjectReaders: Object.fromEntries(subjectReaders),
+		readingChoices: readingChoiceRows,
+		myReadingChoices: readingChoiceRows.filter((row) => row.attendee.userId === locals.user?.id),
+		allBooks,
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
 		featuredSubjects: subjects.filter(({ link }) => link.status === 'featured'),
 		discussedSubjects: subjects.filter(({ link }) => link.status === 'discussed'),
@@ -402,5 +418,92 @@ export const actions: Actions = {
 			session,
 			status
 		});
+	},
+
+	upsertReadingChoice: async ({ locals, params, request, platform }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
+			.get();
+		if (!session) throw error(404, 'Session not found');
+
+		const data = await request.formData();
+		const bookId = data.get('bookId')?.toString();
+		const bookUrl = data.get('url')?.toString().trim() ?? '';
+		const previousBookId = data.get('previousBookId')?.toString();
+		const readingStatus = data.get('readingStatus')?.toString();
+		if (!isSessionReadingStatus(readingStatus)) {
+			return fail(400, { readingChoiceError: 'Choose a reading status.' });
+		}
+
+		const attendee = await getOrCreateMemberAttendee(locals.db, locals.user);
+		if (bookUrl) {
+			const links = detectSubjectLinks(bookUrl);
+			if (links.length !== 1 || links[0].subjectKind !== 'book') {
+				return fail(400, {
+					readingChoiceError: 'Use one Goodreads or Hardcover book URL.'
+				});
+			}
+			const result = await ensureSubjectSource(locals.db, links[0], platform?.env, {
+				sessionReadingChoice: {
+					sessionId: session.id,
+					attendeeId: attendee.id,
+					readingStatus,
+					previousBookId
+				}
+			});
+			return result.resolvedSubjectId
+				? { readingChoiceSaved: true }
+				: { readingChoiceQueued: true };
+		}
+		if (!bookId) {
+			return fail(400, { readingChoiceError: 'Choose a book or enter a book URL.' });
+		}
+		const subject = await locals.db
+			.select({ id: books.id })
+			.from(books)
+			.where(and(eq(books.id, bookId), isNull(books.deletedAt)))
+			.get();
+		if (!subject) return fail(404, { readingChoiceError: 'That title is unavailable.' });
+
+		await upsertSessionReadingChoice(locals.db, {
+			sessionId: session.id,
+			attendeeId: attendee.id,
+			bookId,
+			readingStatus
+		});
+		if (previousBookId && previousBookId !== bookId) {
+			await removeSessionReadingChoice(locals.db, {
+				sessionId: session.id,
+				attendeeId: attendee.id,
+				bookId: previousBookId
+			});
+		}
+		return { readingChoiceSaved: true };
+	},
+
+	removeReadingChoice: async ({ locals, params, request }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
+			.get();
+		if (!session) throw error(404, 'Session not found');
+
+		const data = await request.formData();
+		const bookId = data.get('bookId')?.toString();
+		if (!bookId) {
+			return fail(400, { readingChoiceError: 'Missing reading choice.' });
+		}
+		const attendee = await getOrCreateMemberAttendee(locals.db, locals.user);
+		await removeSessionReadingChoice(locals.db, {
+			sessionId: session.id,
+			attendeeId: attendee.id,
+			bookId
+		});
+		return { readingChoiceRemoved: true };
 	}
 };

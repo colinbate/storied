@@ -227,10 +227,8 @@
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Public Profile</Card.Title>
-			<Card.Description>
-				Adding profile details or featured books makes your presence visible in the member list.
-			</Card.Description>
+			<Card.Title>Club Profile</Card.Title>
+			<Card.Description>Your profile is available only to signed-in club members.</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<form
@@ -249,8 +247,9 @@
 				class="space-y-4"
 			>
 				<div class="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-					These fields are for your {APP_SHORT_NAME.toLowerCase()} profile. Adding values here creates
-					a public member profile, unless you turn off profile visibility below.
+					Your account appears in the member list by default. You can hide it from that list below.
+					Posts, RSVPs, book activity, and session reading choices remain visible where they appear
+					in the club.
 				</div>
 				<div class="space-y-2">
 					<Label for="headline">Title or Headline</Label>
@@ -375,12 +374,12 @@
 				<div class="grid gap-3 sm:grid-cols-3">
 					<label class="flex items-center gap-2 text-sm">
 						<input
-							name="showProfile"
+							name="showInMemberList"
 							type="checkbox"
-							checked={data.profile?.showProfile ?? true}
+							checked={data.profile?.showInMemberList ?? true}
 							class="rounded border-input"
 						/>
-						Show in member list
+						Show me in member list
 					</label>
 					<label class="flex items-center gap-2 text-sm">
 						<input
@@ -389,7 +388,7 @@
 							checked={data.profile?.showRecommendations ?? true}
 							class="rounded border-input"
 						/>
-						Show recommendations
+						Show recommendations on my profile
 					</label>
 					<label class="flex items-center gap-2 text-sm">
 						<input
@@ -398,7 +397,7 @@
 							checked={data.profile?.showReadBooks ?? true}
 							class="rounded border-input"
 						/>
-						Show read books
+						Show read books on my profile
 					</label>
 				</div>
 				{#if form?.profileError}
@@ -413,10 +412,9 @@
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Featured On Profile</Card.Title>
+			<Card.Title>Featured on Club Profile</Card.Title>
 			<Card.Description>
-				Pick up to 5 books, series, or authors to lead your profile. Adding one creates a public
-				profile and includes you in the member list while profile visibility is on.
+				Pick up to 5 books, series, or authors to lead your club profile.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">

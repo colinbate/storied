@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { invites, moderationEvents, users } from '$lib/server/db/schema';
+import { invites, moderationEvents, userProfiles, users } from '$lib/server/db/schema';
 import { desc, eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import {
@@ -40,10 +40,23 @@ async function notifyIfActivatedFromPending({
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'members:edit');
-	const allUsers = await locals.db.select().from(users).orderBy(desc(users.createdAt)).all();
-	const allInvites = await locals.db.select().from(invites).orderBy(desc(invites.createdAt)).all();
+	const [allUsers, allInvites, profiles] = await Promise.all([
+		locals.db.select().from(users).orderBy(desc(users.createdAt)).all(),
+		locals.db.select().from(invites).orderBy(desc(invites.createdAt)).all(),
+		locals.db
+			.select({ userId: userProfiles.userId, showInMemberList: userProfiles.showInMemberList })
+			.from(userProfiles)
+			.all()
+	]);
+	const visibility = new Map(profiles.map((profile) => [profile.userId, profile.showInMemberList]));
 
-	return { members: allUsers, invites: allInvites };
+	return {
+		members: allUsers.map((member) => ({
+			...member,
+			showInMemberList: visibility.get(member.id) ?? true
+		})),
+		invites: allInvites
+	};
 };
 
 export const actions: Actions = {
@@ -182,6 +195,35 @@ export const actions: Actions = {
 			updatedStatus: statusValue,
 			approvalEmailSent
 		};
+	},
+
+	updateMemberListVisibility: async ({ request, locals }) => {
+		requirePermission(locals, 'members:edit');
+		const data = await request.formData();
+		const userId = data.get('userId')?.toString();
+		const visibilityValue = data.get('showInMemberList')?.toString();
+		if (!userId) return fail(400, { error: 'Missing user id.' });
+		if (visibilityValue !== 'true' && visibilityValue !== 'false') {
+			return fail(400, { error: 'Choose a valid member list setting.' });
+		}
+		const showInMemberList = visibilityValue === 'true';
+
+		const member = await locals.db
+			.select({ id: users.id })
+			.from(users)
+			.where(eq(users.id, userId))
+			.get();
+		if (!member) return fail(404, { error: 'Member not found.' });
+		const now = new Date().toISOString();
+		await locals.db
+			.insert(userProfiles)
+			.values({ userId, showInMemberList, createdAt: now, updatedAt: now })
+			.onConflictDoUpdate({
+				target: userProfiles.userId,
+				set: { showInMemberList, updatedAt: now }
+			});
+
+		return { visibilityUpdated: true, updatedUserId: userId, showInMemberList };
 	},
 
 	approveSignup: async ({ request, locals, platform, url }) => {

@@ -193,13 +193,12 @@ export const actions: Actions = {
 		if (!row) return fail(404, { error: 'Series not found' });
 
 		const data = await request.formData();
-		const mode = data.get('mode')?.toString();
+		const url = data.get('url')?.toString()?.trim() || '';
 		const position = data.get('position')?.toString()?.trim() || null;
 		const positionSortStr = data.get('positionSort')?.toString()?.trim() || '';
 		const positionSort = positionSortStr ? Number(positionSortStr) : null;
 
-		if (mode === 'url') {
-			const url = data.get('url')?.toString()?.trim() || '';
+		if (url) {
 			const link = detectFirstSubjectLinkOfKind(url, 'book');
 			if (!link)
 				return fail(400, { error: 'Only Goodreads or Hardcover book URLs are supported.' });

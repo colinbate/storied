@@ -7,6 +7,11 @@ import {
 	sessions,
 	users,
 	sessionParticipants,
+	sessionSubjects,
+	sessionReadingChoices,
+	books,
+	subjectSources,
+	userProfiles,
 	themes,
 	threads
 } from '../src/lib/server/db/schema.ts';
@@ -36,7 +41,12 @@ import {
 } from '../src/lib/server/thread-access.ts';
 import { GET as publicSessions } from '../src/routes/api/v1/sessions/+server.ts';
 import { GET as publicSubjects } from '../src/routes/api/v1/sessions/[id]/subjects/+server.ts';
-import { load as sessionPage } from '../src/routes/sessions/[slug]/+page.server.ts';
+import {
+	load as sessionPage,
+	actions as sessionActions
+} from '../src/routes/sessions/[slug]/+page.server.ts';
+import { load as membersPage } from '../src/routes/members/+page.server.ts';
+import { actions as adminMemberActions } from '../src/routes/admin/members/+page.server.ts';
 import { load as homePage } from '../src/routes/+page.server.ts';
 import { load as themesPage } from '../src/routes/themes/+page.server.ts';
 import { actions as publicRsvp } from '../src/routes/rsvp/[eventSlug]/+page.server.ts';
@@ -601,6 +611,121 @@ test('a member with an RSVP can download the session calendar event', async () =
 	assert.match(calendar, /SUMMARY:Bermuda Triangle Society Meeting/);
 	assert.match(calendar, /DURATION:PT90M/);
 	assert.match(calendar, /LOCATION:Bermuda National Library/);
+});
+
+test('a member can record a session reading choice without creating attendance', async () => {
+	const { db, locals, addSession } = await fixture();
+	const session = await addSession('reading-choice');
+	await db.insert(books).values({ id: 'book', slug: 'book', title: 'The Book' });
+
+	const result = await sessionActions.upsertReadingChoice({
+		locals,
+		params: { slug: session.slug },
+		request: formRequest({
+			bookId: 'book',
+			readingStatus: 'planned'
+		})
+	});
+
+	assert.equal(result.readingChoiceSaved, true);
+	assert.equal(await db.$count(sessionParticipants), 0);
+	const choice = await db.select().from(sessionReadingChoices).get();
+	assert.equal(choice.sessionId, session.id);
+	assert.equal(choice.readingStatus, 'planned');
+	assert.equal(choice.bookId, 'book');
+
+	await db.insert(books).values({ id: 'replacement', slug: 'replacement', title: 'Replacement' });
+	const edited = await sessionActions.upsertReadingChoice({
+		locals,
+		params: { slug: session.slug },
+		request: formRequest({
+			bookId: 'replacement',
+			previousBookId: 'book',
+			readingStatus: 'finished'
+		})
+	});
+	assert.equal(edited.readingChoiceSaved, true);
+	const editedChoice = await db.select().from(sessionReadingChoices).get();
+	assert.equal(editedChoice.readingStatus, 'finished');
+	assert.equal(editedChoice.bookId, 'replacement');
+	assert.equal(await db.$count(sessionReadingChoices), 1);
+
+	const page = await sessionPage({
+		locals,
+		params: { slug: session.slug },
+		platform: undefined
+	});
+	assert.equal(page.myReadingChoices.length, 1);
+	assert.equal(page.readingChoices[0].subject.title, 'Replacement');
+
+	await db.insert(books).values({ id: 'url-book', slug: 'url-book', title: 'The URL Book' });
+	await db.insert(subjectSources).values({
+		id: 'book-source',
+		sourceType: 'goodreads',
+		sourceUrl: 'https://www.goodreads.com/book/show/123',
+		sourceKey: '123',
+		subjectType: 'book',
+		subjectId: 'url-book',
+		fetchStatus: 'resolved'
+	});
+	const urlResult = await sessionActions.upsertReadingChoice({
+		locals,
+		params: { slug: session.slug },
+		platform: undefined,
+		request: formRequest({
+			url: 'https://www.goodreads.com/book/show/123',
+			previousBookId: 'replacement',
+			readingStatus: 'reading'
+		})
+	});
+	assert.equal(urlResult.readingChoiceSaved, true);
+	assert.equal(await db.$count(sessionReadingChoices), 1);
+	assert.equal((await db.select().from(sessionReadingChoices).get()).bookId, 'url-book');
+	assert.equal(await db.$count(sessionParticipants), 0);
+
+	const adminLocals = {
+		db,
+		user: await db.select().from(users).where(eq(users.id, 'host')).get(),
+		permissions: new Set(['sessions:edit'])
+	};
+	const promoted = await adminEdit.promoteReadingChoice({
+		locals: adminLocals,
+		params: { slug: session.slug },
+		request: formRequest({ bookId: 'url-book' })
+	});
+	assert.equal(promoted.readingChoicePromoted, true);
+	const featured = await db.select().from(sessionSubjects).get();
+	assert.equal(featured.subjectId, 'url-book');
+	assert.equal(featured.status, 'featured');
+});
+
+test('active members are listed by default and the admin visibility control is authoritative', async () => {
+	const { db, locals } = await fixture();
+	let page = await membersPage({ locals });
+	assert.deepEqual(page.members.map((member) => member.id).sort(), ['host', 'reader']);
+
+	const adminLocals = {
+		db,
+		user: await db.select().from(users).where(eq(users.id, 'host')).get(),
+		permissions: new Set(['members:edit'])
+	};
+	const hidden = await adminMemberActions.updateMemberListVisibility({
+		locals: adminLocals,
+		request: formRequest({ userId: 'reader', showInMemberList: 'false' })
+	});
+	assert.equal(hidden.visibilityUpdated, true);
+	assert.equal(
+		(await db.select().from(userProfiles).where(eq(userProfiles.userId, 'reader')).get())
+			.showInMemberList,
+		false
+	);
+
+	page = await membersPage({ locals });
+	assert.equal(
+		page.members.some((member) => member.id === 'reader'),
+		false
+	);
+	assert.equal(page.isCurrentUserListed, false);
 });
 
 test('a concurrent details save reports conflict without selecting the unsaved theme', async () => {

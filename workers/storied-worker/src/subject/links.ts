@@ -2,7 +2,8 @@ import type {
 	SubjectType,
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
-	SubjectUserFeatureLink
+	SubjectUserFeatureLink,
+	SubjectSessionReadingChoice
 } from '$shared/worker-messages';
 import { generateId } from '../shared/ids';
 
@@ -129,6 +130,38 @@ export async function linkUserFeaturedSubject(
 		)
 		.bind(userFeatureLink.userId, subjectType, subjectId, featuredOrder, now, now)
 		.run();
+}
+
+export async function linkSessionReadingChoice(
+	db: D1Database,
+	subjectType: SubjectType,
+	bookId: string,
+	choice?: SubjectSessionReadingChoice
+): Promise<void> {
+	if (!choice || subjectType !== 'book') return;
+
+	const now = new Date().toISOString();
+	await db
+		.prepare(
+			`INSERT INTO session_reading_choices (
+				session_id, attendee_id, book_id, reading_status, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(session_id, attendee_id, book_id) DO UPDATE SET
+				reading_status = excluded.reading_status,
+				updated_at = excluded.updated_at`
+		)
+		.bind(choice.sessionId, choice.attendeeId, bookId, choice.readingStatus, now, now)
+		.run();
+
+	if (choice.previousBookId && choice.previousBookId !== bookId) {
+		await db
+			.prepare(
+				`DELETE FROM session_reading_choices
+				 WHERE session_id = ? AND attendee_id = ? AND book_id = ?`
+			)
+			.bind(choice.sessionId, choice.attendeeId, choice.previousBookId)
+			.run();
+	}
 }
 
 export async function markSourceFailed(db: D1Database, subjectSourceId: string): Promise<void> {
