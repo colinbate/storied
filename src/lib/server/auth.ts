@@ -499,6 +499,8 @@ export async function completeMagicLinkLogin(
 		redirect(302, '/auth/login?error=suspended');
 	}
 
+	// Decide before createSession stamps last_login_at.
+	const firstLogin = isNew || !user?.lastLoginAt;
 	const session = await createSession(db, userId);
 
 	cookies.set(SESSION_COOKIE_NAME, session.token, {
@@ -509,8 +511,9 @@ export async function completeMagicLinkLogin(
 		expires: session.expiresAt
 	});
 
-	if (redir && redir.startsWith('/')) {
-		redirect(302, redir);
+	const next = redir && redir.startsWith('/') ? redir : null;
+	if (firstLogin) {
+		redirect(302, next && next !== '/' ? `/welcome?next=${encodeURIComponent(next)}` : '/welcome');
 	}
-	redirect(302, '/');
+	redirect(302, next ?? '/');
 }

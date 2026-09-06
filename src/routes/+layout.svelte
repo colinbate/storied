@@ -21,6 +21,8 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import UserIcon from '@lucide/svelte/icons/user';
+	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+	import MessageCircleIcon from '@lucide/svelte/icons/message-circle';
 	import MemberName from '$lib/components/member-name.svelte';
 	import { resolve } from '$app/paths';
 	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME, PRODUCT_URL } from '$shared/brand';
@@ -197,6 +199,20 @@
 								</DropdownMenu.Item>
 							{/if}
 							<DropdownMenu.Separator />
+							<DropdownMenu.Item onSelect={() => goto(resolve('/welcome'))}>
+								<CircleHelpIcon class="h-4 w-4" />
+								Help and Tour
+							</DropdownMenu.Item>
+							<DropdownMenu.Item
+								onclick={() => {
+									const form = document.getElementById('message-host-form') as HTMLFormElement;
+									form?.requestSubmit();
+								}}
+							>
+								<MessageCircleIcon class="h-4 w-4" />
+								Message the Host
+							</DropdownMenu.Item>
+							<DropdownMenu.Separator />
 							<DropdownMenu.Item
 								onclick={() => {
 									const form = document.getElementById('logout-form') as HTMLFormElement;
@@ -212,6 +228,12 @@
 						id="logout-form"
 						method="POST"
 						action={resolve('/auth/logout')}
+						class="hidden"
+					></form>
+					<form
+						id="message-host-form"
+						method="POST"
+						action="{resolve('/welcome')}?/messageHost"
 						class="hidden"
 					></form>
 				{:else}

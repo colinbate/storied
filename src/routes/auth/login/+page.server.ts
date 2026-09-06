@@ -18,12 +18,16 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	const invite = url.searchParams.get('invite')?.trim() ?? '';
 	const startedEmail =
 		url.searchParams.get('started') === '1' ? normalizeEmail(url.searchParams.get('email')) : null;
+	const canSignup = signupMode !== 'closed' || Boolean(invite);
+	const mode: 'join' | 'signin' =
+		url.searchParams.get('mode') === 'join' && canSignup ? 'join' : 'signin';
 	return {
 		error,
 		signupMode,
-		canSignup: signupMode !== 'closed',
+		canSignup,
 		invite,
-		startedEmail
+		startedEmail,
+		mode
 	};
 };
 
