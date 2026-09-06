@@ -56,10 +56,9 @@
 			</div>
 		{/if}
 		<div class="min-w-0 flex-1">
-			<div class="flex items-start gap-1.5">
-				<p class="min-w-0 flex-1 text-sm leading-tight font-medium">{book.title}</p>
-				<ClassificationBadges classifications={book.classifications} compact />
-			</div>
+			<p class="text-sm leading-tight font-medium">
+				{book.title}<ClassificationBadges classifications={book.classifications} compact />
+			</p>
 			{#if book.authorText}
 				<p class="mt-0.5 text-xs text-muted-foreground">{book.authorText}</p>
 			{/if}

@@ -86,6 +86,37 @@
 								</span>
 							{/if}
 						</div>
+						{#if data.featuredDiscussion}
+							<div class="mt-4 space-y-3 border-t pt-4">
+								<div class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+									<span class="inline-flex items-center gap-1.5">
+										<MessageSquareIcon class="h-4 w-4" />
+										{data.featuredDiscussion.thread.replyCount}
+										{data.featuredDiscussion.thread.replyCount === 1 ? 'reply' : 'replies'}
+									</span>
+									{#if data.featuredDiscussion.participants.length > 0}
+										<span>·</span>
+										<ThreadParticipants participants={data.featuredDiscussion.participants} />
+									{/if}
+									<span>·</span>
+									<span
+										>{formatDate(
+											data.featuredDiscussion.thread.lastPostAt ??
+												data.featuredDiscussion.thread.createdAt,
+											{ time: 'never', timeZone }
+										)}</span
+									>
+								</div>
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a fragment -->
+								<a
+									class={buttonVariants({ variant: 'outline' })}
+									href={`${resolve('/sessions/[slug]', { slug: data.currentSession.slug })}#discussion`}
+								>
+									View Discussion
+								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							</div>
+						{/if}
 					</div>
 					<div class="mt-3 flex flex-col items-start gap-2 sm:mt-0 sm:items-end">
 						<SessionRsvp
@@ -100,24 +131,16 @@
 							waitlistEnabled={data.currentSession.rsvpWaitlistEnabled}
 							calendarLinks={currentSessionCalendarLinks}
 						/>
-						<div class="flex gap-2">
-							{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
-								<Button
-									variant="outline"
-									href={resolve('/admin/sessions/[slug]/attendees', {
-										slug: data.currentSession.slug
-									})}
-								>
-									View RSVPs ({data.currentSessionAttendingCount} attending)
-								</Button>
-							{/if}
+						{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
 							<Button
 								variant="outline"
-								href={resolve('/sessions/[slug]', { slug: data.currentSession.slug })}
+								href={resolve('/admin/sessions/[slug]/attendees', {
+									slug: data.currentSession.slug
+								})}
 							>
-								View Session
+								View RSVPs ({data.currentSessionAttendingCount} attending)
 							</Button>
-						</div>
+						{/if}
 					</div>
 				</Card.Content>
 			</Card.Root>
@@ -141,57 +164,6 @@
 					View RSVPs ({data.upcomingSessionAttendingCount} attending)
 				</Button>
 			{/if}
-		</section>
-	{/if}
-
-	{#if data.featuredDiscussion}
-		<section>
-			<Card.Root class="border-primary/30">
-				<Card.Header class="space-y-2">
-					<div class="flex items-center gap-2 text-sm font-medium text-primary">
-						<MessageSquareIcon class="h-4 w-4" />
-						Main discussion
-					</div>
-					<Card.Title class="text-xl">{data.featuredDiscussion.thread.title}</Card.Title>
-					<Card.Description>
-						Started by <MemberName
-							userId={data.featuredDiscussion.author.id}
-							name={data.featuredDiscussion.author.displayName}
-						/>
-					</Card.Description>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<p class="line-clamp-3 text-sm leading-6 text-muted-foreground">
-						{data.featuredDiscussion.thread.bodySource}
-					</p>
-					<div class="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-						<span>
-							{data.featuredDiscussion.thread.replyCount}
-							{data.featuredDiscussion.thread.replyCount === 1 ? 'reply' : 'replies'}
-						</span>
-						{#if data.featuredDiscussion.participants.length > 0}
-							<span>·</span>
-							<ThreadParticipants participants={data.featuredDiscussion.participants} />
-						{/if}
-						<span>·</span>
-						<span
-							>{formatDate(
-								data.featuredDiscussion.thread.lastPostAt ??
-									data.featuredDiscussion.thread.createdAt,
-								{ time: 'never', timeZone }
-							)}</span
-						>
-					</div>
-					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a fragment -->
-					<a
-						class={buttonVariants({ variant: 'outline' })}
-						href={`${resolve('/sessions/[slug]', { slug: data.currentSession!.slug })}#discussion`}
-					>
-						Open Discussion
-					</a>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				</Card.Content>
-			</Card.Root>
 		</section>
 	{/if}
 

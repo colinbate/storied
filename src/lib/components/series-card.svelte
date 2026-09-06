@@ -59,10 +59,9 @@
 		{/if}
 
 		<div class="min-w-0 flex-1">
-			<div class="flex items-start gap-1.5">
-				<p class="min-w-0 flex-1 text-sm leading-tight font-medium">{series.title}</p>
-				<ClassificationBadges classifications={series.classifications} compact />
-			</div>
+			<p class="text-sm leading-tight font-medium">
+				{series.title}<ClassificationBadges classifications={series.classifications} compact />
+			</p>
 
 			{#if series.authorText}
 				<p class="mt-0.5 text-xs text-muted-foreground">{series.authorText}</p>

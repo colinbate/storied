@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 import {
 	categories,
+	sessions,
 	threads,
 	subscriptions,
 	subjectSources,
@@ -26,15 +27,36 @@ import {
 } from '$lib/server/discussions';
 import { readPostImage, removePostImage, uploadPostImage } from '$lib/server/post-images';
 import { canAssignGroup, listAssignableGroups, threadViewer } from '$lib/server/thread-access';
+import { sessionAccessCondition } from '$lib/server/session-lifecycle';
+
+/** Session a new thread should be linked to as a related conversation, if any. */
+async function findLinkableSession(
+	locals: App.Locals,
+	key: { slug?: string | null; id?: string | null }
+) {
+	const condition = key.id
+		? eq(sessions.id, key.id)
+		: key.slug
+			? eq(sessions.slug, key.slug)
+			: null;
+	if (!condition) return null;
+	const session = await locals.db
+		.select({ id: sessions.id, slug: sessions.slug, title: sessions.title })
+		.from(sessions)
+		.where(and(condition, sessionAccessCondition(locals)))
+		.get();
+	return session ?? null;
+}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const [allCategories, audienceGroups] = await Promise.all([
+	const [allCategories, audienceGroups, linkedSession] = await Promise.all([
 		locals.db.select().from(categories).orderBy(asc(categories.sortOrder)).all(),
-		listAssignableGroups(locals.db, threadViewer(locals))
+		listAssignableGroups(locals.db, threadViewer(locals)),
+		findLinkableSession(locals, { slug: url.searchParams.get('session') })
 	]);
 
 	const canPostAnnouncements = locals.permissions.has('moderate');
@@ -53,6 +75,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		),
 		audienceGroups,
 		preselectedCategory,
+		linkedSession,
 		announcementCategoryId: ANNOUNCEMENTS_CATEGORY_ID,
 		canPostAnnouncements
 	};
@@ -69,6 +92,7 @@ export const actions: Actions = {
 		const bodySource = data.get('body')?.toString()?.trim();
 		const categoryId = data.get('categoryId')?.toString();
 		const audienceGroupId = data.get('audienceGroupId')?.toString() || null;
+		const sessionId = data.get('sessionId')?.toString() || null;
 		const notifyAllMembersByEmail = data.get('notifyAllMembersByEmail') === 'on';
 		const imageInput = readPostImage(data);
 
@@ -162,6 +186,17 @@ export const actions: Actions = {
 			});
 		}
 
+		const linkedSession = sessionId ? await findLinkableSession(locals, { id: sessionId }) : null;
+		if (sessionId && !linkedSession) {
+			return fail(404, {
+				error: 'That session could not be found.',
+				title,
+				body: bodySource,
+				categoryId,
+				audienceGroupId
+			});
+		}
+
 		const bodyHtml = renderMarkdown(bodySource, {
 			mentionableUsers: await listActiveMentionableUsers(locals.db, audienceGroupId)
 		});
@@ -194,6 +229,8 @@ export const actions: Actions = {
 				categoryId,
 				authorUserId: locals.user.id,
 				audienceGroupId,
+				sessionId: linkedSession?.id ?? null,
+				sessionThreadRole: linkedSession ? 'related' : null,
 				title,
 				slug,
 				bodySource,

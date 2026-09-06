@@ -10,6 +10,8 @@
 	import { resolve } from '$app/paths';
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 	import DiscussionNav from '$lib/components/discussion-nav.svelte';
+	import SessionNav from '$lib/components/session-nav.svelte';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 
 	let { data, form } = $props();
 	let loading = $state(false);
@@ -24,6 +26,11 @@
 	);
 
 	const showAnnouncementBroadcast = $derived(categoryId === data.announcementCategoryId);
+	const backHref = $derived(
+		data.linkedSession
+			? resolve('/sessions/[slug]', { slug: data.linkedSession.slug })
+			: resolve('/discussions')
+	);
 </script>
 
 <svelte:head>
@@ -31,18 +38,36 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl space-y-6">
-	<DiscussionNav categories={data.discussionCategories} />
+	{#if data.linkedSession}
+		<SessionNav />
+	{:else}
+		<DiscussionNav categories={data.discussionCategories} />
+	{/if}
 
 	<div>
 		<a
-			href={resolve('/discussions')}
+			href={data.linkedSession
+				? resolve('/sessions/[slug]', { slug: data.linkedSession.slug })
+				: resolve('/discussions')}
 			class="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
 		>
 			<ArrowLeftIcon class="h-4 w-4" />
-			Back to Discussions
+			Back to {data.linkedSession ? data.linkedSession.title : 'Discussions'}
 		</a>
 		<h1 class="text-2xl font-bold">Start a New Thread</h1>
 	</div>
+
+	{#if data.linkedSession}
+		<Card.Root class="border-primary/30 bg-primary/10">
+			<Card.Content class="flex items-start gap-3 text-sm">
+				<CalendarIcon class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+				<p>
+					This thread will be linked to <span class="font-medium">{data.linkedSession.title}</span>
+					as a related conversation and listed on the session page.
+				</p>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<Card.Root>
 		<Card.Content>
@@ -58,6 +83,9 @@
 				}}
 				class="space-y-4"
 			>
+				{#if data.linkedSession}
+					<input type="hidden" name="sessionId" value={data.linkedSession.id} />
+				{/if}
 				<div class="space-y-2">
 					<Label for="categoryId">Category</Label>
 					<NativeSelect id="categoryId" name="categoryId" bind:value={categoryId} required>
@@ -139,7 +167,7 @@
 				{/if}
 
 				<div class="flex justify-end gap-3">
-					<Button variant="outline" href={resolve('/discussions')}>Cancel</Button>
+					<Button variant="outline" href={backHref}>Cancel</Button>
 					<Button type="submit" disabled={loading}>
 						{loading ? 'Creating…' : 'Create Thread'}
 					</Button>

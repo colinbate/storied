@@ -6,68 +6,44 @@
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Avatar from '$lib/components/ui/avatar/index.js';
-	import * as NativeSelect from '$lib/components/ui/native-select';
-	import PostComposer from '$lib/components/post-composer.svelte';
-	import PostImage from '$lib/components/post-image.svelte';
+	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
 	import SeriesCard from '$lib/components/series-card.svelte';
+	import DiscussionThread from '$lib/components/discussion-thread.svelte';
+	import MemberName from '$lib/components/member-name.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-	import BellIcon from '@lucide/svelte/icons/bell';
-	import BellOffIcon from '@lucide/svelte/icons/bell-off';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import ClockIcon from '@lucide/svelte/icons/clock';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
+	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import { formatDate } from '$lib/date-format';
-	import { loadReplyDraft, removeReplyDraft, saveReplyDraft } from '$lib/reply-drafts';
 	import { toast } from 'svelte-sonner';
-	import { publicPostImageUrl } from '$lib/post-images';
 	import SessionNav from '$lib/components/session-nav.svelte';
 	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
 	import { PRIMARY_ORIGIN } from '$shared/brand';
 	import { createSessionCalendarLinks } from '$shared/session-calendar-links';
 	import SessionReadingDialog from '$lib/components/session-reading-dialog.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
-	let replyBody = $state('');
-	let replyImageFiles = $state<FileList | undefined>();
-	let replying = $state(false);
-	let activeReplyDraftId = $state<string | null>(null);
 	let readingDialogOpen = $state(false);
 	let editingChoiceId = $state<string | null>(null);
-	const replyDraftComposerId = $derived(`session:${data.session.id}`);
-	const primaryThreadImageUrl = $derived(
-		publicPostImageUrl(data.fileBaseUrl, data.primaryThread?.thread.imageKey)
-	);
+	let creatingDiscussion = $state(false);
+
 	const calendarLinks = $derived(
 		createSessionCalendarLinks(data.session, {
 			detailsUrl: new URL(`/sessions/${data.session.slug}`, PRIMARY_ORIGIN).toString(),
 			icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.session.slug })
 		})
 	);
-
-	$effect(() => {
-		if (!data.user?.id) return;
-
-		const nextDraftId = `${data.user.id}:${replyDraftComposerId}`;
-		if (activeReplyDraftId !== nextDraftId) {
-			replyBody = loadReplyDraft(data.user.id, replyDraftComposerId)?.body ?? '';
-			activeReplyDraftId = nextDraftId;
-			return;
-		}
-
-		saveReplyDraft(data.user.id, replyDraftComposerId, {
-			body: replyBody,
-			parentPostId: null
-		});
-	});
+	const canManageSession = $derived(
+		data.permissions.has('admin:view') && data.permissions.has('sessions:edit')
+	);
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 subject' : `${items.length} subjects`;
@@ -84,21 +60,18 @@
 			subject: (typeof data.readingChoices)[number]['subject'];
 			readers: typeof data.readingChoices;
 		};
-		return data.readingChoices.reduce<ReadingChoiceGroup[]>((groups, row) => {
-			const existingIndex = groups.findIndex((group) => group.subject.id === row.choice.bookId);
-			if (existingIndex === -1) {
-				return [
-					...groups,
-					{
-						subject: row.subject,
-						readers: [row]
-					}
-				];
-			}
-			return groups.map((group, index) =>
-				index === existingIndex ? { ...group, readers: [...group.readers, row] } : group
-			);
-		}, []);
+		const groups: ReadingChoiceGroup[] = [];
+		for (const row of data.readingChoices) {
+			const group = groups.find((entry) => entry.subject.id === row.choice.bookId);
+			if (group) group.readers.push(row);
+			else groups.push({ subject: row.subject, readers: [row] });
+		}
+		return groups;
+	});
+	const readingChoiceSummary = $derived.by(() => {
+		const readers = new Set(data.readingChoices.map((row) => row.attendee.id)).size;
+		const books = readingChoiceGroups.length;
+		return `${readers} ${readers === 1 ? 'reader' : 'readers'} · ${books} ${books === 1 ? 'book' : 'books'}`;
 	});
 
 	const readingStatusLabels: Record<string, string> = {
@@ -118,6 +91,15 @@
 		].filter((group) => group.items.length > 0)
 	);
 
+	const rsvpParticipants = $derived(
+		data.participants.map(({ participant, user }) => ({
+			id: user.id,
+			displayName: user.displayName,
+			avatarUrl: user.avatarUrl,
+			attendanceStatus: participant.attendanceStatus
+		}))
+	);
+
 	function openReadingDialog(bookId: string | null = null) {
 		editingChoiceId = bookId;
 		readingDialogOpen = true;
@@ -134,36 +116,13 @@
 		};
 	};
 
-	const subscriptionModeLabels: Record<string, string> = {
-		immediate: 'now notifying immediately',
-		daily_digest: 'now in your daily digest',
-		mute: 'muted',
-		none: 'no longer watching'
-	};
-
-	const replyEnhance: SubmitFunction = () => {
-		replying = true;
+	const createDiscussionEnhance: SubmitFunction = () => {
+		creatingDiscussion = true;
 		return async ({ result, update }) => {
-			replying = false;
+			creatingDiscussion = false;
 			await update();
 			if (result.type === 'success') {
-				if (data.user?.id) removeReplyDraft(data.user.id, replyDraftComposerId);
-				replyBody = '';
-				replyImageFiles = undefined;
-				toast.success('Reply posted.');
-			} else if (result.type === 'failure' && result.data?.error) {
-				toast.error(String(result.data.error));
-			}
-		};
-	};
-
-	const subscriptionModeEnhance: SubmitFunction = () => {
-		return async ({ result, update }) => {
-			await update();
-			if (result.type === 'success') {
-				const mode = result.data?.subscriptionMode;
-				const label = typeof mode === 'string' ? subscriptionModeLabels[mode] : null;
-				toast.success(label ? `Discussion ${label}.` : 'Notification preference updated.');
+				toast.success('Discussion created.');
 			} else if (result.type === 'failure' && result.data?.error) {
 				toast.error(String(result.data.error));
 			}
@@ -187,287 +146,93 @@
 	</a>
 
 	<section class="space-y-4">
-    	<div class="flex flex-wrap items-center gap-2">
-    		<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
-    			{SESSION_STATUS_LABELS[data.session.status]}
-    		</Badge>
-    	</div>
-    	<div>
-    		<h1 class="text-3xl font-bold tracking-tight">{data.session.title}</h1>
-    		{#if data.session.themeTitle ?? data.session.theme}
-    			<p class="mt-2 text-xl text-muted-foreground">
-    				{data.session.themeTitle ?? data.session.theme}
-    			</p>
-    		{/if}
-    	</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<Badge variant={data.session.status === 'current' ? 'default' : 'secondary'}>
+				{SESSION_STATUS_LABELS[data.session.status]}
+			</Badge>
+		</div>
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">{data.session.title}</h1>
+			{#if data.session.themeTitle ?? data.session.theme}
+				<p class="mt-2 text-xl text-muted-foreground">
+					{data.session.themeTitle ?? data.session.theme}
+				</p>
+			{/if}
+		</div>
 	</section>
 
-	<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-		<div class="min-w-0 space-y-8">
-<div class="space-y-4">
-
-		<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-			<span class="inline-flex items-center gap-2">
-				<CalendarIcon class="h-4 w-4" />
-				{formatDate(data.session.startsAt, {
-					time: 'always',
-					timeZone: data.session.timezone ?? timeZone,
-					dateStyle: 'full'
-				})}
-			</span>
-			{#if data.session.durationMinutes}
+	<!-- Meeting overview -->
+	<div class="min-w-0 space-y-8">
+		<div class="space-y-4">
+			<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
 				<span class="inline-flex items-center gap-2">
-					<ClockIcon class="h-4 w-4" />
-					{data.session.durationMinutes} min
+					<CalendarIcon class="h-4 w-4" />
+					{formatDate(data.session.startsAt, {
+						time: 'always',
+						timeZone: data.session.timezone ?? timeZone,
+						dateStyle: 'full'
+					})}
 				</span>
+				{#if data.session.durationMinutes}
+					<span class="inline-flex items-center gap-2">
+						<ClockIcon class="h-4 w-4" />
+						{data.session.durationMinutes} min
+					</span>
+				{/if}
+				{#if data.session.locationName}
+					<span class="inline-flex items-center gap-2">
+						<MapPinIcon class="h-4 w-4" />
+						{data.session.locationName}
+					</span>
+				{/if}
+			</div>
+			{#if data.session.themeSummary}
+				<p class="max-w-3xl text-base leading-7">{data.session.themeSummary}</p>
 			{/if}
-			{#if data.session.locationName}
-				<span class="inline-flex items-center gap-2">
-					<MapPinIcon class="h-4 w-4" />
-					{data.session.locationName}
-				</span>
+			{#if canManageSession}
+				<Button
+					variant="outline"
+					href={resolve('/admin/sessions/[slug]', { slug: data.session.slug })}
+				>
+					Manage Session
+				</Button>
 			{/if}
-		</div>
-		{#if data.session.themeSummary}
-			<p class="max-w-3xl text-base leading-7">{data.session.themeSummary}</p>
-		{/if}
-		{#if data.permissions.has('admin:view') && data.permissions.has('sessions:edit')}
-			<Button
-				variant="outline"
-				href={resolve('/admin/sessions/[slug]', { slug: data.session.slug })}
-			>
-				Manage Session
-			</Button>
-		{/if}
-		<SessionRsvp
-			action="?/setRsvp"
-			sessionSlug={data.session.slug}
-			sessionStatus={data.session.status}
-			status={data.currentUserRsvp?.attendanceStatus ?? null}
-			canRsvp={data.canRsvp}
-			canDecline={data.canDeclineRsvp}
-			capacity={data.session.rsvpCapacity}
-			attendingCount={data.attendingCount}
-			waitlistEnabled={data.session.rsvpWaitlistEnabled}
-			{calendarLinks}
-		/>
-</div>
-			{#if data.session.bodyHtml}
-				<section class="prose max-w-none wrap-anywhere dark:prose-invert">
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					{@html data.session.bodyHtml}
-				</section>
-			{/if}
-
-			{#if subjectGroups.length > 0}
-				<section class="space-y-4">
-					{#each subjectGroups as group (group.title)}
-						<Card.Root>
-							<Card.Header>
-								<Card.Title class="text-base">{group.title}</Card.Title>
-								<Card.Description>{subjectCount(group.items)}</Card.Description>
-							</Card.Header>
-							<Card.Content>
-								<div class="grid gap-2 md:grid-cols-2">
-									{#each group.items as item (item.link.subjectType + item.link.subjectId)}
-										<div class="min-w-0">
-											{#if item.kind === 'book'}
-												<BookCard book={item.book} compact />
-											{:else if item.kind === 'series'}
-												<SeriesCard series={item.series} compact />
-											{:else}
-												<AuthorCard author={item.author} compact />
-											{/if}
-											{#if item.link.note}
-												<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">
-													{item.link.note}
-												</p>
-											{/if}
-										</div>
-									{/each}
-								</div>
-							</Card.Content>
-						</Card.Root>
-					{/each}
-				</section>
-			{/if}
-
-			{#if data.primaryThread}
-				<section id="discussion" class="scroll-mt-28 space-y-4">
-					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<div class="space-y-1">
-							<h2 class="text-lg font-semibold">Discussion</h2>
-							<p class="text-sm text-muted-foreground">
-								Questions, reactions, reading notes, and follow-up conversation for this session.
-							</p>
-						</div>
-						<div class="flex flex-wrap items-center gap-3">
-							<form
-								method="POST"
-								action="?/setSubscriptionMode"
-								use:enhance={subscriptionModeEnhance}
-							>
-								<label for="session-discussion-sub-mode" class="sr-only">Notify me</label>
-								<div class="flex items-center gap-2">
-									{#if data.primarySubscriptionMode === 'none' || data.primarySubscriptionMode === 'mute'}
-										<BellOffIcon class="h-4 w-4 text-muted-foreground" />
-									{:else}
-										<BellIcon class="h-4 w-4 text-muted-foreground" />
-									{/if}
-									<NativeSelect.Root
-										id="session-discussion-sub-mode"
-										name="mode"
-										value={data.primarySubscriptionMode}
-										onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
-									>
-										<NativeSelect.Option value="immediate"
-											>Notify me: Immediately</NativeSelect.Option
-										>
-										<NativeSelect.Option value="daily_digest"
-											>Notify me: In my digest</NativeSelect.Option
-										>
-										<NativeSelect.Option value="mute">Notify me: Muted</NativeSelect.Option>
-										<NativeSelect.Option value="none">Notify me: Off</NativeSelect.Option>
-									</NativeSelect.Root>
-								</div>
-							</form>
-						</div>
-					</div>
-
-					<Card.Root>
-						<Card.Content class="space-y-5">
-							<div class="flex gap-3">
-								<Avatar.Root class="mt-0.5 h-10 w-10 shrink-0">
-									{#if data.primaryThread.author.avatarUrl}
-										<Avatar.Image
-											src={data.primaryThread.author.avatarUrl}
-											alt={data.primaryThread.author.displayName}
-										/>
-									{/if}
-									<Avatar.Fallback>
-										{data.primaryThread.author.displayName?.charAt(0).toUpperCase() ?? '?'}
-									</Avatar.Fallback>
-								</Avatar.Root>
-								<div class="min-w-0 flex-1">
-									<div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-										<span class="font-medium text-foreground"
-											>{data.primaryThread.author.displayName}</span
-										>
-										<span>·</span>
-										<span
-											>{formatDate(data.primaryThread.thread.createdAt, {
-												time: 'never',
-												timeZone
-											})}</span
-										>
-									</div>
-									{#if primaryThreadImageUrl}
-										<div class="mt-3">
-											<PostImage
-												src={primaryThreadImageUrl}
-												alt="Image attached by {data.primaryThread.author.displayName}"
-											/>
-										</div>
-									{/if}
-									<div class="prose mt-3 max-w-none wrap-anywhere dark:prose-invert">
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-										{@html data.primaryThread.thread.bodyHtml}
-									</div>
-								</div>
-							</div>
-
-							{#if data.primaryPosts.length > 0}
-								<div class="space-y-4 border-t pt-5">
-									{#each data.primaryPosts as { post, author } (post.id)}
-										{@const postImageUrl = publicPostImageUrl(data.fileBaseUrl, post.imageKey)}
-										<div class="flex gap-3">
-											<Avatar.Root class="mt-0.5 h-9 w-9 shrink-0">
-												{#if author.avatarUrl}
-													<Avatar.Image src={author.avatarUrl} alt={author.displayName} />
-												{/if}
-												<Avatar.Fallback
-													>{author.displayName.charAt(0).toUpperCase()}</Avatar.Fallback
-												>
-											</Avatar.Root>
-											<div class="min-w-0 flex-1">
-												<div
-													class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
-												>
-													<span class="font-medium text-foreground">{author.displayName}</span>
-													<span>·</span>
-													<span>{formatDate(post.createdAt, { time: 'never', timeZone })}</span>
-												</div>
-												{#if postImageUrl}
-													<div class="mt-2">
-														<PostImage
-															src={postImageUrl}
-															alt="Image attached by {author.displayName}"
-														/>
-													</div>
-												{/if}
-												<div class="prose mt-2 max-w-none wrap-anywhere dark:prose-invert">
-													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-													{@html post.bodyHtml}
-												</div>
-											</div>
-										</div>
-									{/each}
-								</div>
-							{/if}
-
-							<form
-								method="POST"
-								action="?/reply"
-								enctype="multipart/form-data"
-								use:enhance={replyEnhance}
-								class="space-y-3 border-t pt-5"
-							>
-								<PostComposer
-									id="session-reply"
-									rows={4}
-									placeholder="Add your thoughts…"
-									required
-									bind:value={replyBody}
-									bind:files={replyImageFiles}
-								/>
-								<div class="flex justify-end">
-									<Button type="submit" disabled={replying}>
-										{replying ? 'Posting…' : 'Post Reply'}
-									</Button>
-								</div>
-							</form>
-						</Card.Content>
-					</Card.Root>
-				</section>
-			{/if}
-
-			{#if data.relatedThreads.length > 0}
-				<section class="space-y-3">
-					<h2 class="text-lg font-semibold">Related Conversations</h2>
-					<div class="grid gap-3 sm:grid-cols-2">
-						{#each data.relatedThreads as { thread, author } (thread.id)}
-							<a href={resolve('/thread/[slug]', { slug: thread.slug })} class="block">
-								<Card.Root class="transition-colors hover:border-primary/40">
-									<Card.Content class="py-4">
-										<h3 class="font-medium">{thread.title}</h3>
-										<p class="mt-1 text-sm text-muted-foreground">
-											{author.displayName} · {thread.replyCount}
-											{thread.replyCount === 1 ? 'reply' : 'replies'}
-										</p>
-									</Card.Content>
-								</Card.Root>
-							</a>
-						{/each}
-					</div>
-				</section>
-			{/if}
+			<SessionRsvp
+				action="?/setRsvp"
+				sessionSlug={data.session.slug}
+				sessionStatus={data.session.status}
+				status={data.currentUserRsvp?.attendanceStatus ?? null}
+				canRsvp={data.canRsvp}
+				canDecline={data.canDeclineRsvp}
+				capacity={data.session.rsvpCapacity}
+				attendingCount={data.attendingCount}
+				waitlistEnabled={data.session.rsvpWaitlistEnabled}
+				{calendarLinks}
+				participants={rsvpParticipants}
+			/>
 		</div>
 
-		<aside class="space-y-4 lg:sticky lg:top-24">
+		{#if data.session.bodyHtml}
+			<section class="prose max-w-none wrap-anywhere dark:prose-invert">
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html data.session.bodyHtml}
+			</section>
+		{/if}
+
+		<section class="space-y-4">
 			<Card.Root>
 				<Card.Header>
-					<div class="flex items-center justify-between gap-3">
-						<Card.Title class="text-base">Reading Choices</Card.Title>
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div class="space-y-1.5">
+							<Card.Title class="text-base">Reading Choices</Card.Title>
+							<Card.Description>
+								{#if readingChoiceGroups.length > 0}
+									{readingChoiceSummary}
+								{:else}
+									What members are reading for this session.
+								{/if}
+							</Card.Description>
+						</div>
 						<Button size="sm" onclick={() => openReadingDialog()}>
 							<PlusIcon class="h-4 w-4" />
 							Add Mine
@@ -476,22 +241,26 @@
 				</Card.Header>
 				<Card.Content>
 					{#if readingChoiceGroups.length > 0}
-						<div class="divide-y">
+						<div class="grid gap-4 md:grid-cols-2">
 							{#each readingChoiceGroups as group (group.subject.id)}
-								<div class="space-y-2 py-3 first:pt-0 last:pb-0">
+								<div class="min-w-0 space-y-1">
 									<BookCard book={group.subject} compact />
-									<div class="space-y-2 px-2">
+									<ul class="space-y-1 px-2">
 										{#each group.readers as { choice, attendee } (attendee.id)}
-											<div class="flex items-start gap-2 text-sm">
-												<div class="min-w-0 flex-1">
-													<p class="font-medium">{attendee.name}</p>
-													<p class="text-xs text-muted-foreground">
-														{readingStatusLabels[choice.readingStatus ?? ''] ??
+											<li class="flex items-center gap-2 text-sm">
+												<span class="min-w-0 flex-1 truncate">
+													{#if attendee.userId}
+														<MemberName userId={attendee.userId} name={attendee.name} />
+													{:else}
+														{attendee.name}
+													{/if}
+													<span class="text-xs text-muted-foreground">
+														· {readingStatusLabels[choice.readingStatus ?? ''] ??
 															'Status not recorded'}
-													</p>
-												</div>
+													</span>
+												</span>
 												{#if attendee.userId === data.user?.id}
-													<div class="flex shrink-0 gap-1">
+													<span class="flex shrink-0 gap-1">
 														<Button
 															variant="ghost"
 															size="icon-sm"
@@ -503,9 +272,7 @@
 														<ConfirmButton
 															confirmText="Remove this reading choice?"
 															formAction="?/removeReadingChoice"
-															formData={{
-																bookId: choice.bookId
-															}}
+															formData={{ bookId: choice.bookId }}
 															enhance={removeReadingChoice}
 															variant="ghost"
 															size="icon-sm"
@@ -513,11 +280,11 @@
 														>
 															<Trash2Icon class="h-3.5 w-3.5" />
 														</ConfirmButton>
-													</div>
+													</span>
 												{/if}
-											</div>
+											</li>
 										{/each}
-									</div>
+									</ul>
 								</div>
 							{/each}
 						</div>
@@ -527,36 +294,93 @@
 				</Card.Content>
 			</Card.Root>
 
-			{#if data.participants.length > 0}
+			{#each subjectGroups as group (group.title)}
 				<Card.Root>
 					<Card.Header>
-						<Card.Title class="text-base">Participants</Card.Title>
+						<Card.Title class="text-base">{group.title}</Card.Title>
+						<Card.Description>{subjectCount(group.items)}</Card.Description>
 					</Card.Header>
-					<Card.Content class="space-y-3">
-						{#each data.participants as { participant, user } (user.id)}
-							<div class="flex items-center gap-2 text-sm">
-								<Avatar.Root class="h-7 w-7 shrink-0">
-									{#if user.avatarUrl}
-										<Avatar.Image src={user.avatarUrl} alt={user.displayName} />
+					<Card.Content>
+						<div class="grid gap-2 md:grid-cols-2">
+							{#each group.items as item (item.link.subjectType + item.link.subjectId)}
+								<div class="min-w-0">
+									{#if item.kind === 'book'}
+										<BookCard book={item.book} compact />
+									{:else if item.kind === 'series'}
+										<SeriesCard series={item.series} compact />
+									{:else}
+										<AuthorCard author={item.author} compact />
 									{/if}
-									<Avatar.Fallback class="text-xs">
-										{user.displayName.charAt(0).toUpperCase()}
-									</Avatar.Fallback>
-								</Avatar.Root>
-								<a
-									href={resolve('/members/[id]', { id: user.id })}
-									class="min-w-0 flex-1 truncate font-medium hover:underline"
-								>
-									{user.displayName}
-								</a>
-								<Badge variant="outline" class="text-xs">{participant.attendanceStatus}</Badge>
-							</div>
-						{/each}
+									{#if item.link.note}
+										<p class="-mt-1 px-2 pb-2 text-xs text-muted-foreground">
+											{item.link.note}
+										</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
 					</Card.Content>
 				</Card.Root>
-			{/if}
-		</aside>
+			{/each}
+		</section>
 	</div>
+
+	<!-- The full discussion thread, same component as the standalone thread page. -->
+	<section id="discussion" class="scroll-mt-28 border-t pt-8">
+		{#if data.discussion}
+			<DiscussionThread view={data.discussion} viewer={data.user} {form} variant="embedded" />
+		{:else}
+			<Card.Root>
+				<Card.Content class="space-y-3 py-10 text-center text-muted-foreground">
+					<MessageSquareIcon class="mx-auto h-6 w-6 opacity-60" />
+					<p>This session does not have a discussion thread yet.</p>
+					{#if data.canCreateDiscussion}
+						<form method="POST" action="?/createDiscussion" use:enhance={createDiscussionEnhance}>
+							<Button type="submit" variant="outline" disabled={creatingDiscussion}>
+								{creatingDiscussion ? 'Creating…' : 'Create Discussion Thread'}
+							</Button>
+						</form>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+		{/if}
+	</section>
+
+	<section class="space-y-3">
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h2 class="text-lg font-semibold">Related Conversations</h2>
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route with a query string -->
+			<a
+				class={buttonVariants({ variant: 'outline', size: 'sm' })}
+				href={`${resolve('/new')}?session=${encodeURIComponent(data.session.slug)}`}
+			>
+				<PlusIcon class="h-4 w-4" />
+				Start a Conversation
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		</div>
+		{#if data.relatedThreads.length > 0}
+			<div class="grid gap-3 sm:grid-cols-2">
+				{#each data.relatedThreads as { thread, author } (thread.id)}
+					<a href={resolve('/thread/[slug]', { slug: thread.slug })} class="block">
+						<Card.Root class="transition-colors hover:border-primary/40">
+							<Card.Content class="py-4">
+								<h3 class="font-medium">{thread.title}</h3>
+								<p class="mt-1 text-sm text-muted-foreground">
+									{author.displayName} · {thread.replyCount}
+									{thread.replyCount === 1 ? 'reply' : 'replies'}
+								</p>
+							</Card.Content>
+						</Card.Root>
+					</a>
+				{/each}
+			</div>
+		{:else}
+			<p class="text-sm text-muted-foreground">
+				Side conversations linked to this session will appear here.
+			</p>
+		{/if}
+	</section>
 
 	{#if readingDialogOpen}
 		{#key editingChoiceId ?? 'new-reading'}

@@ -53,7 +53,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			`WITH listed_threads AS (
 				SELECT *
 				FROM threads
-				WHERE deleted_at IS NULL
+				WHERE category_id <> ?
+					AND deleted_at IS NULL
 					AND ${threadAccessSql('threads')}
 				ORDER BY last_post_at DESC, created_at DESC
 				LIMIT 20
@@ -99,7 +100,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			INNER JOIN users author ON author.id = t.author_user_id
 			ORDER BY t.last_post_at DESC, t.created_at DESC`
 		)
-		.bind(...threadAccessBindings(viewer))
+		.bind(SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer))
 		.all<ThreadListSqlRow>();
 	const recentThreads = recentThreadRows.map(mapThreadListSqlRow);
 

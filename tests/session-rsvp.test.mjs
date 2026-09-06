@@ -653,7 +653,8 @@ test('a member can record a session reading choice without creating attendance',
 	const page = await sessionPage({
 		locals,
 		params: { slug: session.slug },
-		platform: undefined
+		platform: undefined,
+		depends: () => {}
 	});
 	assert.equal(page.myReadingChoices.length, 1);
 	assert.equal(page.readingChoices[0].subject.title, 'Replacement');
@@ -767,9 +768,10 @@ test('a moderator without session permission cannot expose a private draft discu
 	locals.permissions = new Set(['moderate']);
 	const result = await threadActions.linkSession({
 		locals,
-		request: formRequest({ threadId: thread.id, sessionId: '' })
+		params: { slug: thread.slug },
+		request: formRequest({ sessionId: '' })
 	});
-	assert.equal(result.status, 404);
+	assert.equal(result.status, 403);
 	assert.equal(
 		(await db.select().from(threads).where(eq(threads.id, thread.id)).get()).sessionId,
 		'secret'

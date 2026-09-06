@@ -73,7 +73,7 @@
 
 <div data-dyslexic={data.dyslexicFont} class="flex min-h-screen flex-col">
 	<header class="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-sm">
-		<div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+		<div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
 			<a
 				href={resolve('/')}
 				class="flex min-w-0 items-center gap-2 font-semibold text-foreground transition-colors hover:text-primary"
@@ -221,7 +221,7 @@
 		</div>
 		{#if user}
 			<nav class="hidden border-t md:block">
-				<div class="mx-auto max-w-5xl overflow-x-auto px-4">
+				<div class="mx-auto max-w-6xl overflow-x-auto px-4">
 					<div class="flex h-11 w-max items-center gap-1">
 						{#each primaryLinks as link (link.href)}
 							{@const Icon = link.icon}
@@ -240,7 +240,7 @@
 		{/if}
 	</header>
 
-	<main class="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 py-6">
+	<main class="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 py-6">
 		{@render children()}
 	</main>
 

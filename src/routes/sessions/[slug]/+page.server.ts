@@ -1,11 +1,10 @@
 import { sessionAccessCondition } from '$lib/server/session-lifecycle';
-import { error, fail, redirect } from '@sveltejs/kit';
+import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
 	authors,
 	attendeeIdentities,
-	posts,
 	series,
 	sessionReadingChoices,
 	sessionParticipants,
@@ -15,9 +14,8 @@ import {
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
-import { createThreadReply } from '$lib/server/thread-replies';
 import {
 	attendingCount,
 	canAcceptSessionRsvps,
@@ -26,7 +24,6 @@ import {
 	getOrCreateMemberAttendee,
 	setMemberRsvp
 } from '$lib/server/rsvp';
-import { PostImageUploadError, readPostImage } from '$lib/server/post-images';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
 import { detectSubjectLinks } from '$lib/server/book-links';
@@ -36,34 +33,53 @@ import {
 	removeSessionReadingChoice,
 	upsertSessionReadingChoice
 } from '$lib/server/session-reading';
+import {
+	createPrimarySessionThread,
+	getPrimaryThreadForSession,
+	subscribeActiveMembersToSessionThread
+} from '$lib/server/discussions';
+import { getOrCreateNotificationPreferences } from '$lib/server/notification-preferences';
+import {
+	createThreadActions,
+	findThreadRow,
+	loadThreadView,
+	primarySessionThreadCondition,
+	threadSubjectsDependency
+} from '$lib/server/thread-view';
 
-export const load: PageServerLoad = async ({ params, locals, platform }) => {
+async function findSession(locals: App.Locals, slug: string) {
+	return locals.db
+		.select()
+		.from(sessions)
+		.where(and(eq(sessions.slug, slug), sessionAccessCondition(locals)))
+		.get();
+}
+
+async function requireSession(locals: App.Locals, slug: string) {
+	const session = await findSession(locals, slug);
+	if (!session) throw error(404, 'Session not found');
+	return session;
+}
+
+export const load: PageServerLoad = async ({ params, locals, platform, depends }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const session = await locals.db
-		.select()
-		.from(sessions)
-		.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-		.get();
-
-	if (!session) throw error(404, 'Session not found');
+	const session = await requireSession(locals, params.slug);
 
 	const [
 		bookSubjectRows,
 		seriesSubjectRows,
 		authorSubjectRows,
-		sessionThreads,
+		primaryThreadRow,
+		relatedThreads,
 		participants,
 		readingChoiceRows,
 		allBooks
 	] = await Promise.all([
 		locals.db
-			.select({
-				link: sessionSubjects,
-				book: books
-			})
+			.select({ link: sessionSubjects, book: books })
 			.from(sessionSubjects)
 			.innerJoin(books, eq(sessionSubjects.subjectId, books.id))
 			.where(
@@ -76,10 +92,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
 			.all(),
 		locals.db
-			.select({
-				link: sessionSubjects,
-				series
-			})
+			.select({ link: sessionSubjects, series })
 			.from(sessionSubjects)
 			.innerJoin(series, eq(sessionSubjects.subjectId, series.id))
 			.where(
@@ -92,10 +105,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
 			.all(),
 		locals.db
-			.select({
-				link: sessionSubjects,
-				author: authors
-			})
+			.select({ link: sessionSubjects, author: authors })
 			.from(sessionSubjects)
 			.innerJoin(authors, eq(sessionSubjects.subjectId, authors.id))
 			.where(
@@ -107,6 +117,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			)
 			.orderBy(asc(sessionSubjects.status), asc(sessionSubjects.createdAt))
 			.all(),
+		findThreadRow(locals.db, primarySessionThreadCondition(locals, session.id)),
 		locals.db
 			.select({
 				thread: threads,
@@ -121,11 +132,12 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.where(
 				and(
 					eq(threads.sessionId, session.id),
+					ne(threads.sessionThreadRole, 'primary'),
 					isNull(threads.deletedAt),
 					threadAccessCondition(locals.db, threadViewer(locals))
 				)
 			)
-			.orderBy(desc(threads.createdAt))
+			.orderBy(desc(threads.lastPostAt), desc(threads.createdAt))
 			.all(),
 		locals.db
 			.select({
@@ -180,6 +192,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			.orderBy(asc(books.title))
 			.all()
 	]);
+
 	const [bookClassifications, seriesClassifications] = await Promise.all([
 		loadClassificationsBySubject(
 			locals.db,
@@ -210,50 +223,22 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			a.link.status.localeCompare(b.link.status) || a.link.createdAt.localeCompare(b.link.createdAt)
 	);
 
-	const primaryThread =
-		sessionThreads.find(({ thread }) => thread.sessionThreadRole === 'primary') ??
-		sessionThreads[0] ??
-		null;
-
-	const [primaryPosts, primarySubscription] = primaryThread
-		? await Promise.all([
-				locals.db
-					.select({
-						post: posts,
-						author: {
-							id: users.id,
-							displayName: users.displayName,
-							avatarUrl: users.avatarUrl
-						}
-					})
-					.from(posts)
-					.innerJoin(users, eq(posts.authorUserId, users.id))
-					.where(and(eq(posts.threadId, primaryThread.thread.id), isNull(posts.deletedAt)))
-					.orderBy(asc(posts.createdAt))
-					.all(),
-				locals.db
-					.select()
-					.from(subscriptions)
-					.where(
-						and(
-							eq(subscriptions.userId, locals.user.id),
-							eq(subscriptions.threadId, primaryThread.thread.id)
-						)
-					)
-					.get()
-			])
-		: [[], null];
+	let discussion = null;
+	if (primaryThreadRow) {
+		depends(threadSubjectsDependency(primaryThreadRow.thread.id));
+		discussion = await loadThreadView({
+			locals,
+			platform,
+			row: primaryThreadRow,
+			userId: locals.user.id
+		});
+	}
 
 	return {
 		session,
-		primaryThread,
-		primaryPosts,
-		primarySubscriptionMode: (primarySubscription?.mode ?? 'none') as
-			| 'immediate'
-			| 'daily_digest'
-			| 'mute'
-			| 'none',
-		relatedThreads: sessionThreads.filter(({ thread }) => thread.id !== primaryThread?.thread.id),
+		discussion,
+		canCreateDiscussion: locals.permissions.has('sessions:edit'),
+		relatedThreads,
 		participants,
 		canDeclineRsvp: canDeclineSessionRsvp(session),
 		canRsvp: canAcceptSessionRsvps(session),
@@ -265,132 +250,57 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),
 		featuredSubjects: subjects.filter(({ link }) => link.status === 'featured'),
 		discussedSubjects: subjects.filter(({ link }) => link.status === 'discussed'),
-		offThemeSubjects: subjects.filter(({ link }) => link.status === 'mentioned_off_theme'),
-		fileBaseUrl: platform?.env.FILE_BASE_URL ?? ''
+		offThemeSubjects: subjects.filter(({ link }) => link.status === 'mentioned_off_theme')
 	};
 };
 
-export const actions: Actions = {
-	reply: async ({ request, locals, params, platform, url }) => {
-		if (!locals.user) {
-			throw redirect(302, '/auth/login');
-		}
-
-		const session = await locals.db
-			.select()
-			.from(sessions)
-			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-			.get();
-		if (!session) throw error(404, 'Session not found');
-
-		const thread = await locals.db
+const threadActions = createThreadActions({
+	resolveThread: async ({ locals, params }: RequestEvent) => {
+		const session = await findSession(locals, params.slug!);
+		if (!session) return null;
+		return locals.db
 			.select()
 			.from(threads)
-			.where(
-				and(
-					eq(threads.sessionId, session.id),
-					eq(threads.sessionThreadRole, 'primary'),
-					isNull(threads.deletedAt),
-					threadAccessCondition(locals.db, threadViewer(locals))
-				)
-			)
+			.where(primarySessionThreadCondition(locals, session.id))
 			.get();
-
-		if (!thread) {
-			return fail(400, { error: 'This session does not have a primary discussion thread yet.' });
-		}
-
-		if (thread.isLocked) {
-			return fail(403, { error: 'This discussion is locked.' });
-		}
-
-		const data = await request.formData();
-		const bodySource = data.get('body')?.toString()?.trim();
-		const imageInput = readPostImage(data);
-		if (!bodySource) {
-			return fail(400, { error: 'Reply cannot be empty.' });
-		}
-		if (imageInput.error) {
-			return fail(400, { error: imageInput.error });
-		}
-
-		try {
-			await createThreadReply({
-				db: locals.db,
-				platform,
-				thread,
-				authorUserId: locals.user.id,
-				bodySource,
-				baseUrl: url.origin,
-				imageFile: imageInput.file
-			});
-		} catch (error) {
-			if (error instanceof PostImageUploadError) {
-				return fail(500, { error: 'The image could not be uploaded. Please try again.' });
-			}
-			throw error;
-		}
-
-		return { success: true };
 	},
+	afterDelete: ({ params }) => `/sessions/${params.slug}`
+});
 
-	setSubscriptionMode: async ({ locals, params, request }) => {
-		if (!locals.user) {
-			throw redirect(302, '/auth/login');
-		}
+export const actions: Actions = {
+	...threadActions,
 
-		const mode = (await request.formData()).get('mode')?.toString();
-		if (mode !== 'immediate' && mode !== 'daily_digest' && mode !== 'mute' && mode !== 'none') {
-			return fail(400, { error: 'Invalid subscription mode.' });
-		}
+	createDiscussion: async ({ locals, params }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		if (!locals.permissions.has('sessions:edit')) return fail(403, { error: 'Not allowed.' });
 
-		const session = await locals.db
-			.select()
-			.from(sessions)
-			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-			.get();
-		if (!session) throw error(404, 'Session not found');
+		const session = await requireSession(locals, params.slug);
+		const existing = await getPrimaryThreadForSession(locals.db, session.id);
+		if (existing) return fail(409, { error: 'This session already has a discussion.' });
 
-		const thread = await locals.db
-			.select()
-			.from(threads)
-			.where(
-				and(
-					eq(threads.sessionId, session.id),
-					eq(threads.sessionThreadRole, 'primary'),
-					isNull(threads.deletedAt),
-					threadAccessCondition(locals.db, threadViewer(locals))
-				)
-			)
-			.get();
-		if (!thread) {
-			return fail(400, { error: 'This session does not have a primary discussion thread yet.' });
-		}
+		const thread = await createPrimarySessionThread({
+			db: locals.db,
+			session,
+			authorUserId: locals.user.id
+		});
 
-		if (mode === 'none') {
+		const prefs = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
+		if (prefs.autoSubscribeOwn) {
 			await locals.db
-				.delete(subscriptions)
-				.where(
-					and(eq(subscriptions.userId, locals.user.id), eq(subscriptions.threadId, thread.id))
-				);
-			return { subscriptionMode: 'none' as const };
+				.insert(subscriptions)
+				.values({
+					id: newId(),
+					userId: locals.user.id,
+					threadId: thread.id,
+					mode: prefs.defaultSubMode
+				})
+				.onConflictDoNothing();
+		}
+		if (session.status === 'current') {
+			await subscribeActiveMembersToSessionThread(locals.db, thread.id);
 		}
 
-		const now = new Date().toISOString();
-		await locals.db
-			.insert(subscriptions)
-			.values({
-				id: newId(),
-				userId: locals.user.id,
-				threadId: thread.id,
-				mode
-			})
-			.onConflictDoUpdate({
-				target: [subscriptions.userId, subscriptions.threadId],
-				set: { mode, updatedAt: now }
-			});
-
-		return { subscriptionMode: mode };
+		return { discussionCreated: true };
 	},
 
 	setRsvp: async ({ locals, params, request, platform }) => {
@@ -404,12 +314,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid RSVP response.' });
 		}
 
-		const session = await locals.db
-			.select()
-			.from(sessions)
-			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-			.get();
-		if (!session) throw error(404, 'Session not found');
+		const session = await requireSession(locals, params.slug);
 
 		return setMemberRsvp({
 			db: locals.db,
@@ -422,12 +327,7 @@ export const actions: Actions = {
 
 	upsertReadingChoice: async ({ locals, params, request, platform }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
-		const session = await locals.db
-			.select()
-			.from(sessions)
-			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-			.get();
-		if (!session) throw error(404, 'Session not found');
+		const session = await requireSession(locals, params.slug);
 
 		const data = await request.formData();
 		const bookId = data.get('bookId')?.toString();
@@ -486,12 +386,7 @@ export const actions: Actions = {
 
 	removeReadingChoice: async ({ locals, params, request }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
-		const session = await locals.db
-			.select()
-			.from(sessions)
-			.where(and(eq(sessions.slug, params.slug), sessionAccessCondition(locals)))
-			.get();
-		if (!session) throw error(404, 'Session not found');
+		const session = await requireSession(locals, params.slug);
 
 		const data = await request.formData();
 		const bookId = data.get('bookId')?.toString();
