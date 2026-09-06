@@ -11,6 +11,7 @@ import {
 } from '../src/lib/server/db/schema.ts';
 import { createClubSession } from '../src/lib/server/session-lifecycle.ts';
 import { getOrCreateAdminAttendee, upsertAdminParticipation } from '../src/lib/server/rsvp.ts';
+import { markPresent } from '../src/lib/server/session-workflow.ts';
 import {
 	resolveSessionMessageRecipients,
 	retrySessionMessage,
@@ -70,7 +71,12 @@ async function fixture() {
 	};
 	const addParticipant = async (session, name, email, status) => {
 		const attendee = await getOrCreateAdminAttendee(db, { name, email });
-		await upsertAdminParticipation({ db, session, attendee, status, note: null });
+		if (status === 'attended') {
+			await upsertAdminParticipation({ db, session, attendee, status: 'attending', note: null });
+			await markPresent(db, session.id, attendee.id, 'host');
+		} else {
+			await upsertAdminParticipation({ db, session, attendee, status, note: null });
+		}
 		return attendee;
 	};
 	return { ...context, host, sent, failing, platform, locals, addSession, addParticipant };

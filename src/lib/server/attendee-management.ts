@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { ORM } from '$lib/server/db';
 import {
 	attendeeIdentities,
+	sessionAttendance,
 	sessionParticipants,
 	sessionReadingChoices,
 	type SessionAttendanceStatus
@@ -9,8 +10,6 @@ import {
 
 export function mergedAttendanceStatus(a: SessionAttendanceStatus, b: SessionAttendanceStatus) {
 	const rank: Record<SessionAttendanceStatus, number> = {
-		attended: 70,
-		no_show: 60,
 		attending: 50,
 		waitlisted: 40,
 		maybe: 30,
@@ -53,6 +52,20 @@ export async function mergeGuestIdentity(db: ORM, sourceId: string, targetId: st
 			.values({ ...choice, attendeeId: target.id })
 			.onConflictDoNothing();
 	}
+
+	// Attendance outcomes follow the person; the target's own record wins on conflict.
+	const sourceAttendance = await db
+		.select()
+		.from(sessionAttendance)
+		.where(eq(sessionAttendance.attendeeId, source.id))
+		.all();
+	for (const record of sourceAttendance) {
+		await db
+			.insert(sessionAttendance)
+			.values({ ...record, id: `${record.id}_m`, attendeeId: target.id })
+			.onConflictDoNothing();
+	}
+	await db.delete(sessionAttendance).where(eq(sessionAttendance.attendeeId, source.id));
 
 	for (const sourceParticipant of sourceParticipations) {
 		const targetParticipant = await db

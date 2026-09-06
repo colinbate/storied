@@ -51,10 +51,15 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Sessions</h1>
-		<Button onclick={toggleCreateForm} size="sm">
-			<PlusIcon class="h-4 w-4" />
-			New Session
-		</Button>
+		<div class="flex flex-wrap gap-2">
+			<Button variant="outline" size="sm" href={resolve('/admin/default-agenda')}
+				>Default Agenda</Button
+			>
+			<Button onclick={toggleCreateForm} size="sm">
+				<PlusIcon class="h-4 w-4" />
+				New Session
+			</Button>
+		</div>
 	</div>
 
 	{#if form?.error}
@@ -145,6 +150,13 @@
 								label={createThemeRequired ? 'Theme' : 'Theme (can be decided later)'}
 								required={createThemeRequired}
 							/>
+							{#if data.nextThemeNote}
+								<p class="mt-2 text-xs text-muted-foreground">
+									Handoff from <span class="font-medium">{data.nextThemeNote.title}</span>: next
+									theme idea was “{data.nextThemeNote.nextThemeNote}”. Pick or create that theme
+									above if it still stands.
+								</p>
+							{/if}
 						</div>
 						<div class="space-y-2 sm:col-span-2">
 							<Label for="create-themeSummary">Theme Summary</Label>

@@ -22,9 +22,13 @@ export type SessionAttendanceStatus =
 	| 'waitlisted'
 	| 'maybe'
 	| 'declined'
-	| 'cancelled'
-	| 'attended'
-	| 'no_show';
+	| 'cancelled';
+/** What actually happened at the meeting, separate from the RSVP above. */
+export type SessionAttendanceOutcome = 'present' | 'absent';
+export type AgendaItemVisibility = 'members' | 'facilitator';
+export type AgendaItemStatus = 'pending' | 'ready' | 'completed' | 'skipped';
+export type AgendaItemSource = 'facilitator' | 'member';
+export type SessionFeedbackPace = 'too_slow' | 'about_right' | 'too_fast';
 export type SessionParticipantSource = 'member' | 'public_form' | 'admin' | 'legacy_import';
 export type SessionReadingStatus =
 	| 'considering'
@@ -320,6 +324,17 @@ export const sessions = sqliteTable(
 		isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
 		astroPath: text('astro_path'),
 		externalUrl: text('external_url'),
+		/** Set by the facilitator runner; independent of the publication status. */
+		liveStartedAt: text('live_started_at'),
+		liveEndedAt: text('live_ended_at'),
+		/** Interim next-theme idea captured before the next session exists. */
+		nextThemeNote: text('next_theme_note'),
+		facilitatorRecap: text('facilitator_recap'),
+		memberRecap: text('member_recap'),
+		memberRecapHtml: text('member_recap_html'),
+		publicRecap: text('public_recap'),
+		publicRecapHtml: text('public_recap_html'),
+		feedbackEnabled: integer('feedback_enabled', { mode: 'boolean' }).notNull().default(true),
 		createdAt: text('created_at').notNull().default(timestampDefault),
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
@@ -1127,4 +1142,106 @@ export const sessionMessageDeliveries = sqliteTable(
 		),
 		index('idx_session_message_deliveries_message_status').on(table.messageId, table.status)
 	]
+);
+
+// ──────────────────────────────────────────────
+// session workflow: agenda, attendance, quick notes, feedback
+// ──────────────────────────────────────────────
+export const sessionAgendaItems = sqliteTable(
+	'session_agenda_items',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		description: text('description'),
+		sortOrder: integer('sort_order').notNull().default(0),
+		visibility: text('visibility').notNull().default('members').$type<AgendaItemVisibility>(),
+		status: text('status').notNull().default('ready').$type<AgendaItemStatus>(),
+		source: text('source').notNull().default('facilitator').$type<AgendaItemSource>(),
+		submittedByUserId: text('submitted_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		completedAt: text('completed_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		index('idx_session_agenda_items_session_order').on(
+			table.sessionId,
+			table.status,
+			table.sortOrder
+		)
+	]
+);
+
+export const defaultAgendaItems = sqliteTable('default_agenda_items', {
+	id: text('id').primaryKey(),
+	title: text('title').notNull(),
+	description: text('description'),
+	sortOrder: integer('sort_order').notNull().default(0),
+	visibility: text('visibility').notNull().default('members').$type<AgendaItemVisibility>(),
+	createdAt: text('created_at').notNull().default(timestampDefault),
+	updatedAt: text('updated_at').notNull().default(timestampDefault)
+});
+
+export const sessionAttendance = sqliteTable(
+	'session_attendance',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		attendeeId: text('attendee_id')
+			.notNull()
+			.references(() => attendeeIdentities.id, { onDelete: 'cascade' }),
+		status: text('status').notNull().default('present').$type<SessionAttendanceOutcome>(),
+		recordedAt: text('recorded_at').notNull().default(timestampDefault),
+		recordedByUserId: text('recorded_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('session_attendance_session_attendee_unique').on(table.sessionId, table.attendeeId),
+		index('idx_session_attendance_attendee').on(table.attendeeId, table.status)
+	]
+);
+
+export const sessionQuickNotes = sqliteTable(
+	'session_quick_notes',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		body: text('body').notNull(),
+		createdByUserId: text('created_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_session_quick_notes_session').on(table.sessionId, table.createdAt)]
+);
+
+export const sessionFeedback = sqliteTable(
+	'session_feedback',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => sessions.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		overallRating: integer('overall_rating'),
+		pace: text('pace').$type<SessionFeedbackPace>(),
+		comments: text('comments'),
+		futureDiscussion: text('future_discussion'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [uniqueIndex('session_feedback_session_user_unique').on(table.sessionId, table.userId)]
 );

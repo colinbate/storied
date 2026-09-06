@@ -8,7 +8,7 @@ import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { sessionStartDate } from '$shared/session-lifecycle';
 import { NOTIFICATION_FROM_ADDRESS, ORGANIZATION_NAME, PRIMARY_ORIGIN } from '$shared/brand';
 
-const calendarStatuses = new Set(['attending', 'waitlisted', 'attended']);
+const calendarStatuses = new Set(['attending', 'waitlisted']);
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');

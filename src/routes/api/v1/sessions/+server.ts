@@ -36,6 +36,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 			rsvpEnabled: sessions.rsvpEnabled,
 			astroPath: sessions.astroPath,
 			externalUrl: sessions.externalUrl,
+			publicRecap: sessions.publicRecap,
+			publicRecapHtml: sessions.publicRecapHtml,
 			createdAt: sessions.createdAt,
 			updatedAt: sessions.updatedAt
 		})
@@ -46,7 +48,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	return json(
 		rows.map((r) => {
-			const { rsvpSlug, rsvpEnabled, ...session } = r;
+			const { rsvpSlug, rsvpEnabled, publicRecap, publicRecapHtml, ...session } = r;
 			const acceptsRsvps = canAcceptSessionRsvps({
 				status: r.status,
 				rsvpEnabled,
@@ -58,7 +60,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 				...session,
 				date: r.date?.split('T')[0],
 				start: r.start?.split('T')[1],
-				...(acceptsRsvps ? { rsvpSlug: rsvpSlug ?? r.slug } : {})
+				...(acceptsRsvps ? { rsvpSlug: rsvpSlug ?? r.slug } : {}),
+				// Only the sanitized public recap leaves the member site; it is omitted until written.
+				...(publicRecap && r.status !== 'cancelled'
+					? { publicRecap, publicRecapHtml: publicRecapHtml ?? undefined }
+					: {})
 			};
 		}),
 		{ headers: publicApiHeaders }

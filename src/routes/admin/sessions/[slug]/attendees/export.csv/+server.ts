@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { asc, eq } from 'drizzle-orm';
 import { attendeeIdentities, sessionParticipants, sessions } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth';
+import { getAttendanceByAttendee } from '$lib/server/session-workflow';
 
 function csv(value: string | null) {
 	const text = value ?? '';
@@ -24,16 +25,26 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		.where(eq(sessionParticipants.sessionId, session.id))
 		.orderBy(asc(attendeeIdentities.name))
 		.all();
+	const attendance = await getAttendanceByAttendee(locals.db, session.id);
 	const lines = [
-		['Name', 'Email', 'Member ID', 'Status', 'Source', 'Note', 'Created At', 'Updated At'].join(
-			','
-		),
+		[
+			'Name',
+			'Email',
+			'Member ID',
+			'RSVP',
+			'Attendance',
+			'Source',
+			'Note',
+			'Created At',
+			'Updated At'
+		].join(','),
 		...rows.map(({ participant, attendee }) =>
 			[
 				participant.nameSnapshot,
 				participant.emailSnapshot,
 				attendee.userId,
 				participant.attendanceStatus,
+				attendance[attendee.id]?.status ?? '',
 				participant.rsvpSource,
 				participant.note,
 				participant.createdAt,

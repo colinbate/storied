@@ -21,16 +21,24 @@
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
-	const statusOptions = [
-		'attending',
-		'attended',
-		'waitlisted',
-		'maybe',
-		'declined',
-		'cancelled',
-		'no_show'
-	] as const;
-	const confirmationStatuses = new Set(['attending', 'waitlisted', 'attended']);
+	const statusOptions = ['attending', 'waitlisted', 'maybe', 'declined', 'cancelled'] as const;
+	const confirmationStatuses = new Set(['attending', 'waitlisted']);
+	const attendanceCounts = $derived.by(() => {
+		const values = Object.values(data.attendance);
+		return {
+			present: values.filter((row) => row.status === 'present').length,
+			absent: values.filter((row) => row.status === 'absent').length
+		};
+	});
+	function outcomeFor(attendeeId: string) {
+		return data.attendance[attendeeId]?.status ?? null;
+	}
+	const enhanceAttendance: SubmitFunction =
+		() =>
+		async ({ result, update }) => {
+			await update({ reset: false });
+			if (result.type === 'failure' && result.data?.error) toast.error(String(result.data.error));
+		};
 	type RecordAction = 'note' | 'reconcile' | 'delete';
 	let recordActionOpen = $state(false);
 	let recordAction = $state<{ kind: RecordAction; participantId: string } | null>(null);
@@ -131,9 +139,17 @@
 			{#each statusOptions as status (status)}
 				<div class="text-center">
 					<p class="text-2xl font-bold">{data.counts[status]}</p>
-					<p class="text-xs text-muted-foreground capitalize">{label(status)}</p>
+					<p class="text-xs text-muted-foreground capitalize">{label(status)} (RSVP)</p>
 				</div>
 			{/each}
+			<div class="text-center">
+				<p class="text-2xl font-bold">{attendanceCounts.present}</p>
+				<p class="text-xs text-muted-foreground">Present</p>
+			</div>
+			<div class="text-center">
+				<p class="text-2xl font-bold">{attendanceCounts.absent}</p>
+				<p class="text-xs text-muted-foreground">Absent</p>
+			</div>
 		</Card.Content>
 	</Card.Root>
 
@@ -158,10 +174,10 @@
 						>
 					</div>
 					<div class="space-y-1">
-						<Label for="existing-status">Status</Label><NativeSelect
+						<Label for="existing-status">RSVP</Label><NativeSelect
 							id="existing-status"
 							name="status"
-							value={data.session.status === 'past' ? 'attended' : 'attending'}
+							value="attending"
 							>{#each statusOptions as status (status)}<NativeSelectOption value={status}
 									>{label(status)}</NativeSelectOption
 								>{/each}</NativeSelect
@@ -170,6 +186,10 @@
 					<div class="space-y-1">
 						<Label for="existing-note">Note</Label><Input id="existing-note" name="note" />
 					</div>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="markPresent" class="rounded border-input" />
+						Also mark present
+					</label>
 					<Button type="submit">Add attendee</Button>
 				</form>
 			</Card.Content></Card.Root
@@ -203,10 +223,10 @@
 						/>
 					</div>
 					<div class="space-y-1">
-						<Label for="new-status">Status</Label><NativeSelect
+						<Label for="new-status">RSVP</Label><NativeSelect
 							id="new-status"
 							name="status"
-							value={data.session.status === 'past' ? 'attended' : 'attending'}
+							value="attending"
 							>{#each statusOptions as status (status)}<NativeSelectOption value={status}
 									>{label(status)}</NativeSelectOption
 								>{/each}</NativeSelect
@@ -219,6 +239,10 @@
 							placeholder="Walk-in, added by admin…"
 						/>
 					</div>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" name="markPresent" class="rounded border-input" checked />
+						Also mark present
+					</label>
 					<Button type="submit">Record attendee</Button>
 				</form>
 			</Card.Content></Card.Root
@@ -229,7 +253,8 @@
 		<div>
 			<h2 class="text-base font-semibold">Session records ({data.participants.length})</h2>
 			<p class="text-sm text-muted-foreground">
-				Records are separated by status. Contact information is visible only to administrators.
+				Records are grouped by RSVP. Attendance is recorded separately and never changes what
+				someone said beforehand. Contact information is visible only to administrators.
 			</p>
 		</div>
 		{#if data.participants.length === 0}
@@ -268,6 +293,54 @@
 													timeZone
 												})}
 											</p>
+											<div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+												<span class="text-muted-foreground">Attendance:</span>
+												{#if outcomeFor(row.attendee.id) === 'present'}
+													<Badge>Present</Badge>
+												{:else if outcomeFor(row.attendee.id) === 'absent'}
+													<Badge variant="destructive">Absent</Badge>
+												{:else}
+													<Badge variant="outline">Not recorded</Badge>
+												{/if}
+												<form
+													method="POST"
+													action="?/attendance"
+													use:enhance={enhanceAttendance}
+													class="inline-flex gap-1"
+												>
+													<input type="hidden" name="attendeeId" value={row.attendee.id} />
+													{#if outcomeFor(row.attendee.id) !== 'present'}
+														<Button
+															type="submit"
+															name="outcome"
+															value="present"
+															size="sm"
+															variant="ghost"
+															class="h-6 px-2 text-xs">Present</Button
+														>
+													{/if}
+													{#if outcomeFor(row.attendee.id) !== 'absent'}
+														<Button
+															type="submit"
+															name="outcome"
+															value="absent"
+															size="sm"
+															variant="ghost"
+															class="h-6 px-2 text-xs">Absent</Button
+														>
+													{/if}
+													{#if outcomeFor(row.attendee.id)}
+														<Button
+															type="submit"
+															name="outcome"
+															value="clear"
+															size="sm"
+															variant="ghost"
+															class="h-6 px-2 text-xs">Clear</Button
+														>
+													{/if}
+												</form>
+											</div>
 											{#if data.reminderDeliveries[row.attendee.id]}
 												{@const reminder = data.reminderDeliveries[row.attendee.id]}
 												<p class="text-xs text-muted-foreground">

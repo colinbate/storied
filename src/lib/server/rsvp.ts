@@ -211,7 +211,7 @@ export async function setAttendeeRsvp({
 			.returning()
 			.get();
 	}
-	const activeStatuses: SessionAttendanceStatus[] = ['attending', 'waitlisted', 'attended'];
+	const activeStatuses: SessionAttendanceStatus[] = ['attending', 'waitlisted'];
 
 	if (response === 'attending' && existing && activeStatuses.includes(existing.attendanceStatus)) {
 		return {
@@ -361,7 +361,7 @@ export async function updateParticipantStatus(
 		.get();
 	const promoted =
 		existing.participant.attendanceStatus === 'attending' &&
-		!['attending', 'attended'].includes(status) &&
+		status !== 'attending' &&
 		canAcceptSessionRsvps(existing.session)
 			? await promoteNextWaitlisted(db, existing.session.id)
 			: null;

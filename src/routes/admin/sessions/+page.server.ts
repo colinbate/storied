@@ -15,6 +15,7 @@ import {
 	isValidTimezone
 } from '$lib/server/notification-preferences';
 import { createTheme, listThemes, resolveSessionTheme } from '$lib/server/themes';
+import { latestNextThemeNote } from '$lib/server/session-workflow';
 
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
@@ -22,12 +23,13 @@ function getOptionalString(data: FormData, key: string) {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'sessions:edit');
-	const [allSessions, allThemes] = await Promise.all([
+	const [allSessions, allThemes, nextThemeNote] = await Promise.all([
 		locals.db.select().from(sessions).orderBy(desc(sessions.createdAt)).all(),
-		listThemes(locals.db)
+		listThemes(locals.db),
+		latestNextThemeNote(locals.db)
 	]);
 
-	return { sessions: allSessions, themes: allThemes };
+	return { sessions: allSessions, themes: allThemes, nextThemeNote };
 };
 
 export const actions: Actions = {

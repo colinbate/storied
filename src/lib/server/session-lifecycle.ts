@@ -9,6 +9,7 @@ import {
 	SESSION_DISCUSSIONS_CATEGORY_ID
 } from './discussions';
 import { renderMarkdown } from './markdown';
+import { defaultAgendaCopyStatements } from './session-workflow';
 
 type BatchItem = Parameters<ORM['batch']>[0][number];
 
@@ -81,6 +82,7 @@ export async function createClubSession(
 		);
 	if (session.status !== 'draft' && session.themeId)
 		statements.push(selectThemeStatement(db, session.themeId));
+	statements.push(...(await defaultAgendaCopyStatements(db, session.id)));
 	// D1 batches are transactional: a failed insert also rolls back the previous current session.
 	await db.batch(statements as [BatchItem, ...BatchItem[]]);
 	return { threadId };

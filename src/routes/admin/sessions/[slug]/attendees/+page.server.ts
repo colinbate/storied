@@ -29,20 +29,23 @@ import {
 } from '$lib/server/rsvp-email';
 import { PRIMARY_ORIGIN } from '$shared/brand';
 import { listReminderDeliveriesByAttendee } from '$lib/server/session-messages';
+import {
+	clearAttendance,
+	getAttendanceByAttendee,
+	recordAttendance
+} from '$lib/server/session-workflow';
 
 const statuses = new Set<SessionAttendanceStatus>([
 	'attending',
 	'waitlisted',
 	'maybe',
 	'declined',
-	'cancelled',
-	'attended',
-	'no_show'
+	'cancelled'
 ]);
 
 function parseStatus(value: FormDataEntryValue | null): SessionAttendanceStatus {
 	const status = value?.toString() as SessionAttendanceStatus | undefined;
-	return status && statuses.has(status) ? status : 'attended';
+	return status && statuses.has(status) ? status : 'attending';
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -54,7 +57,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.get();
 	if (!session) throw error(404, 'Session not found');
 
-	const [participants, allUsers, identities, reminderDeliveries] = await Promise.all([
+	const [participants, allUsers, identities, reminderDeliveries, attendance] = await Promise.all([
 		locals.db
 			.select({
 				participant: sessionParticipants,
@@ -78,7 +81,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			.orderBy(asc(users.displayName))
 			.all(),
 		locals.db.select().from(attendeeIdentities).orderBy(asc(attendeeIdentities.name)).all(),
-		listReminderDeliveriesByAttendee(locals.db, session.id)
+		listReminderDeliveriesByAttendee(locals.db, session.id),
+		getAttendanceByAttendee(locals.db, session.id)
 	]);
 	const participantIdentityIds = new Set(participants.map((row) => row.attendee.id));
 	const participantUserIds = new Set(
@@ -89,6 +93,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		session,
 		participants,
 		reminderDeliveries,
+		attendance,
 		users: allUsers,
 		addableUsers: allUsers.filter((user) => !participantUserIds.has(user.id)),
 		availableIdentities: identities.filter((identity) => !participantIdentityIds.has(identity.id)),
@@ -150,7 +155,41 @@ export const actions = {
 			status: parseStatus(data.get('status')),
 			note
 		});
+		if (data.get('markPresent') === 'on') {
+			await recordAttendance(locals.db, {
+				sessionId: session.id,
+				attendeeId: attendee.id,
+				status: 'present',
+				recordedByUserId: locals.user?.id ?? null
+			});
+		}
 		return { added: true };
+	},
+
+	/** Record what actually happened for one person: present, absent, or not yet recorded. */
+	attendance: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.slug, params.slug))
+			.get();
+		if (!session) return fail(404, { error: 'Session not found.' });
+		const data = await request.formData();
+		const attendeeId = data.get('attendeeId')?.toString();
+		const outcome = data.get('outcome')?.toString();
+		if (!attendeeId) return fail(400, { error: 'Missing attendee.' });
+		if (outcome === 'present' || outcome === 'absent') {
+			await recordAttendance(locals.db, {
+				sessionId: session.id,
+				attendeeId,
+				status: outcome,
+				recordedByUserId: locals.user?.id ?? null
+			});
+		} else {
+			await clearAttendance(locals.db, session.id, attendeeId);
+		}
+		return { attendanceUpdated: true };
 	},
 
 	update: async ({ request, params, locals, platform }) => {

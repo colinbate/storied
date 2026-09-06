@@ -14,7 +14,7 @@ import {
 	threads,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import {
 	attendingCount,
@@ -46,6 +46,16 @@ import {
 	primarySessionThreadCondition,
 	threadSubjectsDependency
 } from '$lib/server/thread-view';
+import {
+	canFacilitate,
+	canGiveFeedback,
+	getAttendanceByAttendee,
+	getOwnSessionFeedback,
+	getSessionAgenda,
+	submitAgendaSuggestion,
+	withdrawAgendaSuggestion,
+	workflowPhase
+} from '$lib/server/session-workflow';
 
 async function findSession(locals: App.Locals, slug: string) {
 	return locals.db
@@ -142,6 +152,7 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 		locals.db
 			.select({
 				participant: sessionParticipants,
+				attendee: { id: attendeeIdentities.id, name: attendeeIdentities.name },
 				user: {
 					id: users.id,
 					displayName: users.displayName,
@@ -150,14 +161,15 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 			})
 			.from(sessionParticipants)
 			.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
-			.innerJoin(users, eq(attendeeIdentities.userId, users.id))
+			// Guests have an identity but no account; keep them in the list.
+			.leftJoin(users, eq(attendeeIdentities.userId, users.id))
 			.where(
 				and(
 					eq(sessionParticipants.sessionId, session.id),
-					inArray(sessionParticipants.attendanceStatus, ['attending', 'maybe', 'attended'])
+					inArray(sessionParticipants.attendanceStatus, ['attending', 'maybe'])
 				)
 			)
-			.orderBy(asc(users.displayName))
+			.orderBy(asc(attendeeIdentities.name))
 			.all(),
 		locals.db
 			.select({
@@ -223,6 +235,65 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 			a.link.status.localeCompare(b.link.status) || a.link.createdAt.localeCompare(b.link.createdAt)
 	);
 
+	const facilitator = canFacilitate(locals);
+	const [attendance, agenda, ownFeedback, presentAttendees] = await Promise.all([
+		getAttendanceByAttendee(locals.db, session.id),
+		// The member page always shows the member view; facilitator-only items stay in the runner.
+		getSessionAgenda(locals.db, session.id, { userId: locals.user.id, canFacilitate: false }),
+		getOwnSessionFeedback(locals.db, session.id, locals.user.id),
+		// Anyone who came without an RSVP, member or guest, still belongs in the list afterwards.
+		locals.db
+			.select({
+				attendee: { id: attendeeIdentities.id, name: attendeeIdentities.name },
+				user: { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl }
+			})
+			.from(attendeeIdentities)
+			.leftJoin(users, eq(attendeeIdentities.userId, users.id))
+			.where(
+				sql`EXISTS (SELECT 1 FROM session_attendance a WHERE a.session_id = ${session.id} AND a.attendee_id = ${attendeeIdentities.id} AND a.status = 'present')`
+			)
+			.all()
+	]);
+
+	// One entry per person: attendance outcome first, otherwise the RSVP intent. Absentees drop out.
+	type ParticipantEntry = {
+		attendeeId: string;
+		userId: string | null;
+		name: string;
+		avatarUrl: string | null;
+		status: 'present' | 'attending' | 'maybe';
+	};
+	const identity = (row: {
+		attendee: { id: string; name: string };
+		user: { id: string; displayName: string; avatarUrl: string | null } | null;
+	}) => ({
+		attendeeId: row.attendee.id,
+		userId: row.user?.id ?? null,
+		name: row.user?.displayName ?? row.attendee.name,
+		avatarUrl: row.user?.avatarUrl ?? null
+	});
+	const participantMap = new Map<string, ParticipantEntry>();
+	for (const row of participants) {
+		const outcome = attendance[row.attendee.id]?.status;
+		if (outcome === 'absent') continue;
+		participantMap.set(row.attendee.id, {
+			...identity(row),
+			status:
+				outcome === 'present'
+					? 'present'
+					: row.participant.attendanceStatus === 'maybe'
+						? 'maybe'
+						: 'attending'
+		});
+	}
+	for (const row of presentAttendees) {
+		if (!participantMap.has(row.attendee.id))
+			participantMap.set(row.attendee.id, { ...identity(row), status: 'present' });
+	}
+	const participantSummary = [...participantMap.values()].sort((a, b) =>
+		a.name.localeCompare(b.name)
+	);
+
 	let discussion = null;
 	if (primaryThreadRow) {
 		depends(threadSubjectsDependency(primaryThreadRow.thread.id));
@@ -234,12 +305,24 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 		});
 	}
 
+	const pendingSuggestionCount = facilitator
+		? (await getSessionAgenda(locals.db, session.id, { userId: null, canFacilitate: true })).filter(
+				(item) => item.status === 'pending'
+			).length
+		: 0;
+
 	return {
 		session,
 		discussion,
 		canCreateDiscussion: locals.permissions.has('sessions:edit'),
 		relatedThreads,
-		participants,
+		participants: participantSummary,
+		agenda,
+		pendingSuggestionCount,
+		canFacilitate: facilitator,
+		phase: workflowPhase(session),
+		canGiveFeedback: canGiveFeedback(session),
+		hasOwnFeedback: Boolean(ownFeedback),
 		canDeclineRsvp: canDeclineSessionRsvp(session),
 		canRsvp: canAcceptSessionRsvps(session),
 		attendingCount: await attendingCount(locals.db, session.id),
@@ -301,6 +384,33 @@ export const actions: Actions = {
 		}
 
 		return { discussionCreated: true };
+	},
+
+	suggestAgendaItem: async ({ locals, params, request }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		const session = await requireSession(locals, params.slug);
+		if (session.status === 'past' || session.status === 'cancelled' || session.liveEndedAt) {
+			return fail(400, { agendaError: 'This session is over, so the agenda is closed.' });
+		}
+		const data = await request.formData();
+		const title = data.get('title')?.toString().trim() ?? '';
+		if (title.length < 3) return fail(400, { agendaError: 'Describe the topic in a few words.' });
+		if (title.length > 200)
+			return fail(400, { agendaError: 'Keep the topic under 200 characters.' });
+		await submitAgendaSuggestion(locals.db, session.id, locals.user.id, {
+			title,
+			description: data.get('description')?.toString().trim() || null
+		});
+		return { agendaSuggested: true };
+	},
+
+	withdrawAgendaSuggestion: async ({ locals, params, request }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		const session = await requireSession(locals, params.slug);
+		const itemId = (await request.formData()).get('itemId')?.toString();
+		if (!itemId) return fail(400, { agendaError: 'Missing suggestion.' });
+		await withdrawAgendaSuggestion(locals.db, session.id, itemId, locals.user.id);
+		return { agendaWithdrawn: true };
 	},
 
 	setRsvp: async ({ locals, params, request, platform }) => {

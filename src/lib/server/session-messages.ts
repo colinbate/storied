@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { ORM } from '$lib/server/db';
 import {
 	attendeeIdentities,
+	sessionAttendance,
 	sessionMessageDeliveries,
 	sessionMessages,
 	sessionParticipants,
@@ -91,17 +92,24 @@ async function selectPastAttendeeRecipients(db: ORM, session: StoriedSession) {
 		.where(
 			and(
 				isNotNull(attendeeIdentities.email),
-				sql`EXISTS (
-					SELECT 1 FROM ${sessionParticipants} earlier
-					INNER JOIN ${sessions} earlier_session ON earlier_session.id = earlier.session_id
-					WHERE earlier.attendee_id = ${attendeeIdentities.id}
-						AND earlier.session_id <> ${session.id}
-						AND earlier.attendance_status IN ('attended', 'attending')
-						AND earlier_session.status IN ('past', 'current', 'scheduled')
-						AND (
-							earlier_session.status = 'past'
-							OR (earlier_session.starts_at IS NOT NULL AND earlier_session.starts_at < ${session.startsAt ?? '9999'})
-						)
+				sql`(
+					EXISTS (
+						SELECT 1 FROM ${sessionAttendance} came
+						WHERE came.attendee_id = ${attendeeIdentities.id}
+							AND came.session_id <> ${session.id}
+							AND came.status = 'present'
+					)
+					OR EXISTS (
+						SELECT 1 FROM ${sessionParticipants} earlier
+						INNER JOIN ${sessions} earlier_session ON earlier_session.id = earlier.session_id
+						WHERE earlier.attendee_id = ${attendeeIdentities.id}
+							AND earlier.session_id <> ${session.id}
+							AND earlier.attendance_status = 'attending'
+							AND (
+								earlier_session.status = 'past'
+								OR (earlier_session.starts_at IS NOT NULL AND earlier_session.starts_at < ${session.startsAt ?? '9999'})
+							)
+					)
 				)`,
 				sql`NOT EXISTS (
 					SELECT 1 FROM ${sessionParticipants} current

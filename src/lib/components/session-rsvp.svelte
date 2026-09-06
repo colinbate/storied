@@ -12,7 +12,9 @@
 	import type { SessionCalendarLink } from '$shared/session-calendar-links';
 
 	export type SessionParticipantSummary = {
+		/** Attendee identity id; guests have one without a member account. */
 		id: string;
+		userId: string | null;
 		displayName: string;
 		avatarUrl: string | null;
 		attendanceStatus: string;
@@ -47,14 +49,14 @@
 	let saving = $state(false);
 	const participantStack = $derived(participants.slice(0, 4).toReversed());
 	const participantSummary = $derived.by(() => {
-		const counts = { attended: 0, attending: 0, maybe: 0 };
+		const counts = { present: 0, attending: 0, maybe: 0 };
 		for (const participant of participants) {
 			if (participant.attendanceStatus in counts) {
 				counts[participant.attendanceStatus as keyof typeof counts] += 1;
 			}
 		}
 		const parts = [];
-		if (counts.attended) parts.push(`${counts.attended} attended`);
+		if (counts.present) parts.push(`${counts.present} came`);
 		if (counts.attending) parts.push(`${counts.attending} attending`);
 		if (counts.maybe) parts.push(`${counts.maybe} maybe`);
 		return parts.join(' · ');
@@ -200,12 +202,19 @@
 											{participant.displayName.charAt(0).toUpperCase()}
 										</Avatar.Fallback>
 									</Avatar.Root>
-									<a
-										href={resolve('/members/[id]', { id: participant.id })}
-										class="min-w-0 flex-1 truncate hover:underline"
-									>
-										{participant.displayName}
-									</a>
+									{#if participant.userId}
+										<a
+											href={resolve('/members/[id]', { id: participant.userId })}
+											class="min-w-0 flex-1 truncate hover:underline"
+										>
+											{participant.displayName}
+										</a>
+									{:else}
+										<span class="min-w-0 flex-1 truncate">
+											{participant.displayName}
+											<span class="text-xs text-muted-foreground">guest</span>
+										</span>
+									{/if}
 									{#if participant.attendanceStatus !== 'attending'}
 										<Badge variant="outline" class="px-1.5 py-0 text-[10px]">
 											{participant.attendanceStatus}

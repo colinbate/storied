@@ -47,6 +47,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 		'series:edit',
 		'members:edit',
 		'sessions:edit',
+		'sessions:facilitate',
 		'groups:edit',
 		'search:rebuild',
 		'static-site:deploy'
