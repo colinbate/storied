@@ -266,6 +266,12 @@
 					{/if}
 				</div>
 			{/if}
+			{#if data.discussion}
+				<a class={buttonVariants({ variant: 'outline' })} href="#discussion">
+					<MessageSquareIcon class="h-4 w-4" />
+					Jump to Discussion
+				</a>
+			{/if}
 			<SessionRsvp
 				action="?/setRsvp"
 				sessionSlug={data.session.slug}

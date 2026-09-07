@@ -22,6 +22,9 @@
 	import UserIcon from '@lucide/svelte/icons/user';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import MailIcon from '@lucide/svelte/icons/mail';
+	import EyeIcon from '@lucide/svelte/icons/eye';
+	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
+	import PlayIcon from '@lucide/svelte/icons/play';
 	import { toast } from 'svelte-sonner';
 	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
@@ -55,10 +58,11 @@
 			.join('&');
 		return `${messagesHref}?${query}`;
 	});
-	let selectedThemeId = $state('');
-	let sessionTimezone = $state('');
-	let allTimezones = $state<string[]>([]);
-	let loadedSessionId = $state('');
+	let selectedThemeId = $derived(data.session.themeId ?? '');
+	let sessionTimezone = $derived(data.session.timezone ?? 'Atlantic/Bermuda');
+	const allTimezones = $derived(
+		supportedTimeZones(data.session.timezone, sessionTimezone, data.user?.timezone)
+	);
 
 	type LinkKind = 'book' | 'series' | 'author';
 	type SubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
@@ -68,6 +72,7 @@
 	let addAuthorId = $state<string | undefined>(undefined);
 	let addStatus = $state<SubjectStatus>('starter');
 	let showLinkForms = $state(false);
+	let showAddReadingChoice = $state(false);
 	let readReaderId = $state('');
 	let readBookId = $state<string | undefined>(undefined);
 	let readBookUrl = $state<string | null>(null);
@@ -111,19 +116,6 @@
 			.map((theme) => ({ id: theme.id, name: theme.name, status: theme.status }))
 	);
 
-	$effect(() => {
-		if (loadedSessionId !== data.session.id) {
-			loadedSessionId = data.session.id;
-			selectedThemeId = data.session.themeId ?? '';
-			sessionTimezone = data.session.timezone ?? 'Atlantic/Bermuda';
-			allTimezones = supportedTimeZones(
-				data.session.timezone,
-				sessionTimezone,
-				data.user?.timezone
-			);
-		}
-	});
-
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
 	const authorLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'author'));
@@ -148,7 +140,7 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<Button variant="ghost" size="icon-sm" href={resolve('/admin/sessions')}>
 			<ArrowLeftIcon class="h-4 w-4" />
 		</Button>
@@ -159,20 +151,32 @@
 		{#if data.session.themeTitle ?? data.session.theme}
 			<Badge variant="secondary">{data.session.themeTitle ?? data.session.theme}</Badge>
 		{/if}
-		<div class="ml-auto flex flex-wrap gap-2">
-			<Button variant="outline" href={messagesHref}>
-				<MailIcon class="h-4 w-4" />
-				Message Attendees
-			</Button>
-			<Button
-				variant="outline"
-				href={resolve('/admin/sessions/[slug]/attendees', { slug: data.session.slug })}
-			>
-				<UsersIcon class="h-4 w-4" />
-				Manage Attendees
-			</Button>
-		</div>
 	</div>
+
+	<nav class="flex flex-wrap gap-2" aria-label="Session management">
+		<a class={buttonVariants({ variant: 'outline' })} href="#details">Details</a>
+		<Button
+			variant="outline"
+			href={resolve('/admin/sessions/[slug]/attendees', { slug: data.session.slug })}
+		>
+			<UsersIcon class="h-4 w-4" /> People
+		</Button>
+		<a class={buttonVariants({ variant: 'outline' })} href="#reading">
+			<BookOpenIcon class="h-4 w-4" /> Reading
+		</a>
+		<Button variant="outline" href={resolve('/sessions/[slug]/run', { slug: data.session.slug })}>
+			<PlayIcon class="h-4 w-4" /> Agenda and Run
+		</Button>
+		<Button variant="outline" href={messagesHref}>
+			<MailIcon class="h-4 w-4" /> Message Attendees
+		</Button>
+		<Button variant="outline" href={resolve('/sessions/[slug]/recap', { slug: data.session.slug })}>
+			<ClipboardListIcon class="h-4 w-4" /> Recap
+		</Button>
+		<Button variant="ghost" href={resolve('/sessions/[slug]', { slug: data.session.slug })}>
+			<EyeIcon class="h-4 w-4" /> Member View
+		</Button>
+	</nav>
 
 	{#if form?.error}
 		<div class="rounded border border-destructive p-3 text-destructive">
@@ -228,15 +232,13 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root>
+	<Card.Root id="details" class="scroll-mt-24">
 		<Card.Header>
 			<Card.Title class="text-base">Session Status</Card.Title>
 			<Card.Description>
-				Drafts stay private. Upcoming sessions are visible to members and can accept RSVPs. Current
-				also features the session on Home. When you choose a new current session, the previous one
-				stays Upcoming until it has happened. Upcoming sessions need a date. Current and Past
-				sessions also need a theme. Save required details below before changing the status.
-				Cancelling closes RSVPs and offers a prepared notice for the people who replied.
+				Drafts stay private. Upcoming sessions are visible to members. Current also appears on Home.
+				Save the required details before publishing; cancelling closes RSVPs and prepares an
+				attendee notice.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -377,10 +379,6 @@
 							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
-							<Label for="rsvpSlug">RSVP Slug</Label>
-							<Input id="rsvpSlug" name="rsvpSlug" value={data.session.rsvpSlug ?? ''} />
-						</div>
-						<div class="space-y-2">
 							<Label for="rsvpCapacity">RSVP Capacity</Label>
 							<Input
 								id="rsvpCapacity"
@@ -407,19 +405,40 @@
 							/>
 							Enable RSVP waitlist
 						</label>
-						<div class="space-y-2">
-							<Label for="astroPath">Astro Path</Label>
-							<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
-						</div>
-						<label class="flex items-center gap-2 text-sm">
-							<input
-								name="isPublic"
-								type="checkbox"
-								checked={data.session.isPublic}
-								class="rounded border-input"
-							/>
-							Show on the public site when published
-						</label>
+						<details class="space-y-4 rounded-lg border p-4 sm:col-span-2">
+							<summary class="cursor-pointer font-medium">Advanced and public-site fields</summary>
+							<p class="text-sm text-muted-foreground">
+								Integration settings for RSVP and supporting-site links.
+							</p>
+							<div class="grid gap-4 sm:grid-cols-2">
+								<div class="space-y-2">
+									<Label for="rsvpSlug">RSVP Slug</Label>
+									<Input id="rsvpSlug" name="rsvpSlug" value={data.session.rsvpSlug ?? ''} />
+								</div>
+								<div class="space-y-2">
+									<Label for="astroPath">Public Site Path</Label>
+									<Input id="astroPath" name="astroPath" value={data.session.astroPath ?? ''} />
+								</div>
+								<div class="space-y-2 sm:col-span-2">
+									<Label for="externalUrl">External Session URL</Label>
+									<Input
+										id="externalUrl"
+										name="externalUrl"
+										type="url"
+										value={data.session.externalUrl ?? ''}
+									/>
+								</div>
+								<label class="flex items-center gap-2 text-sm sm:col-span-2">
+									<input
+										name="isPublic"
+										type="checkbox"
+										checked={data.session.isPublic}
+										class="rounded border-input"
+									/>
+									Show on the public site when published
+								</label>
+							</div>
+						</details>
 					</div>
 					<Button type="submit" disabled={saving}>
 						{saving ? 'Saving…' : 'Save Session'}
@@ -430,15 +449,30 @@
 	</Card.Root>
 
 	<!-- Reading choices -->
-	<Card.Root>
+	<Card.Root id="reading" class="scroll-mt-24">
 		<Card.Header>
-			<Card.Title class="text-base"
-				>Session Reading Choices ({data.readingChoices.length})</Card.Title
-			>
-			<Card.Description
-				>Record what a member or guest considered or read. Reading choices do not change their
-				attendance.</Card.Description
-			>
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div class="space-y-1.5">
+					<Card.Title class="text-base"
+						>Session Reading Choices ({data.readingChoices.length})</Card.Title
+					>
+					<Card.Description>
+						Record what a member or guest considered or read. Reading choices do not change their
+						attendance.
+					</Card.Description>
+				</div>
+				{#if !showAddReadingChoice}
+					<Button
+						size="sm"
+						variant="outline"
+						onclick={() => (showAddReadingChoice = true)}
+						aria-expanded="false"
+						aria-controls="add-reading-choice"
+					>
+						<PlusIcon class="h-4 w-4" /> Add Reading Choice
+					</Button>
+				{/if}
+			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			{#if data.readingChoices.length > 0}
@@ -524,84 +558,100 @@
 				<p class="text-sm text-muted-foreground">No reading choices recorded yet.</p>
 			{/if}
 
-			<form
-				method="POST"
-				action="?/upsertReadingChoice"
-				use:enhance={() => {
-					saving = true;
-					return async ({ result, update }) => {
-						saving = false;
-						await update({ reset: false });
-						if (result.type === 'success') {
-							if (result.data?.readingChoiceSaved) {
-								toast.success('Reading choice saved.');
-								readBookId = undefined;
-								readBookUrl = null;
-							} else if (result.data?.readingChoiceQueued) {
-								toast.success('The book is being added from the URL.');
-								readBookUrl = null;
+			{#if showAddReadingChoice}
+				<form
+					id="add-reading-choice"
+					method="POST"
+					action="?/upsertReadingChoice"
+					use:enhance={() => {
+						saving = true;
+						return async ({ result, update }) => {
+							saving = false;
+							await update({ reset: false });
+							if (result.type === 'success') {
+								if (result.data?.readingChoiceSaved) {
+									toast.success('Reading choice saved.');
+									readReaderId = '';
+									readBookId = undefined;
+									readBookUrl = null;
+									showAddReadingChoice = false;
+								} else if (result.data?.readingChoiceQueued) {
+									toast.success('The book is being added from the URL.');
+									readReaderId = '';
+									readBookUrl = null;
+									showAddReadingChoice = false;
+								}
+								if (result.data?.error) toast.error(String(result.data.error));
 							}
-							if (result.data?.error) toast.error(String(result.data.error));
-						}
-					};
-				}}
-				class="space-y-4"
-			>
-				<div class="grid gap-4">
-					<div class="space-y-2">
-						<Label for="read-reader">Reader</Label>
-						<NativeSelect id="read-reader" name="readerId" bind:value={readReaderId} class="w-full">
-							<NativeSelectOption value="">Choose a member or guest</NativeSelectOption>
-							{#each data.allUsers.filter((user) => user.status === 'active') as user (user.id)}
-								<NativeSelectOption value={`user:${user.id}`}>{user.displayName}</NativeSelectOption
-								>
-							{/each}
-							{#each data.guestAttendees as attendee (attendee.id)}
-								<NativeSelectOption value={`attendee:${attendee.id}`}
-									>{attendee.name} (guest)</NativeSelectOption
-								>
-							{/each}
-						</NativeSelect>
+						};
+					}}
+					class="space-y-4 rounded-lg border p-4"
+				>
+					<div class="grid gap-4">
+						<div class="space-y-2">
+							<Label for="read-reader">Reader</Label>
+							<NativeSelect
+								id="read-reader"
+								name="readerId"
+								bind:value={readReaderId}
+								class="w-full"
+							>
+								<NativeSelectOption value="">Choose a member or guest</NativeSelectOption>
+								{#each data.allUsers.filter((user) => user.status === 'active') as user (user.id)}
+									<NativeSelectOption value={`user:${user.id}`}
+										>{user.displayName}</NativeSelectOption
+									>
+								{/each}
+								{#each data.guestAttendees as attendee (attendee.id)}
+									<NativeSelectOption value={`attendee:${attendee.id}`}
+										>{attendee.name} (guest)</NativeSelectOption
+									>
+								{/each}
+							</NativeSelect>
+						</div>
+						<div class="space-y-2">
+							<Label>Book</Label>
+							<BookPicker
+								books={readingBookPickerItems}
+								bind:selectedId={readBookId}
+								bind:selectedUrl={readBookUrl}
+								name="bookId"
+								urlName="url"
+								allowUrl
+								placeholder="Search club books or enter a URL..."
+							/>
+						</div>
+						<div class="space-y-2">
+							<Label for="read-status">Reading Status</Label>
+							<NativeSelect class="w-full" id="read-status" name="readingStatus" value="planned">
+								<NativeSelectOption value="considering">Considering</NativeSelectOption>
+								<NativeSelectOption value="planned">Planning to read</NativeSelectOption>
+								<NativeSelectOption value="reading">Reading</NativeSelectOption>
+								<NativeSelectOption value="finished">Finished</NativeSelectOption>
+								<NativeSelectOption value="did_not_finish">Did not finish</NativeSelectOption>
+							</NativeSelect>
+						</div>
 					</div>
-					<div class="space-y-2">
-						<Label>Book</Label>
-						<BookPicker
-							books={readingBookPickerItems}
-							bind:selectedId={readBookId}
-							bind:selectedUrl={readBookUrl}
-							name="bookId"
-							urlName="url"
-							allowUrl
-							placeholder="Search club books or enter a URL..."
-						/>
+					<div class="flex justify-end gap-2">
+						<Button type="button" variant="ghost" onclick={() => (showAddReadingChoice = false)}>
+							Cancel
+						</Button>
+						<Button
+							type="submit"
+							class="h-10 w-full md:w-auto"
+							disabled={saving || !readReaderId || (!readBookId && !readBookUrl)}
+						>
+							<PlusIcon class="h-4 w-4" />
+							Record
+						</Button>
 					</div>
-					<div class="space-y-2">
-						<Label for="read-status">Reading Status</Label>
-						<NativeSelect class="w-full" id="read-status" name="readingStatus" value="planned">
-							<NativeSelectOption value="considering">Considering</NativeSelectOption>
-							<NativeSelectOption value="planned">Planning to read</NativeSelectOption>
-							<NativeSelectOption value="reading">Reading</NativeSelectOption>
-							<NativeSelectOption value="finished">Finished</NativeSelectOption>
-							<NativeSelectOption value="did_not_finish">Did not finish</NativeSelectOption>
-						</NativeSelect>
-					</div>
-				</div>
-				<div class="flex justify-end">
-					<Button
-						type="submit"
-						class="h-10 w-full md:w-auto"
-						disabled={saving || !readReaderId || (!readBookId && !readBookUrl)}
-					>
-						<PlusIcon class="h-4 w-4" />
-						Record
-					</Button>
-				</div>
-			</form>
+				</form>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 
 	<!-- Linked books -->
-	<Card.Root>
+	<Card.Root class={books.length === 0 ? 'hidden' : undefined}>
 		<Card.Header>
 			<div class="flex items-center gap-2">
 				<BookOpenIcon class="h-5 w-5 text-primary" />
@@ -666,11 +716,11 @@
 										name="status"
 										value={entry.link.status}
 									>
-										<NativeSelectOption value="starter">starter</NativeSelectOption>
-										<NativeSelectOption value="featured">featured</NativeSelectOption>
-										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="starter">Starter book</NativeSelectOption>
+										<NativeSelectOption value="featured">Featured reading</NativeSelectOption>
+										<NativeSelectOption value="discussed">Discussed at session</NativeSelectOption>
 										<NativeSelectOption value="mentioned_off_theme"
-											>mentioned off theme</NativeSelectOption
+											>Mentioned outside the theme</NativeSelectOption
 										>
 									</NativeSelect>
 								</div>
@@ -697,7 +747,7 @@
 	</Card.Root>
 
 	<!-- Linked series -->
-	<Card.Root>
+	<Card.Root class={seriesLinks.length === 0 ? 'hidden' : undefined}>
 		<Card.Header>
 			<div class="flex items-center gap-2">
 				<LibraryIcon class="h-5 w-5 text-primary" />
@@ -763,11 +813,11 @@
 										name="status"
 										value={entry.link.status}
 									>
-										<NativeSelectOption value="starter">starter</NativeSelectOption>
-										<NativeSelectOption value="featured">featured</NativeSelectOption>
-										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="starter">Starter selection</NativeSelectOption>
+										<NativeSelectOption value="featured">Featured selection</NativeSelectOption>
+										<NativeSelectOption value="discussed">Discussed at session</NativeSelectOption>
 										<NativeSelectOption value="mentioned_off_theme"
-											>mentioned off theme</NativeSelectOption
+											>Mentioned outside the theme</NativeSelectOption
 										>
 									</NativeSelect>
 								</div>
@@ -794,7 +844,7 @@
 	</Card.Root>
 
 	<!-- Linked authors -->
-	<Card.Root>
+	<Card.Root class={authorLinks.length === 0 ? 'hidden' : undefined}>
 		<Card.Header>
 			<div class="flex items-center gap-2">
 				<UserIcon class="h-5 w-5 text-primary" />
@@ -855,11 +905,11 @@
 										name="status"
 										value={entry.link.status}
 									>
-										<NativeSelectOption value="starter">starter</NativeSelectOption>
-										<NativeSelectOption value="featured">featured</NativeSelectOption>
-										<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+										<NativeSelectOption value="starter">Starter selection</NativeSelectOption>
+										<NativeSelectOption value="featured">Featured selection</NativeSelectOption>
+										<NativeSelectOption value="discussed">Discussed at session</NativeSelectOption>
 										<NativeSelectOption value="mentioned_off_theme"
-											>mentioned off theme</NativeSelectOption
+											>Mentioned outside the theme</NativeSelectOption
 										>
 									</NativeSelect>
 								</div>
@@ -986,11 +1036,11 @@
 						<div class="space-y-2">
 							<Label for="add-status">Status</Label>
 							<NativeSelect class="w-full" id="add-status" name="status" bind:value={addStatus}>
-								<NativeSelectOption value="starter">starter</NativeSelectOption>
-								<NativeSelectOption value="featured">featured</NativeSelectOption>
-								<NativeSelectOption value="discussed">discussed</NativeSelectOption>
+								<NativeSelectOption value="starter">Starter selection</NativeSelectOption>
+								<NativeSelectOption value="featured">Featured selection</NativeSelectOption>
+								<NativeSelectOption value="discussed">Discussed at session</NativeSelectOption>
 								<NativeSelectOption value="mentioned_off_theme"
-									>mentioned off theme</NativeSelectOption
+									>Mentioned outside the theme</NativeSelectOption
 								>
 							</NativeSelect>
 						</div>

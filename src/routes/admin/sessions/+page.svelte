@@ -169,10 +169,6 @@
 							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
-							<Label for="create-rsvpSlug">RSVP Slug</Label>
-							<Input id="create-rsvpSlug" name="rsvpSlug" />
-						</div>
-						<div class="space-y-2">
 							<Label for="create-rsvpCapacity">RSVP Capacity</Label>
 							<Input
 								id="create-rsvpCapacity"
@@ -199,14 +195,30 @@
 							/>
 							Enable RSVP waitlist
 						</label>
-						<div class="space-y-2">
-							<Label for="create-astroPath">Astro Path</Label>
-							<Input id="create-astroPath" name="astroPath" placeholder="/sessions/jan-2025" />
-						</div>
-						<label class="flex items-center gap-2 text-sm">
-							<input name="isPublic" type="checkbox" class="rounded border-input" checked />
-							Show on the public site when published
-						</label>
+						<details class="space-y-4 rounded-lg border p-4 sm:col-span-2">
+							<summary class="cursor-pointer font-medium">Advanced and public-site fields</summary>
+							<p class="text-sm text-muted-foreground">
+								Optional integration settings can usually keep their generated defaults.
+							</p>
+							<div class="grid gap-4 sm:grid-cols-2">
+								<div class="space-y-2">
+									<Label for="create-rsvpSlug">RSVP Slug</Label>
+									<Input id="create-rsvpSlug" name="rsvpSlug" />
+								</div>
+								<div class="space-y-2">
+									<Label for="create-astroPath">Public Site Path</Label>
+									<Input id="create-astroPath" name="astroPath" placeholder="/sessions/jan-2025" />
+								</div>
+								<div class="space-y-2 sm:col-span-2">
+									<Label for="create-externalUrl">External Session URL</Label>
+									<Input id="create-externalUrl" name="externalUrl" type="url" />
+								</div>
+								<label class="flex items-center gap-2 text-sm sm:col-span-2">
+									<input name="isPublic" type="checkbox" class="rounded border-input" checked />
+									Show on the public site when published
+								</label>
+							</div>
+						</details>
 					</div>
 					<div class="flex items-center gap-2">
 						<Button type="submit" disabled={loading}>
