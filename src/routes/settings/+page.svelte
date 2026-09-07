@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { APP_SHORT_NAME, pageTitle } from '$shared/brand';
+	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card/index.js';

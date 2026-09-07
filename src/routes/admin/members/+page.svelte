@@ -381,7 +381,7 @@
 								</div>
 							</div>
 
-							<div class="grid grid-cols-1 gap-2 sm:grid-cols-4 lg:w-[32rem]">
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-4 lg:w-lg">
 								{#if member.status === 'active' && member.id !== data.user?.id}
 									<form method="POST" action="?/message" class="flex justify-end">
 										<input type="hidden" name="userId" value={member.id} />
