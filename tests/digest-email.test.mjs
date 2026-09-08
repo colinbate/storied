@@ -37,6 +37,8 @@ test('digest lists recent forum threads and posts with their context', () => {
 	});
 
 	assert.match(email.textBody, /Ada posted in Chapter Five/);
+	assert.match(email.textBody, /what you haven't read yet/i);
+	assert.match(email.subject, /2 unread updates/);
 	assert.match(email.textBody, /The locked room changes everything\./);
 	assert.match(email.textBody, /chapter-five\?post=post-1#post-post-1/);
 	assert.match(email.textBody, /What should we read next\? in Book Club, started by Grace/);
@@ -60,8 +62,33 @@ test('digest reports forum activity omitted by the display limit', () => {
 		}))
 	});
 
-	assert.match(email.textBody, /And 3 more updates around the forum\./);
-	assert.match(email.htmlBody, /And 3 more updates around the forum\./);
+	assert.match(email.textBody, /And 3 more unread updates around the forum\./);
+	assert.match(email.htmlBody, /And 3 more unread updates around the forum\./);
+});
+
+test('digest omits around the forum when followed sections contain all unread activity', () => {
+	const email = renderDigestEmail({
+		...baseArgs,
+		followedThreads: [
+			{
+				threadId: 'followed-thread',
+				threadSlug: 'followed-thread',
+				threadTitle: 'Followed thread',
+				posts: [
+					{
+						authorDisplayName: 'Ada',
+						bodyPreview: 'An unread reply.',
+						createdAt: '2026-09-08T10:00:00.000Z'
+					}
+				]
+			}
+		],
+		siteCounts: { newThreads: 0, newPosts: 0 },
+		siteActivity: []
+	});
+
+	assert.doesNotMatch(email.textBody, /Around the forum/);
+	assert.doesNotMatch(email.htmlBody, /Around the forum/);
 });
 
 test('digest escapes forum activity in its HTML body', () => {

@@ -339,18 +339,22 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 } {
 	const totalUpdates =
 		args.followedThreads.reduce((acc, t) => acc + t.posts.length, 0) +
-		args.followedCategories.reduce((acc, c) => acc + c.threads.length, 0);
+		args.followedCategories.reduce((acc, c) => acc + c.threads.length, 0) +
+		args.siteCounts.newThreads +
+		args.siteCounts.newPosts;
 
 	const subject =
 		totalUpdates > 0
-			? `Your ${APP_NAME} digest - ${totalUpdates} update${totalUpdates === 1 ? '' : 's'}`
+			? `Your ${APP_NAME} digest: ${totalUpdates} unread update${totalUpdates === 1 ? '' : 's'}`
 			: `Your ${APP_NAME} digest`;
 
 	// ─── Text body ──────────────────────────────────────────────────────────
 	const textLines: string[] = [];
 	textLines.push(`Hi ${args.displayName},`);
 	textLines.push('');
-	textLines.push(`Here's what's happened since ${new Date(args.windowStart).toLocaleString()}.`);
+	textLines.push(
+		`Here's what you haven't read yet from activity since ${new Date(args.windowStart).toLocaleString()}.`
+	);
 	textLines.push('');
 
 	if (args.followedThreads.length > 0) {
@@ -378,34 +382,37 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		textLines.push('');
 	}
 
-	textLines.push('── Around the forum ──');
-	textLines.push(
-		`${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'}, ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} in the last day.`
-	);
-	for (const item of args.siteActivity) {
-		textLines.push('');
-		if (item.kind === 'thread') {
+	const hasSiteActivity = args.siteCounts.newThreads > 0 || args.siteCounts.newPosts > 0;
+	if (hasSiteActivity) {
+		textLines.push('── Around the forum ──');
+		textLines.push(
+			`${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'} and ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} you haven't read.`
+		);
+		for (const item of args.siteActivity) {
+			textLines.push('');
+			if (item.kind === 'thread') {
+				textLines.push(
+					`• New thread: ${item.threadTitle} in ${item.categoryName}, started by ${item.authorDisplayName}`
+				);
+				textLines.push(`  ${args.baseUrl}/thread/${item.threadSlug}`);
+			} else {
+				textLines.push(`• ${item.authorDisplayName} posted in ${item.threadTitle}`);
+				textLines.push(`  ${truncate(item.bodyPreview, 200)}`);
+				textLines.push(
+					`  ${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
+				);
+			}
+		}
+		const remainingSiteUpdates =
+			args.siteCounts.newThreads + args.siteCounts.newPosts - args.siteActivity.length;
+		if (remainingSiteUpdates > 0) {
+			textLines.push('');
 			textLines.push(
-				`• New thread: ${item.threadTitle} in ${item.categoryName}, started by ${item.authorDisplayName}`
-			);
-			textLines.push(`  ${args.baseUrl}/thread/${item.threadSlug}`);
-		} else {
-			textLines.push(`• ${item.authorDisplayName} posted in ${item.threadTitle}`);
-			textLines.push(`  ${truncate(item.bodyPreview, 200)}`);
-			textLines.push(
-				`  ${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
+				`And ${remainingSiteUpdates} more unread update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.`
 			);
 		}
-	}
-	const remainingSiteUpdates =
-		args.siteCounts.newThreads + args.siteCounts.newPosts - args.siteActivity.length;
-	if (remainingSiteUpdates > 0) {
 		textLines.push('');
-		textLines.push(
-			`And ${remainingSiteUpdates} more update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.`
-		);
 	}
-	textLines.push('');
 	textLines.push('Update your preferences at ' + args.baseUrl + '/settings.');
 
 	// ─── HTML body ──────────────────────────────────────────────────────────
@@ -416,7 +423,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 	htmlParts.push(`<p style="color: #888; font-size: 13px; margin: 0 0 4px;">${APP_SUBTITLE}</p>`);
 	htmlParts.push(`<h2 style="margin: 0 0 8px;">Hi ${escapeHtml(args.displayName)},</h2>`);
 	htmlParts.push(
-		`<p style="color: #444; line-height: 1.5; margin: 0 0 24px;">Here's what's happened since ${escapeHtml(
+		`<p style="color: #444; line-height: 1.5; margin: 0 0 24px;">Here's what you haven't read yet from activity since ${escapeHtml(
 			new Date(args.windowStart).toLocaleString()
 		)}.</p>`
 	);
@@ -458,37 +465,41 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		}
 	}
 
-	htmlParts.push(
-		`<h3 style="color: #6d28d9; font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; margin: 32px 0 8px;">Around the forum</h3>`
-	);
-	htmlParts.push(
-		`<p style="color: #333; line-height: 1.5; margin: 0 0 24px;">${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'}, ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} in the last 24 hours.</p>`
-	);
-	if (args.siteActivity.length > 0) {
+	if (hasSiteActivity) {
 		htmlParts.push(
-			`<ul style="margin: -12px 0 24px; padding-left: 18px; color: #333; line-height: 1.5;">`
+			`<h3 style="color: #6d28d9; font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; margin: 32px 0 8px;">Around the forum</h3>`
 		);
-		for (const item of args.siteActivity) {
-			const itemUrl =
-				item.kind === 'post'
-					? `${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
-					: `${args.baseUrl}/thread/${item.threadSlug}`;
-			if (item.kind === 'thread') {
-				htmlParts.push(
-					`<li style="margin: 10px 0;"><a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a> in ${escapeHtml(item.categoryName)}, started by ${escapeHtml(item.authorDisplayName)}</li>`
-				);
-			} else {
-				htmlParts.push(
-					`<li style="margin: 10px 0;"><strong>${escapeHtml(item.authorDisplayName)}</strong> posted in <a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a><div style="color: #555; font-size: 14px; margin-top: 3px;">${escapeHtml(truncate(item.bodyPreview, 200))}</div></li>`
-				);
+		htmlParts.push(
+			`<p style="color: #333; line-height: 1.5; margin: 0 0 24px;">${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'} and ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} you haven't read.</p>`
+		);
+		if (args.siteActivity.length > 0) {
+			htmlParts.push(
+				`<ul style="margin: -12px 0 24px; padding-left: 18px; color: #333; line-height: 1.5;">`
+			);
+			for (const item of args.siteActivity) {
+				const itemUrl =
+					item.kind === 'post'
+						? `${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
+						: `${args.baseUrl}/thread/${item.threadSlug}`;
+				if (item.kind === 'thread') {
+					htmlParts.push(
+						`<li style="margin: 10px 0;"><a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a> in ${escapeHtml(item.categoryName)}, started by ${escapeHtml(item.authorDisplayName)}</li>`
+					);
+				} else {
+					htmlParts.push(
+						`<li style="margin: 10px 0;"><strong>${escapeHtml(item.authorDisplayName)}</strong> posted in <a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a><div style="color: #555; font-size: 14px; margin-top: 3px;">${escapeHtml(truncate(item.bodyPreview, 200))}</div></li>`
+					);
+				}
 			}
+			htmlParts.push(`</ul>`);
 		}
-		htmlParts.push(`</ul>`);
-	}
-	if (remainingSiteUpdates > 0) {
-		htmlParts.push(
-			`<p style="color: #666; font-size: 13px; margin: -12px 0 24px;">And ${remainingSiteUpdates} more update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.</p>`
-		);
+		const remainingSiteUpdates =
+			args.siteCounts.newThreads + args.siteCounts.newPosts - args.siteActivity.length;
+		if (remainingSiteUpdates > 0) {
+			htmlParts.push(
+				`<p style="color: #666; font-size: 13px; margin: -12px 0 24px;">And ${remainingSiteUpdates} more unread update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.</p>`
+			);
+		}
 	}
 
 	htmlParts.push(

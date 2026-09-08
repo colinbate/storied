@@ -123,14 +123,33 @@ async function loadFollowedThreadPosts(
 		                             AND s.mode = 'daily_digest'
 		   INNER JOIN threads t ON t.id = p.thread_id
 		   INNER JOIN users u ON u.id = p.author_user_id
+		   LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                           AND read_state.thread_id = p.thread_id
 		  WHERE p.created_at >= ?
 		    AND p.deleted_at IS NULL
 		    AND t.deleted_at IS NULL
 		    AND p.author_user_id != ?
+		    AND (
+		    	read_state.user_id IS NULL
+		    	OR p.created_at > read_state.last_read_post_created_at
+		    	OR (
+		    		p.created_at = read_state.last_read_post_created_at
+		    		AND p.id > COALESCE(read_state.last_read_post_id, '')
+		    	)
+		    )
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM posts own_post
+		    	WHERE own_post.thread_id = p.thread_id
+		    	  AND own_post.author_user_id = ?
+		    	  AND (
+		    		own_post.created_at > p.created_at
+		    		OR (own_post.created_at = p.created_at AND own_post.id > p.id)
+		    	  )
+		    )
 		    ${DIGEST_THREAD_ACCESS_SQL}
-		  ORDER BY t.id, p.created_at`
+		  ORDER BY t.id, p.created_at, p.id`
 	)
-		.bind(userId, windowStart, userId, userId, userId)
+		.bind(userId, userId, windowStart, userId, userId, userId, userId)
 		.all<{
 			thread_id: string;
 			thread_slug: string;
@@ -185,13 +204,21 @@ async function loadFollowedCategoryThreads(
 		                             AND s.mode = 'daily_digest'
 		   INNER JOIN categories c ON c.id = t.category_id
 		   INNER JOIN users u ON u.id = t.author_user_id
+		   LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                           AND read_state.thread_id = t.id
 		  WHERE t.created_at >= ?
 		    AND t.deleted_at IS NULL
 		    AND t.author_user_id != ?
+		    AND read_state.user_id IS NULL
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM posts own_post
+		    	WHERE own_post.thread_id = t.id
+		    	  AND own_post.author_user_id = ?
+		    )
 		    ${DIGEST_THREAD_ACCESS_SQL}
 		  ORDER BY c.sort_order, c.name, t.created_at`
 	)
-		.bind(userId, windowStart, userId, userId, userId)
+		.bind(userId, userId, windowStart, userId, userId, userId, userId)
 		.all<{
 			category_id: string;
 			category_name: string;
@@ -237,23 +264,63 @@ async function loadSiteCounts(
 	activity: DigestSiteActivityItem[];
 }> {
 	const threadsCountQuery = env.DB.prepare(
-		`SELECT COUNT(*) AS n FROM threads t
+		`SELECT COUNT(*) AS n
+		   FROM threads t
+		   LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                           AND read_state.thread_id = t.id
 		  WHERE t.created_at >= ? AND t.deleted_at IS NULL AND t.author_user_id != ?
+		    AND read_state.user_id IS NULL
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM subscriptions digest_subscription
+		    	WHERE digest_subscription.user_id = ?
+		    	  AND digest_subscription.category_id = t.category_id
+		    	  AND digest_subscription.mode = 'daily_digest'
+		    )
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM posts own_post
+		    	WHERE own_post.thread_id = t.id
+		    	  AND own_post.author_user_id = ?
+		    )
 		  ${DIGEST_THREAD_ACCESS_SQL}`
 	)
-		.bind(windowStart, userId, userId, userId)
+		.bind(userId, windowStart, userId, userId, userId, userId, userId)
 		.first<{ n: number }>();
 	const postsCountQuery = env.DB.prepare(
 		`SELECT COUNT(*) AS n
 		 FROM posts p
 		 INNER JOIN threads t ON t.id = p.thread_id
+		 LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                         AND read_state.thread_id = p.thread_id
 		 WHERE p.created_at >= ?
 		   AND p.deleted_at IS NULL
 		   AND t.deleted_at IS NULL
 		   AND p.author_user_id != ?
+		   AND (
+		   	read_state.user_id IS NULL
+		   	OR p.created_at > read_state.last_read_post_created_at
+		   	OR (
+		   		p.created_at = read_state.last_read_post_created_at
+		   		AND p.id > COALESCE(read_state.last_read_post_id, '')
+		   	)
+		   )
+		   AND NOT EXISTS (
+		   	SELECT 1 FROM subscriptions digest_subscription
+		   	WHERE digest_subscription.user_id = ?
+		   	  AND digest_subscription.thread_id = p.thread_id
+		   	  AND digest_subscription.mode = 'daily_digest'
+		   )
+		   AND NOT EXISTS (
+		   	SELECT 1 FROM posts own_post
+		   	WHERE own_post.thread_id = p.thread_id
+		   	  AND own_post.author_user_id = ?
+		   	  AND (
+		   		own_post.created_at > p.created_at
+		   		OR (own_post.created_at = p.created_at AND own_post.id > p.id)
+		   	  )
+		   )
 		   ${DIGEST_THREAD_ACCESS_SQL}`
 	)
-		.bind(windowStart, userId, userId, userId)
+		.bind(userId, windowStart, userId, userId, userId, userId, userId)
 		.first<{ n: number }>();
 	const threadsQuery = env.DB.prepare(
 		`SELECT t.slug AS thread_slug, t.title AS thread_title, t.created_at AS created_at,
@@ -261,14 +328,28 @@ async function loadSiteCounts(
 		   FROM threads t
 		   INNER JOIN categories c ON c.id = t.category_id
 		   INNER JOIN users u ON u.id = t.author_user_id
+		   LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                           AND read_state.thread_id = t.id
 		  WHERE t.created_at >= ?
 		    AND t.deleted_at IS NULL
 		    AND t.author_user_id != ?
+		    AND read_state.user_id IS NULL
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM subscriptions digest_subscription
+		    	WHERE digest_subscription.user_id = ?
+		    	  AND digest_subscription.category_id = t.category_id
+		    	  AND digest_subscription.mode = 'daily_digest'
+		    )
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM posts own_post
+		    	WHERE own_post.thread_id = t.id
+		    	  AND own_post.author_user_id = ?
+		    )
 		    ${DIGEST_THREAD_ACCESS_SQL}
 		  ORDER BY t.created_at DESC, t.id DESC
 		  LIMIT ?`
 	)
-		.bind(windowStart, userId, userId, userId, SITE_ACTIVITY_LIMIT)
+		.bind(userId, windowStart, userId, userId, userId, userId, userId, SITE_ACTIVITY_LIMIT)
 		.all<{
 			thread_slug: string;
 			thread_title: string;
@@ -284,15 +365,40 @@ async function loadSiteCounts(
 		   FROM posts p
 		   INNER JOIN threads t ON t.id = p.thread_id
 		   INNER JOIN users u ON u.id = p.author_user_id
+		   LEFT JOIN thread_read_states read_state ON read_state.user_id = ?
+		                                           AND read_state.thread_id = p.thread_id
 		  WHERE p.created_at >= ?
 		    AND p.deleted_at IS NULL
 		    AND t.deleted_at IS NULL
 		    AND p.author_user_id != ?
+		    AND (
+		    	read_state.user_id IS NULL
+		    	OR p.created_at > read_state.last_read_post_created_at
+		    	OR (
+		    		p.created_at = read_state.last_read_post_created_at
+		    		AND p.id > COALESCE(read_state.last_read_post_id, '')
+		    	)
+		    )
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM subscriptions digest_subscription
+		    	WHERE digest_subscription.user_id = ?
+		    	  AND digest_subscription.thread_id = p.thread_id
+		    	  AND digest_subscription.mode = 'daily_digest'
+		    )
+		    AND NOT EXISTS (
+		    	SELECT 1 FROM posts own_post
+		    	WHERE own_post.thread_id = p.thread_id
+		    	  AND own_post.author_user_id = ?
+		    	  AND (
+		    		own_post.created_at > p.created_at
+		    		OR (own_post.created_at = p.created_at AND own_post.id > p.id)
+		    	  )
+		    )
 		    ${DIGEST_THREAD_ACCESS_SQL}
 		  ORDER BY p.created_at DESC, p.id DESC
 		  LIMIT ?`
 	)
-		.bind(windowStart, userId, userId, userId, SITE_ACTIVITY_LIMIT)
+		.bind(userId, windowStart, userId, userId, userId, userId, userId, SITE_ACTIVITY_LIMIT)
 		.all<{
 			post_id: string;
 			body_source: string;
@@ -343,6 +449,30 @@ async function loadSiteCounts(
 	};
 }
 
+export async function loadDigestContent(
+	env: HandlerContext['env'],
+	userId: string,
+	windowStart: string
+): Promise<{
+	followedThreads: DigestFollowedThread[];
+	followedCategories: DigestFollowedCategory[];
+	siteCounts: { newThreads: number; newPosts: number };
+	siteActivity: DigestSiteActivityItem[];
+}> {
+	const [followedThreads, followedCategories, site] = await Promise.all([
+		loadFollowedThreadPosts(env, userId, windowStart),
+		loadFollowedCategoryThreads(env, userId, windowStart),
+		loadSiteCounts(env, userId, windowStart)
+	]);
+
+	return {
+		followedThreads,
+		followedCategories,
+		siteCounts: site.counts,
+		siteActivity: site.activity
+	};
+}
+
 /**
  * Build and deliver a daily digest for a single user.
  * Called once per selected user in `runDailyDigest`. Returns whether a send
@@ -361,12 +491,11 @@ async function runDigestForUser(
 	let windowStart = user.last_digest_at ?? defaultStart;
 	if (windowStart < cap) windowStart = cap;
 
-	const [followedThreads, followedCategories, site] = await Promise.all([
-		loadFollowedThreadPosts(env, user.user_id, windowStart),
-		loadFollowedCategoryThreads(env, user.user_id, windowStart),
-		loadSiteCounts(env, user.user_id, windowStart)
-	]);
-	const { counts: siteCounts, activity: siteActivity } = site;
+	const { followedThreads, followedCategories, siteCounts, siteActivity } = await loadDigestContent(
+		env,
+		user.user_id,
+		windowStart
+	);
 
 	const hasContent =
 		followedThreads.length > 0 ||
