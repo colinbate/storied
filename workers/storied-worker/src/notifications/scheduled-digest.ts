@@ -7,6 +7,7 @@ import {
 	sendEmail,
 	type DigestFollowedCategory,
 	type DigestFollowedThread,
+	type DigestSiteActivityItem,
 	type DigestThreadPost,
 	type DigestFollowedCategoryThread
 } from './email';
@@ -17,6 +18,8 @@ const DEFAULT_WINDOW_HOURS = 24;
 const MAX_WINDOW_HOURS = 48;
 /** Preview length (chars) for post bodies embedded in the digest. */
 const POST_PREVIEW_CHARS = 200;
+/** Maximum number of forum-wide activity items shown in a digest. */
+const SITE_ACTIVITY_LIMIT = 10;
 
 // Moderators may open any group thread, but group notifications remain limited
 // to actual group members so moderation access does not create extra noise.
@@ -229,15 +232,18 @@ async function loadSiteCounts(
 	env: HandlerContext['env'],
 	userId: string,
 	windowStart: string
-): Promise<{ newThreads: number; newPosts: number }> {
-	const threadsRow = await env.DB.prepare(
+): Promise<{
+	counts: { newThreads: number; newPosts: number };
+	activity: DigestSiteActivityItem[];
+}> {
+	const threadsCountQuery = env.DB.prepare(
 		`SELECT COUNT(*) AS n FROM threads t
 		  WHERE t.created_at >= ? AND t.deleted_at IS NULL AND t.author_user_id != ?
 		  ${DIGEST_THREAD_ACCESS_SQL}`
 	)
 		.bind(windowStart, userId, userId, userId)
 		.first<{ n: number }>();
-	const postsRow = await env.DB.prepare(
+	const postsCountQuery = env.DB.prepare(
 		`SELECT COUNT(*) AS n
 		 FROM posts p
 		 INNER JOIN threads t ON t.id = p.thread_id
@@ -249,10 +255,91 @@ async function loadSiteCounts(
 	)
 		.bind(windowStart, userId, userId, userId)
 		.first<{ n: number }>();
+	const threadsQuery = env.DB.prepare(
+		`SELECT t.slug AS thread_slug, t.title AS thread_title, t.created_at AS created_at,
+		        c.name AS category_name, u.display_name AS author_display_name
+		   FROM threads t
+		   INNER JOIN categories c ON c.id = t.category_id
+		   INNER JOIN users u ON u.id = t.author_user_id
+		  WHERE t.created_at >= ?
+		    AND t.deleted_at IS NULL
+		    AND t.author_user_id != ?
+		    ${DIGEST_THREAD_ACCESS_SQL}
+		  ORDER BY t.created_at DESC, t.id DESC
+		  LIMIT ?`
+	)
+		.bind(windowStart, userId, userId, userId, SITE_ACTIVITY_LIMIT)
+		.all<{
+			thread_slug: string;
+			thread_title: string;
+			created_at: string;
+			category_name: string;
+			author_display_name: string;
+		}>();
+	const postsQuery = env.DB.prepare(
+		`SELECT p.id AS post_id, p.body_source AS body_source,
+		        p.contains_spoilers AS contains_spoilers, p.created_at AS created_at,
+		        t.slug AS thread_slug, t.title AS thread_title,
+		        u.display_name AS author_display_name
+		   FROM posts p
+		   INNER JOIN threads t ON t.id = p.thread_id
+		   INNER JOIN users u ON u.id = p.author_user_id
+		  WHERE p.created_at >= ?
+		    AND p.deleted_at IS NULL
+		    AND t.deleted_at IS NULL
+		    AND p.author_user_id != ?
+		    ${DIGEST_THREAD_ACCESS_SQL}
+		  ORDER BY p.created_at DESC, p.id DESC
+		  LIMIT ?`
+	)
+		.bind(windowStart, userId, userId, userId, SITE_ACTIVITY_LIMIT)
+		.all<{
+			post_id: string;
+			body_source: string;
+			contains_spoilers: number;
+			created_at: string;
+			thread_slug: string;
+			thread_title: string;
+			author_display_name: string;
+		}>();
+
+	const [threadsRow, postsRow, threadsResult, postsResult] = await Promise.all([
+		threadsCountQuery,
+		postsCountQuery,
+		threadsQuery,
+		postsQuery
+	]);
+	const threadActivity: DigestSiteActivityItem[] = (threadsResult.results ?? []).map((row) => ({
+		kind: 'thread',
+		threadSlug: row.thread_slug,
+		threadTitle: row.thread_title,
+		categoryName: row.category_name,
+		authorDisplayName: row.author_display_name,
+		createdAt: row.created_at
+	}));
+	const postActivity: DigestSiteActivityItem[] = (postsResult.results ?? []).map((row) => ({
+		kind: 'post',
+		postId: row.post_id,
+		threadSlug: row.thread_slug,
+		threadTitle: row.thread_title,
+		authorDisplayName: row.author_display_name,
+		bodyPreview:
+			spoilerSafeExcerpt(row.body_source, {
+				containsSpoilers: Boolean(row.contains_spoilers),
+				maxLength: POST_PREVIEW_CHARS
+			}) ?? '',
+		createdAt: row.created_at
+	}));
+	const activity = [...threadActivity, ...postActivity]
+		.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+		.slice(0, SITE_ACTIVITY_LIMIT);
 
 	return {
-		newThreads: threadsRow?.n ?? 0,
-		newPosts: postsRow?.n ?? 0
+		counts: {
+			newThreads: threadsRow?.n ?? 0,
+			newPosts: postsRow?.n ?? 0
+		},
+		activity
 	};
 }
 
@@ -274,11 +361,12 @@ async function runDigestForUser(
 	let windowStart = user.last_digest_at ?? defaultStart;
 	if (windowStart < cap) windowStart = cap;
 
-	const [followedThreads, followedCategories, siteCounts] = await Promise.all([
+	const [followedThreads, followedCategories, site] = await Promise.all([
 		loadFollowedThreadPosts(env, user.user_id, windowStart),
 		loadFollowedCategoryThreads(env, user.user_id, windowStart),
 		loadSiteCounts(env, user.user_id, windowStart)
 	]);
+	const { counts: siteCounts, activity: siteActivity } = site;
 
 	const hasContent =
 		followedThreads.length > 0 ||
@@ -303,6 +391,7 @@ async function runDigestForUser(
 		followedThreads,
 		followedCategories,
 		siteCounts,
+		siteActivity,
 		baseUrl
 	});
 

@@ -279,12 +279,32 @@ export interface DigestSiteCounts {
 	newPosts: number;
 }
 
+export type DigestSiteActivityItem =
+	| {
+			kind: 'thread';
+			threadSlug: string;
+			threadTitle: string;
+			categoryName: string;
+			authorDisplayName: string;
+			createdAt: string;
+	  }
+	| {
+			kind: 'post';
+			postId: string;
+			threadSlug: string;
+			threadTitle: string;
+			authorDisplayName: string;
+			bodyPreview: string;
+			createdAt: string;
+	  };
+
 export interface DigestEmailTemplateArgs {
 	displayName: string;
 	windowStart: string; // ISO-8601 - start of the digest window
 	followedThreads: DigestFollowedThread[];
 	followedCategories: DigestFollowedCategory[];
 	siteCounts: DigestSiteCounts;
+	siteActivity: DigestSiteActivityItem[];
 	baseUrl: string;
 }
 
@@ -357,6 +377,27 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 	textLines.push(
 		`${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'}, ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} in the last day.`
 	);
+	for (const item of args.siteActivity) {
+		textLines.push('');
+		if (item.kind === 'thread') {
+			textLines.push(
+				`• New thread: ${item.threadTitle} in ${item.categoryName}, started by ${item.authorDisplayName}`
+			);
+			textLines.push(`  ${args.baseUrl}/thread/${item.threadSlug}`);
+		} else {
+			textLines.push(`• ${item.authorDisplayName} posted in ${item.threadTitle}`);
+			textLines.push(`  ${truncate(item.bodyPreview, 200)}`);
+			textLines.push(`  ${args.baseUrl}/thread/${item.threadSlug}#post-${item.postId}`);
+		}
+	}
+	const remainingSiteUpdates =
+		args.siteCounts.newThreads + args.siteCounts.newPosts - args.siteActivity.length;
+	if (remainingSiteUpdates > 0) {
+		textLines.push('');
+		textLines.push(
+			`And ${remainingSiteUpdates} more update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.`
+		);
+	}
 	textLines.push('');
 	textLines.push('Update your preferences at ' + args.baseUrl + '/settings.');
 
@@ -416,6 +457,32 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 	htmlParts.push(
 		`<p style="color: #333; line-height: 1.5; margin: 0 0 24px;">${args.siteCounts.newThreads} new thread${args.siteCounts.newThreads === 1 ? '' : 's'}, ${args.siteCounts.newPosts} new post${args.siteCounts.newPosts === 1 ? '' : 's'} in the last 24 hours.</p>`
 	);
+	if (args.siteActivity.length > 0) {
+		htmlParts.push(
+			`<ul style="margin: -12px 0 24px; padding-left: 18px; color: #333; line-height: 1.5;">`
+		);
+		for (const item of args.siteActivity) {
+			const itemUrl =
+				item.kind === 'post'
+					? `${args.baseUrl}/thread/${item.threadSlug}#post-${item.postId}`
+					: `${args.baseUrl}/thread/${item.threadSlug}`;
+			if (item.kind === 'thread') {
+				htmlParts.push(
+					`<li style="margin: 10px 0;"><a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a> in ${escapeHtml(item.categoryName)}, started by ${escapeHtml(item.authorDisplayName)}</li>`
+				);
+			} else {
+				htmlParts.push(
+					`<li style="margin: 10px 0;"><strong>${escapeHtml(item.authorDisplayName)}</strong> posted in <a href="${escapeHtml(itemUrl)}" style="color: #6d28d9; text-decoration: none; font-weight: 600;">${escapeHtml(item.threadTitle)}</a><div style="color: #555; font-size: 14px; margin-top: 3px;">${escapeHtml(truncate(item.bodyPreview, 200))}</div></li>`
+				);
+			}
+		}
+		htmlParts.push(`</ul>`);
+	}
+	if (remainingSiteUpdates > 0) {
+		htmlParts.push(
+			`<p style="color: #666; font-size: 13px; margin: -12px 0 24px;">And ${remainingSiteUpdates} more update${remainingSiteUpdates === 1 ? '' : 's'} around the forum.</p>`
+		);
+	}
 
 	htmlParts.push(
 		`<p style="color: #aaa; font-size: 12px; margin-top: 40px;">You're receiving this digest because of your notification preferences. <a href="${escapeHtml(args.baseUrl)}/settings" style="color: #6d28d9;">Change them</a>.</p>`
