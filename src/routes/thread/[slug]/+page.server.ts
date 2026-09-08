@@ -12,7 +12,7 @@ import {
 	threadSubjectsDependency
 } from '$lib/server/thread-view';
 
-export const load: PageServerLoad = async ({ params, locals, depends, platform }) => {
+export const load: PageServerLoad = async ({ params, locals, depends, platform, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
@@ -29,12 +29,25 @@ export const load: PageServerLoad = async ({ params, locals, depends, platform }
 			.from(sessions)
 			.where(eq(sessions.id, row.thread.sessionId))
 			.get();
-		if (session) throw redirect(302, `/sessions/${session.slug}#discussion`);
+		if (session) {
+			const focusPostId = url?.searchParams.get('post') ?? null;
+			const target = focusPostId
+				? `/sessions/${session.slug}?post=${encodeURIComponent(focusPostId)}#post-${encodeURIComponent(focusPostId)}`
+				: `/sessions/${session.slug}#discussion`;
+			throw redirect(302, target);
+		}
 	}
 
 	depends(threadSubjectsDependency(row.thread.id));
 
-	const view = await loadThreadView({ locals, platform, row, userId: locals.user.id });
+	const view = await loadThreadView({
+		locals,
+		platform,
+		row,
+		userId: locals.user.id,
+		requestedPage: Number.parseInt(url?.searchParams.get('page') ?? '', 10),
+		focusPostId: url?.searchParams.get('post') ?? null
+	});
 	const discussionCategories = view.session
 		? []
 		: await listDiscussionCategories(locals.db, threadViewer(locals));

@@ -38,7 +38,7 @@ test('digest lists recent forum threads and posts with their context', () => {
 
 	assert.match(email.textBody, /Ada posted in Chapter Five/);
 	assert.match(email.textBody, /The locked room changes everything\./);
-	assert.match(email.textBody, /chapter-five#post-post-1/);
+	assert.match(email.textBody, /chapter-five\?post=post-1#post-post-1/);
 	assert.match(email.textBody, /What should we read next\? in Book Club, started by Grace/);
 	assert.match(email.htmlBody, /<strong>Ada<\/strong> posted in/);
 	assert.match(email.htmlBody, /What should we read next\?/);

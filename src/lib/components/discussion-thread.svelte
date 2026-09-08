@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { onDestroy, tick } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
@@ -48,6 +49,7 @@
 	import type { ThreadViewData } from '$lib/server/thread-view';
 	import { spoilerSafeExcerpt } from '$shared/spoilers';
 	import type { ResolvedPathname } from '$app/types';
+	import type { Attachment } from 'svelte/attachments';
 
 	type QueuedSubjectLink = {
 		sourceType: Extract<
@@ -108,6 +110,9 @@
 	let queuedSubjectLinks = $state<QueuedSubjectLink[]>([]);
 	let queuedSubjectPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let queuedSubjectPollStartedAt = 0;
+	let markedReadThrough = '';
+	let pendingReadPostId = '';
+	let readMarkTimer: ReturnType<typeof setTimeout> | null = null;
 
 	/** Post id currently being edited (empty string = editing the thread opener) */
 	let editingId = $state<string | null>(null);
@@ -225,6 +230,53 @@
 		return spoilerSafeExcerpt(body, { containsSpoilers }) ?? '';
 	}
 
+	function discussionPageHref(pageNumber: number, postId?: string | null): ResolvedPathname {
+		const focus = postId ? `&post=${encodeURIComponent(postId)}` : '';
+		const hash = postId ? `#post-${encodeURIComponent(postId)}` : embedded ? '#discussion' : '';
+		if (embedded && view.session) {
+			return `${resolve('/sessions/[slug]', { slug: view.session.slug })}?discussionPage=${pageNumber}${focus}${hash}` as ResolvedPathname;
+		}
+		return `${resolve('/thread/[slug]', { slug: view.thread.slug })}?page=${pageNumber}${focus}${hash}` as ResolvedPathname;
+	}
+
+	const observeReplies: Attachment = (element) => {
+		const postElements = Array.from(element.querySelectorAll<HTMLElement>('[data-thread-post-id]'));
+		const visiblePosts = new SvelteSet<HTMLElement>();
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					const postElement = entry.target as HTMLElement;
+					if (entry.isIntersecting) visiblePosts.add(postElement);
+					else visiblePosts.delete(postElement);
+				}
+				const furthestVisible = postElements.findLast((postElement) =>
+					visiblePosts.has(postElement)
+				);
+				const postId = furthestVisible?.dataset.threadPostId;
+				if (!postId || postId === markedReadThrough || postId === pendingReadPostId) return;
+
+				pendingReadPostId = postId;
+				if (readMarkTimer) clearTimeout(readMarkTimer);
+				readMarkTimer = setTimeout(async () => {
+					const nextPostId = pendingReadPostId;
+					pendingReadPostId = '';
+					readMarkTimer = null;
+					const response = await fetch('?/markRead', {
+						method: 'POST',
+						headers: { 'content-type': 'application/x-www-form-urlencoded' },
+						body: new URLSearchParams({ postId: nextPostId })
+					});
+					if (response.ok) markedReadThrough = nextPostId;
+				}, 400);
+			},
+			{ threshold: 0.15 }
+		);
+		for (const postElement of postElements) observer.observe(postElement);
+
+		return () => observer.disconnect();
+	};
+
 	async function selectReplyTarget(postId: string) {
 		replyingTo = replyingTo === postId ? null : postId;
 		if (!replyingTo) return;
@@ -338,18 +390,24 @@
 		queuedSubjectPollTimer = setTimeout(pollQueuedSubjectLinks, 2_500);
 	}
 
-	onDestroy(stopQueuedSubjectPolling);
+	onDestroy(() => {
+		stopQueuedSubjectPolling();
+		if (readMarkTimer) clearTimeout(readMarkTimer);
+	});
 
 	const replyEnhance: SubmitFunction = () => {
 		loading = true;
 		return async ({ result, update }) => {
 			loading = false;
-			await update();
 			if (result.type === 'success') {
-				const queued =
+				const data =
 					typeof result.data === 'object' && result.data !== null
-						? (result.data as { queuedSubjectLinks?: QueuedSubjectLink[] }).queuedSubjectLinks
-						: null;
+						? (result.data as {
+								postId?: string;
+								queuedSubjectLinks?: QueuedSubjectLink[];
+							})
+						: {};
+				const queued = data.queuedSubjectLinks ?? null;
 				addQueuedSubjectLinks(queued);
 				if (currentUserId) {
 					removeReplyDraft(currentUserId, replyDraftComposerId);
@@ -358,13 +416,21 @@
 				replyImageFiles = undefined;
 				replyContainsSpoilers = false;
 				replyingTo = null;
+				if (data.postId) {
+					window.location.assign(discussionPageHref(view.pagination.pageCount, data.postId));
+				} else {
+					await update();
+				}
 				toast.success(
 					Array.isArray(queued) && queued.length > 0
 						? 'Reply posted. Book links are being processed.'
 						: 'Reply posted.'
 				);
-			} else if (result.type === 'failure' && result.data?.error) {
-				toast.error(String(result.data.error));
+			} else {
+				await update();
+				if (result.type === 'failure' && result.data?.error) {
+					toast.error(String(result.data.error));
+				}
 			}
 		};
 	};
@@ -878,16 +944,43 @@
 		<!-- Replies -->
 		{#if view.posts.length > 0}
 			<Separator />
-			<h3 class="text-lg font-semibold">
-				{view.posts.length}
-				{view.posts.length === 1 ? 'Reply' : 'Replies'}
-			</h3>
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<h3 class="text-lg font-semibold">
+					{#if view.pagination.totalPosts > view.posts.length}
+						Replies {view.pagination.firstPostNumber} to {view.pagination.lastPostNumber} of
+						{view.pagination.totalPosts}
+					{:else}
+						{view.pagination.totalPosts}
+						{view.pagination.totalPosts === 1 ? 'Reply' : 'Replies'}
+					{/if}
+				</h3>
+				{#if view.pagination.firstUnreadPostId && view.pagination.firstUnreadPage}
+					<Button
+						variant="outline"
+						size="sm"
+						href={discussionPageHref(
+							view.pagination.firstUnreadPage,
+							view.pagination.firstUnreadPostId
+						)}
+					>
+						Continue reading ({view.pagination.unreadCount} new)
+					</Button>
+				{/if}
+			</div>
 
-			<div class="space-y-3">
+			<div class="space-y-3" {@attach observeReplies}>
 				{#each view.posts as { post, author } (post.id)}
 					{@const postImageUrl = publicPostImageUrl(view.fileBaseUrl, post.imageKey)}
+					{#if view.pagination.firstUnreadPostId === post.id}
+						<div class="flex items-center gap-3 py-1 text-xs font-medium text-primary">
+							<div class="h-px flex-1 bg-primary/40"></div>
+							<span>First unread reply</span>
+							<div class="h-px flex-1 bg-primary/40"></div>
+						</div>
+					{/if}
 					<Card.Root
 						id="post-{post.id}"
+						data-thread-post-id={post.id}
 						class={cn(
 							'scroll-mt-20 target:border-2 target:border-primary',
 							replyingTo === post.id && 'border-2 border-primary bg-primary/5'
@@ -918,9 +1011,11 @@
 										{/if}
 										{#if post.parentPostId}
 											{@const parentPost = postsById.get(post.parentPostId)}
-											<a
-												href="#post-{post.parentPostId}"
-												class="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-primary hover:underline"
+											<Button
+												variant="link"
+												size="xs"
+												href={discussionPageHref(view.pagination.page, post.parentPostId)}
+												class="h-auto max-w-full min-w-0 justify-start p-0 text-xs font-normal no-underline hover:underline"
 											>
 												<ReplyIcon class="h-3 w-3 shrink-0" />
 												{#if parentPost}
@@ -935,7 +1030,7 @@
 												{:else}
 													<span>in reply</span>
 												{/if}
-											</a>
+											</Button>
 										{/if}
 									</div>
 									{#if editingId === post.id}
@@ -1017,6 +1112,28 @@
 					</Card.Root>
 				{/each}
 			</div>
+
+			{#if view.pagination.hasOlder || view.pagination.hasNewer}
+				<nav class="flex items-center justify-between gap-3" aria-label="Reply pages">
+					{#if view.pagination.hasOlder}
+						<Button variant="outline" href={discussionPageHref(view.pagination.page - 1)}>
+							Older replies
+						</Button>
+					{:else}
+						<span></span>
+					{/if}
+					<span class="text-sm text-muted-foreground">
+						Page {view.pagination.page} of {view.pagination.pageCount}
+					</span>
+					{#if view.pagination.hasNewer}
+						<Button variant="outline" href={discussionPageHref(view.pagination.page + 1)}>
+							Newer replies
+						</Button>
+					{:else}
+						<span></span>
+					{/if}
+				</nav>
+			{/if}
 		{/if}
 
 		<!-- Reply form or locked notice -->

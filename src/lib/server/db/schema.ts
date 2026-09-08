@@ -453,6 +453,30 @@ export const posts = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
+// thread_read_states
+// ──────────────────────────────────────────────
+export const threadReadStates = sqliteTable(
+	'thread_read_states',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		threadId: text('thread_id')
+			.notNull()
+			.references(() => threads.id, { onDelete: 'cascade' }),
+		lastReadPostId: text('last_read_post_id').references(() => posts.id, {
+			onDelete: 'set null'
+		}),
+		lastReadPostCreatedAt: text('last_read_post_created_at').notNull(),
+		lastReadAt: text('last_read_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.threadId] }),
+		index('idx_thread_read_states_user').on(table.userId, table.lastReadAt)
+	]
+);
+
+// ──────────────────────────────────────────────
 // subscriptions
 // ──────────────────────────────────────────────
 export const subscriptions = sqliteTable(

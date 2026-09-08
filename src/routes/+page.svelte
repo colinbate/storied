@@ -94,6 +94,9 @@
 										{data.featuredDiscussion.thread.replyCount}
 										{data.featuredDiscussion.thread.replyCount === 1 ? 'reply' : 'replies'}
 									</span>
+									{#if data.featuredDiscussion.unreadCount > 0}
+										<Badge>{data.featuredDiscussion.unreadCount} new</Badge>
+									{/if}
 									{#if data.featuredDiscussion.participants.length > 0}
 										<span>·</span>
 										<ThreadParticipants participants={data.featuredDiscussion.participants} />
@@ -179,7 +182,7 @@
 			</Card.Root>
 		{:else}
 			<div class="space-y-3">
-				{#each data.recentThreads as { thread, author, participants } (thread.id)}
+				{#each data.recentThreads as { thread, author, participants, unreadCount } (thread.id)}
 					<a href={resolve(`/thread/${thread.slug}`)} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
 							<Card.Content class="flex items-center gap-3">
@@ -199,6 +202,9 @@
 										{/if}
 										{#if thread.isLocked}
 											<LockIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+										{/if}
+										{#if unreadCount > 0}
+											<Badge class="shrink-0 px-1.5 py-0 text-xs">{unreadCount} new</Badge>
 										{/if}
 									</div>
 									<div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">

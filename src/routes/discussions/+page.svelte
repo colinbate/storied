@@ -72,7 +72,7 @@
 			</Card.Root>
 		{:else}
 			<div class="space-y-3">
-				{#each data.recentThreads as { thread, author, participants } (thread.id)}
+				{#each data.recentThreads as { thread, author, participants, unreadCount } (thread.id)}
 					<a href={resolve('/thread/[slug]', { slug: thread.slug })} class="block">
 						<Card.Root class="transition-colors hover:border-primary/30">
 							<Card.Content class="flex items-center gap-3">
@@ -97,6 +97,11 @@
 											<Badge variant="secondary" class="shrink-0 px-1.5 py-0 text-xs"
 												>Spoilers</Badge
 											>
+										{/if}
+										{#if unreadCount > 0}
+											<Badge class="shrink-0 px-1.5 py-0 text-xs">
+												{unreadCount} new
+											</Badge>
 										{/if}
 									</div>
 									<div

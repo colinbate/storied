@@ -52,6 +52,7 @@ export async function sendEmail(
 export interface ReplyNotificationTemplateArgs {
 	threadTitle: string;
 	threadSlug: string;
+	postId?: string;
 	replyAuthor: string;
 	replyPreview: string;
 	baseUrl: string;
@@ -62,7 +63,9 @@ export function renderReplyNotificationEmail(args: ReplyNotificationTemplateArgs
 	textBody: string;
 	htmlBody: string;
 } {
-	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
+	const threadUrl = args.postId
+		? `${args.baseUrl}/thread/${args.threadSlug}?post=${encodeURIComponent(args.postId)}#post-${args.postId}`
+		: `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
 		subject: `New reply in "${args.threadTitle}" - ${APP_NAME}`,
 		textBody: `${args.replyAuthor} replied in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
@@ -89,7 +92,9 @@ export function renderMentionNotificationEmail(args: ReplyNotificationTemplateAr
 	textBody: string;
 	htmlBody: string;
 } {
-	const threadUrl = `${args.baseUrl}/thread/${args.threadSlug}`;
+	const threadUrl = args.postId
+		? `${args.baseUrl}/thread/${args.threadSlug}?post=${encodeURIComponent(args.postId)}#post-${args.postId}`
+		: `${args.baseUrl}/thread/${args.threadSlug}`;
 	return {
 		subject: `${args.replyAuthor} mentioned you in "${args.threadTitle}" - ${APP_NAME}`,
 		textBody: `${args.replyAuthor} mentioned you in "${args.threadTitle}":\n\n${args.replyPreview}\n\nView the thread: ${threadUrl}`,
@@ -387,7 +392,9 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		} else {
 			textLines.push(`• ${item.authorDisplayName} posted in ${item.threadTitle}`);
 			textLines.push(`  ${truncate(item.bodyPreview, 200)}`);
-			textLines.push(`  ${args.baseUrl}/thread/${item.threadSlug}#post-${item.postId}`);
+			textLines.push(
+				`  ${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
+			);
 		}
 	}
 	const remainingSiteUpdates =
@@ -464,7 +471,7 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		for (const item of args.siteActivity) {
 			const itemUrl =
 				item.kind === 'post'
-					? `${args.baseUrl}/thread/${item.threadSlug}#post-${item.postId}`
+					? `${args.baseUrl}/thread/${item.threadSlug}?post=${encodeURIComponent(item.postId)}#post-${item.postId}`
 					: `${args.baseUrl}/thread/${item.threadSlug}`;
 			if (item.kind === 'thread') {
 				htmlParts.push(

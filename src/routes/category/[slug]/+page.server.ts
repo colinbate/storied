@@ -10,7 +10,8 @@ import {
 	SESSION_DISCUSSIONS_CATEGORY_ID,
 	type ThreadListSqlRow,
 	isAnnouncementsCategory,
-	isSessionDiscussionsCategory
+	isSessionDiscussionsCategory,
+	withThreadReadContext
 } from '$lib/server/discussions';
 import { threadAccessBindings, threadAccessSql, threadViewer } from '$lib/server/thread-access';
 
@@ -82,7 +83,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		)
 		.bind(category.id, ...threadAccessBindings(viewer))
 		.all<ThreadListSqlRow>();
-	const categoryThreads = categoryThreadRows.map(mapThreadListSqlRow);
+	const categoryThreads = await withThreadReadContext(
+		locals.db,
+		locals.user.id,
+		categoryThreadRows.map(mapThreadListSqlRow)
+	);
 
 	const subscription = await locals.db
 		.select()

@@ -1,5 +1,5 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, asc, eq, isNull, not, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, lt, ne, not, or, sql, type SQL } from 'drizzle-orm';
 
 import type { ORM } from '$lib/server/db';
 import {
@@ -13,6 +13,7 @@ import {
 	sessions,
 	sessionSubjects,
 	subscriptions,
+	threadReadStates,
 	threads,
 	threadSubjects,
 	users,
@@ -32,6 +33,7 @@ import { SESSION_DISCUSSIONS_CATEGORY_ID } from '$lib/server/discussions';
 
 /** How long after posting a user can edit their own post or thread. */
 export const POST_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const THREAD_POST_PAGE_SIZE = 30;
 
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
 const subscriptionModes = new Set(['immediate', 'daily_digest', 'mute', 'none']);
@@ -101,6 +103,180 @@ export async function findThreadRow(db: ORM, condition: SQL | undefined) {
 
 export type ThreadHeadRow = NonNullable<Awaited<ReturnType<typeof findThreadRow>>>;
 
+type ThreadPostPosition = { id: string; createdAt: string };
+
+function postsAfter(position: ThreadPostPosition) {
+	return or(
+		gt(posts.createdAt, position.createdAt),
+		and(eq(posts.createdAt, position.createdAt), gt(posts.id, position.id))
+	);
+}
+
+function postsBefore(position: ThreadPostPosition) {
+	return or(
+		lt(posts.createdAt, position.createdAt),
+		and(eq(posts.createdAt, position.createdAt), lt(posts.id, position.id))
+	);
+}
+
+async function postIndex(db: ORM, threadId: string, position: ThreadPostPosition) {
+	const row = await db
+		.select({ value: count() })
+		.from(posts)
+		.where(and(eq(posts.threadId, threadId), isNull(posts.deletedAt), postsBefore(position)))
+		.get();
+	return Number(row?.value ?? 0);
+}
+
+export async function advanceThreadReadState(
+	db: ORM,
+	args: { userId: string; threadId: string; post: ThreadPostPosition }
+) {
+	const readAt = new Date().toISOString();
+	await db.run(sql`
+		INSERT INTO thread_read_states (
+			user_id, thread_id, last_read_post_id, last_read_post_created_at, last_read_at
+		) VALUES (
+			${args.userId}, ${args.threadId}, ${args.post.id}, ${args.post.createdAt}, ${readAt}
+		)
+		ON CONFLICT (user_id, thread_id) DO UPDATE SET
+			last_read_post_id = excluded.last_read_post_id,
+			last_read_post_created_at = excluded.last_read_post_created_at,
+			last_read_at = excluded.last_read_at
+		WHERE thread_read_states.last_read_post_created_at < excluded.last_read_post_created_at
+			OR (
+				thread_read_states.last_read_post_created_at = excluded.last_read_post_created_at
+				AND COALESCE(thread_read_states.last_read_post_id, '') < excluded.last_read_post_id
+			)
+	`);
+}
+
+/**
+ * Loads one bounded page of replies. First visits open on the newest page;
+ * later visits open on the page containing the first unread reply. The client
+ * advances read state once the rendered replies enter the viewport.
+ */
+export async function loadThreadPostPage(args: {
+	db: ORM;
+	threadId: string;
+	userId: string;
+	requestedPage?: number | null;
+	focusPostId?: string | null;
+}) {
+	const { db, threadId, userId } = args;
+	const [totalRow, readState, focusPost] = await Promise.all([
+		db
+			.select({ value: count() })
+			.from(posts)
+			.where(and(eq(posts.threadId, threadId), isNull(posts.deletedAt)))
+			.get(),
+		db
+			.select()
+			.from(threadReadStates)
+			.where(and(eq(threadReadStates.userId, userId), eq(threadReadStates.threadId, threadId)))
+			.get(),
+		args.focusPostId
+			? db
+					.select({ id: posts.id, createdAt: posts.createdAt })
+					.from(posts)
+					.where(
+						and(
+							eq(posts.id, args.focusPostId),
+							eq(posts.threadId, threadId),
+							isNull(posts.deletedAt)
+						)
+					)
+					.get()
+			: Promise.resolve(undefined)
+	]);
+
+	const totalPosts = Number(totalRow?.value ?? 0);
+	const pageCount = Math.max(1, Math.ceil(totalPosts / THREAD_POST_PAGE_SIZE));
+	const readPosition = readState
+		? {
+				id: readState.lastReadPostId ?? '',
+				createdAt: readState.lastReadPostCreatedAt
+			}
+		: null;
+	const [firstUnread, unreadCountRow] = readPosition
+		? await Promise.all([
+				db
+					.select({ id: posts.id, createdAt: posts.createdAt })
+					.from(posts)
+					.where(
+						and(
+							eq(posts.threadId, threadId),
+							ne(posts.authorUserId, userId),
+							isNull(posts.deletedAt),
+							postsAfter(readPosition)
+						)
+					)
+					.orderBy(asc(posts.createdAt), asc(posts.id))
+					.get(),
+				db
+					.select({ value: count() })
+					.from(posts)
+					.where(
+						and(
+							eq(posts.threadId, threadId),
+							ne(posts.authorUserId, userId),
+							isNull(posts.deletedAt),
+							postsAfter(readPosition)
+						)
+					)
+					.get()
+			])
+		: [undefined, undefined];
+
+	const firstUnreadPage = firstUnread
+		? Math.floor((await postIndex(db, threadId, firstUnread)) / THREAD_POST_PAGE_SIZE) + 1
+		: null;
+	const focusPage = focusPost
+		? Math.floor((await postIndex(db, threadId, focusPost)) / THREAD_POST_PAGE_SIZE) + 1
+		: null;
+	const requestedPage =
+		Number.isInteger(args.requestedPage) && Number(args.requestedPage) > 0
+			? Number(args.requestedPage)
+			: null;
+	const page = Math.min(
+		Math.max(focusPage ?? requestedPage ?? firstUnreadPage ?? pageCount, 1),
+		pageCount
+	);
+	const offset = (page - 1) * THREAD_POST_PAGE_SIZE;
+	const threadPosts = await db
+		.select({
+			post: posts,
+			author: {
+				id: users.id,
+				displayName: users.displayName,
+				avatarUrl: users.avatarUrl
+			}
+		})
+		.from(posts)
+		.innerJoin(users, eq(posts.authorUserId, users.id))
+		.where(and(eq(posts.threadId, threadId), isNull(posts.deletedAt)))
+		.orderBy(asc(posts.createdAt), asc(posts.id))
+		.limit(THREAD_POST_PAGE_SIZE)
+		.offset(offset)
+		.all();
+
+	return {
+		posts: threadPosts,
+		pagination: {
+			page,
+			pageCount,
+			totalPosts,
+			firstPostNumber: totalPosts === 0 ? 0 : offset + 1,
+			lastPostNumber: offset + threadPosts.length,
+			hasOlder: page > 1,
+			hasNewer: page < pageCount,
+			firstUnreadPostId: firstUnread?.id ?? null,
+			firstUnreadPage,
+			unreadCount: Number(unreadCountRow?.value ?? 0)
+		}
+	};
+}
+
 /**
  * Everything the discussion component needs to render a thread: posts, subscription state,
  * linked subjects (with their session promotion status), the linked session, and moderation
@@ -111,27 +287,22 @@ export async function loadThreadView(args: {
 	platform: App.Platform | undefined;
 	row: ThreadHeadRow;
 	userId: string;
+	requestedPage?: number | null;
+	focusPostId?: string | null;
 }) {
 	const { locals, row } = args;
 	const db = locals.db;
 	const thread = row.thread;
 
-	const [threadPosts, subscription, bookSubjectRows, seriesSubjectRows, authorSubjectRows] =
+	const [postPage, subscription, bookSubjectRows, seriesSubjectRows, authorSubjectRows] =
 		await Promise.all([
-			db
-				.select({
-					post: posts,
-					author: {
-						id: users.id,
-						displayName: users.displayName,
-						avatarUrl: users.avatarUrl
-					}
-				})
-				.from(posts)
-				.innerJoin(users, eq(posts.authorUserId, users.id))
-				.where(and(eq(posts.threadId, thread.id), isNull(posts.deletedAt)))
-				.orderBy(asc(posts.createdAt))
-				.all(),
+			loadThreadPostPage({
+				db,
+				threadId: thread.id,
+				userId: args.userId,
+				requestedPage: args.requestedPage,
+				focusPostId: args.focusPostId
+			}),
 			db
 				.select()
 				.from(subscriptions)
@@ -269,7 +440,8 @@ export async function loadThreadView(args: {
 		author: row.author,
 		category: row.category,
 		audienceGroup: row.audienceGroup,
-		posts: threadPosts,
+		posts: postPage.posts,
+		pagination: postPage.pagination,
 		subscriptionMode: (subscription?.mode ?? 'none') as
 			| 'immediate'
 			| 'daily_digest'
@@ -359,7 +531,7 @@ export function createThreadActions(options: {
 			if (thread.isLocked) return fail(403, { error: 'This thread is locked.' });
 
 			try {
-				const { queuedSubjectLinks } = await createThreadReply({
+				const { postId, queuedSubjectLinks } = await createThreadReply({
 					db: locals.db,
 					platform,
 					thread,
@@ -371,7 +543,7 @@ export function createThreadActions(options: {
 					processSubjectLinks: true,
 					imageFile: imageInput.file
 				});
-				return { success: true, queuedSubjectLinks };
+				return { success: true, postId, queuedSubjectLinks };
 			} catch (err) {
 				if (err instanceof PostImageUploadError) {
 					return fail(500, { error: 'The image could not be uploaded. Please try again.' });
@@ -410,6 +582,28 @@ export function createThreadActions(options: {
 				});
 
 			return { subscriptionMode: mode as 'immediate' | 'daily_digest' | 'mute' };
+		},
+
+		markRead: async (event: RequestEvent) => {
+			const { locals, request } = event;
+			if (!locals.user) throw redirect(302, '/auth/login');
+
+			const postId = (await request.formData()).get('postId')?.toString();
+			if (!postId) return fail(400, { error: 'Missing reply.' });
+			const thread = await requireThread(event);
+			const post = await locals.db
+				.select({ id: posts.id, createdAt: posts.createdAt })
+				.from(posts)
+				.where(and(eq(posts.id, postId), eq(posts.threadId, thread.id), isNull(posts.deletedAt)))
+				.get();
+			if (!post) return fail(404, { error: 'Reply not found.' });
+
+			await advanceThreadReadState(locals.db, {
+				userId: locals.user.id,
+				threadId: thread.id,
+				post
+			});
+			return { readThroughPostId: post.id };
 		},
 
 		togglePin: async (event: RequestEvent) => {

@@ -77,7 +77,7 @@ export async function handleThreadReplyFanout(
 			containsSpoilers: Boolean(post.contains_spoilers),
 			maxLength: 400
 		}) ?? '';
-	const postUrl = `${baseUrl}/thread/${thread.slug}#post-${post.id}`;
+	const postUrl = `${baseUrl}/thread/${thread.slug}?post=${encodeURIComponent(post.id)}#post-${post.id}`;
 
 	// Respect per-user email_enabled. Users who haven't set a preferences row
 	// yet (LEFT JOIN returning NULL) are treated as enabled (matching the
@@ -138,6 +138,7 @@ export async function handleThreadReplyFanout(
 	const template = renderReplyNotificationEmail({
 		threadTitle: thread.title,
 		threadSlug: thread.slug,
+		postId: post.id,
 		replyAuthor: author.display_name,
 		replyPreview,
 		baseUrl
@@ -194,6 +195,7 @@ export async function handleThreadReplyFanout(
 		const mentionTemplate = renderMentionNotificationEmail({
 			threadTitle: thread.title,
 			threadSlug: thread.slug,
+			postId: post.id,
 			replyAuthor: author.display_name,
 			replyPreview,
 			baseUrl

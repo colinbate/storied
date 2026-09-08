@@ -7,7 +7,8 @@ import { eq, isNull, desc, asc, and, count } from 'drizzle-orm';
 import {
 	mapThreadListSqlRow,
 	type ThreadListSqlRow,
-	SESSION_DISCUSSIONS_CATEGORY_ID
+	SESSION_DISCUSSIONS_CATEGORY_ID,
+	withThreadReadContext
 } from '$lib/server/discussions';
 import {
 	attendingCount,
@@ -103,7 +104,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		)
 		.bind(SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer))
 		.all<ThreadListSqlRow>();
-	const recentThreads = recentThreadRows.map(mapThreadListSqlRow);
+	const recentThreads = await withThreadReadContext(
+		locals.db,
+		viewer.userId,
+		recentThreadRows.map(mapThreadListSqlRow)
+	);
 
 	const currentSessions = await locals.db
 		.select()
@@ -187,7 +192,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.bind(featuredSession.id, SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer))
 				.all<ThreadListSqlRow>()
 		: { results: [] };
-	const [featuredDiscussion = null] = featuredDiscussionRows.map(mapThreadListSqlRow);
+	const [featuredDiscussion = null] = await withThreadReadContext(
+		locals.db,
+		viewer.userId,
+		featuredDiscussionRows.map(mapThreadListSqlRow)
+	);
 
 	return {
 		categories: allCategories,

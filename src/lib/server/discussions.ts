@@ -15,6 +15,70 @@ import {
 export const SESSION_DISCUSSIONS_CATEGORY_ID = 'cat_session_discussions';
 export const ANNOUNCEMENTS_CATEGORY_ID = 'cat_announcements';
 
+export async function withThreadReadContext<T extends { thread: { id: string } }>(
+	db: ORM,
+	userId: string | null,
+	items: T[]
+): Promise<Array<T & { unreadCount: number; firstUnreadPostId: string | null }>> {
+	if (!userId || items.length === 0) {
+		return items.map((item) => ({ ...item, unreadCount: 0, firstUnreadPostId: null }));
+	}
+
+	const threadIdsJson = JSON.stringify(items.map((item) => item.thread.id));
+	const rows = await db.all<{
+		threadId: string;
+		unreadCount: number;
+		firstUnreadPostId: string | null;
+	}>(sql`
+		SELECT
+			candidate.value AS threadId,
+			CASE WHEN read_state.user_id IS NULL THEN 0 ELSE (
+				SELECT COUNT(*)
+				FROM posts unread_post
+				WHERE unread_post.thread_id = candidate.value
+					AND unread_post.deleted_at IS NULL
+					AND unread_post.author_user_id <> ${userId}
+					AND (
+						unread_post.created_at > read_state.last_read_post_created_at
+						OR (
+							unread_post.created_at = read_state.last_read_post_created_at
+							AND unread_post.id > COALESCE(read_state.last_read_post_id, '')
+						)
+					)
+			) END AS unreadCount,
+			CASE WHEN read_state.user_id IS NULL THEN NULL ELSE (
+				SELECT unread_post.id
+				FROM posts unread_post
+				WHERE unread_post.thread_id = candidate.value
+					AND unread_post.deleted_at IS NULL
+					AND unread_post.author_user_id <> ${userId}
+					AND (
+						unread_post.created_at > read_state.last_read_post_created_at
+						OR (
+							unread_post.created_at = read_state.last_read_post_created_at
+							AND unread_post.id > COALESCE(read_state.last_read_post_id, '')
+						)
+					)
+				ORDER BY unread_post.created_at, unread_post.id
+				LIMIT 1
+			) END AS firstUnreadPostId
+		FROM json_each(${threadIdsJson}) candidate
+		LEFT JOIN thread_read_states read_state
+			ON read_state.thread_id = candidate.value
+			AND read_state.user_id = ${userId}
+	`);
+	const contextByThreadId = new Map(rows.map((row) => [row.threadId, row]));
+
+	return items.map((item) => {
+		const context = contextByThreadId.get(item.thread.id);
+		return {
+			...item,
+			unreadCount: Number(context?.unreadCount ?? 0),
+			firstUnreadPostId: context?.firstUnreadPostId ?? null
+		};
+	});
+}
+
 export async function listDiscussionCategories(db: ORM, viewer: ThreadViewer) {
 	return db
 		.select({
@@ -103,7 +167,7 @@ export async function listRecentDiscussionThreads(db: ORM, viewer: ThreadViewer,
 		.bind(SESSION_DISCUSSIONS_CATEGORY_ID, ...threadAccessBindings(viewer), limit)
 		.all<ThreadListSqlRow>();
 
-	return results.map(mapThreadListSqlRow);
+	return withThreadReadContext(db, viewer.userId, results.map(mapThreadListSqlRow));
 }
 
 export function buildSessionDiscussionBody(args: { title: string; themeTitle?: string | null }) {

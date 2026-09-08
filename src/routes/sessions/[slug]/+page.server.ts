@@ -71,7 +71,7 @@ async function requireSession(locals: App.Locals, slug: string) {
 	return session;
 }
 
-export const load: PageServerLoad = async ({ params, locals, platform, depends }) => {
+export const load: PageServerLoad = async ({ params, locals, platform, depends, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
@@ -314,7 +314,9 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends }
 			locals,
 			platform,
 			row: primaryThreadRow,
-			userId: locals.user.id
+			userId: locals.user.id,
+			requestedPage: Number.parseInt(url?.searchParams.get('discussionPage') ?? '', 10),
+			focusPostId: url?.searchParams.get('post') ?? null
 		});
 	}
 
