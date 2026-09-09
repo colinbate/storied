@@ -23,6 +23,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
+	let rebuildingSearch = $state(false);
 	let deployingStaticSite = $state(false);
 	const timeZone = $derived(data.user?.timezone);
 
@@ -53,6 +54,21 @@
 				toast.error(
 					String(result.data?.staticSiteDeployError ?? 'Static site deploy could not be triggered.')
 				);
+			}
+		};
+	};
+
+	const rebuildSearchEnhance: SubmitFunction = () => {
+		rebuildingSearch = true;
+
+		return async ({ result, update }) => {
+			rebuildingSearch = false;
+			await update();
+
+			if (result.type === 'success' && result.data?.searchRebuildQueued) {
+				toast.success('Search rebuild queued.');
+			} else if (result.type === 'success') {
+				toast.error('Search rebuild could not be queued.');
 			}
 		};
 	};
@@ -302,9 +318,10 @@
 								Queue a full rebuild of the search indexes.
 							</p>
 						</div>
-						<form method="POST" action="?/rebuildSearch">
-							<Button type="submit" variant="outline">
-								<SearchIcon class="h-4 w-4" /> Rebuild Search
+						<form method="POST" action="?/rebuildSearch" use:enhance={rebuildSearchEnhance}>
+							<Button type="submit" variant="outline" disabled={rebuildingSearch}>
+								<SearchIcon class="h-4 w-4" />
+								{rebuildingSearch ? 'Queuing…' : 'Rebuild Search'}
 							</Button>
 						</form>
 					</div>

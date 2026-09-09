@@ -16,6 +16,7 @@
 	import { NativeSelectOption, NativeSelect } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import type { SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -27,6 +28,7 @@
 	let updatingStatusUserId = $state<string | null>(null);
 	let updatingVisibilityUserId = $state<string | null>(null);
 	let moderatingUserId = $state<string | null>(null);
+	let messagingUserId = $state<string | null>(null);
 	let inviteEmailInput = $state<HTMLInputElement | null>(null);
 	let addEmailInput = $state<HTMLInputElement | null>(null);
 	const pendingMembers = $derived(data.members.filter((member) => member.status === 'pending'));
@@ -77,6 +79,16 @@
 			await tick();
 			addEmailInput?.focus();
 		}
+	}
+
+	function messageEnhance(userId: string): SubmitFunction {
+		return () => {
+			messagingUserId = userId;
+			return async ({ update }) => {
+				await update();
+				messagingUserId = null;
+			};
+		};
 	}
 </script>
 
@@ -383,7 +395,12 @@
 
 							<div class="grid grid-cols-1 gap-2 sm:grid-cols-4 lg:w-lg">
 								{#if member.status === 'active' && member.id !== data.user?.id}
-									<form method="POST" action="?/message" class="flex justify-end">
+									<form
+										method="POST"
+										action="?/message"
+										use:enhance={messageEnhance(member.id)}
+										class="flex justify-end"
+									>
 										<input type="hidden" name="userId" value={member.id} />
 										<Button
 											type="submit"
@@ -391,6 +408,7 @@
 											size="icon-lg"
 											class="size-9"
 											aria-label="Message"
+											disabled={messagingUserId === member.id}
 										>
 											<MessageSquareIcon class="h-4 w-4" />
 										</Button>

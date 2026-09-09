@@ -1,7 +1,9 @@
 <script lang="ts">
 	import './layout.css';
+	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -26,9 +28,11 @@
 	import MemberName from '$lib/components/member-name.svelte';
 	import { resolve } from '$app/paths';
 	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME, PRODUCT_URL } from '$shared/brand';
+	import { toast } from 'svelte-sonner';
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
+	let openingHostConversation = $state(false);
 
 	const primaryLinks = [
 		{ label: 'Home', href: '/' as const, icon: HouseIcon },
@@ -108,6 +112,18 @@
 		event.preventDefault();
 		setInlineSpoilerRevealed(spoiler, spoiler.dataset.revealed !== 'true');
 	}
+
+	const messageHostEnhance: SubmitFunction = () => {
+		openingHostConversation = true;
+
+		return async ({ result, update }) => {
+			openingHostConversation = false;
+			if (result.type === 'failure' && result.data?.error) {
+				toast.error(String(result.data.error));
+			}
+			await update();
+		};
+	};
 </script>
 
 <ModeWatcher />
@@ -245,13 +261,14 @@
 								Help and Tour
 							</DropdownMenu.Item>
 							<DropdownMenu.Item
+								disabled={openingHostConversation}
 								onclick={() => {
 									const form = document.getElementById('message-host-form') as HTMLFormElement;
 									form?.requestSubmit();
 								}}
 							>
 								<MessageCircleIcon class="h-4 w-4" />
-								Message the Host
+								{openingHostConversation ? 'Opening message…' : 'Message the Host'}
 							</DropdownMenu.Item>
 							<DropdownMenu.Separator />
 							<DropdownMenu.Item
@@ -275,6 +292,7 @@
 						id="message-host-form"
 						method="POST"
 						action="{resolve('/welcome')}?/messageHost"
+						use:enhance={messageHostEnhance}
 						class="hidden"
 					></form>
 				{:else}

@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { pageTitle } from '$shared/brand';
 	import { resolve } from '$app/paths';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -15,6 +17,15 @@
 	import MemberName from '$lib/components/member-name.svelte';
 
 	let { data } = $props();
+	let openingConversation = $state(false);
+
+	const messageEnhance: SubmitFunction = () => {
+		openingConversation = true;
+		return async ({ update }) => {
+			await update();
+			openingConversation = false;
+		};
+	};
 
 	function subjectCount(items: unknown[]) {
 		return items.length === 1 ? '1 item' : `${items.length} items`;
@@ -86,10 +97,10 @@
 				{#if data.isOwnProfile}
 					<Button href={resolve('/settings')} variant="outline" size="sm">Edit Profile</Button>
 				{:else}
-					<form method="POST" action="?/message">
-						<Button type="submit" variant="outline" size="sm">
+					<form method="POST" action="?/message" use:enhance={messageEnhance}>
+						<Button type="submit" variant="outline" size="sm" disabled={openingConversation}>
 							<MessageSquareIcon class="h-4 w-4" />
-							Message
+							{openingConversation ? 'Opening…' : 'Message'}
 						</Button>
 					</form>
 				{/if}
