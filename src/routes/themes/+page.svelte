@@ -13,11 +13,18 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
 	import SessionNav from '$lib/components/session-nav.svelte';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
+	import type { PageData } from './$types';
+
+	type Theme = PageData['themes'][number];
 
 	let { data, form } = $props();
 	let saving = $state(false);
 	let showCreateForm = $state(false);
 	let createNameInput = $state<HTMLInputElement | null>(null);
+	let themes = $derived(data.themes);
+	let ideaSort = $state<'name' | 'added'>('name');
+	let selectedSort = $state<'name' | 'used'>('name');
 
 	const statusGroups = $derived([
 		{ status: 'shortlist', title: 'Shortlist' },
@@ -27,6 +34,43 @@
 
 	function sessionsForTheme(themeId: string) {
 		return data.sessions.filter((session) => session.themeId === themeId);
+	}
+
+	function isTheme(value: unknown): value is Theme {
+		return (
+			typeof value === 'object' &&
+			value !== null &&
+			'id' in value &&
+			typeof value.id === 'string' &&
+			'name' in value &&
+			typeof value.name === 'string' &&
+			'createdAt' in value &&
+			typeof value.createdAt === 'string'
+		);
+	}
+
+	function latestSessionDate(themeId: string) {
+		return sessionsForTheme(themeId).reduce(
+			(latest, session) =>
+				session.startsAt && session.startsAt > latest ? session.startsAt : latest,
+			''
+		);
+	}
+
+	function themesFor(status: (typeof statusGroups)[number]['status']) {
+		return themes
+			.filter((theme) => theme.status === status)
+			.sort((a, b) => {
+				if (status === 'idea' && ideaSort === 'added') {
+					return b.createdAt.localeCompare(a.createdAt) || a.name.localeCompare(b.name);
+				}
+				if (status === 'selected' && selectedSort === 'used') {
+					const aDate = latestSessionDate(a.id) || a.selectedAt || '';
+					const bDate = latestSessionDate(b.id) || b.selectedAt || '';
+					return bDate.localeCompare(aDate) || a.name.localeCompare(b.name);
+				}
+				return a.name.localeCompare(b.name);
+			});
 	}
 
 	async function toggleCreateForm() {
@@ -78,9 +122,11 @@
 						saving = true;
 						return async ({ result, update }) => {
 							saving = false;
-							await update();
+							await update({ invalidateAll: false });
 							if (result.type === 'success') {
-								if (result.data?.created) {
+								const createdTheme = result.data?.theme;
+								if (result.data?.created && isTheme(createdTheme)) {
+									themes = [...themes, createdTheme];
 									toast.success('Theme added.');
 									showCreateForm = false;
 								}
@@ -140,9 +186,22 @@
 	{/if}
 
 	{#each statusGroups as group (group.status)}
-		{@const groupThemes = data.themes.filter((theme) => theme.status === group.status)}
+		{@const groupThemes = themesFor(group.status)}
 		<section class="space-y-3">
-			<h2 class="text-lg font-semibold">{group.title}</h2>
+			<div class="flex items-center justify-between gap-3">
+				<h2 class="text-lg font-semibold">{group.title}</h2>
+				{#if group.status === 'idea'}
+					<NativeSelect bind:value={ideaSort} class="w-auto" aria-label="Sort ideas">
+						<NativeSelectOption value="name">Name</NativeSelectOption>
+						<NativeSelectOption value="added">Date added</NativeSelectOption>
+					</NativeSelect>
+				{:else if group.status === 'selected'}
+					<NativeSelect bind:value={selectedSort} class="w-auto" aria-label="Sort selected themes">
+						<NativeSelectOption value="name">Name</NativeSelectOption>
+						<NativeSelectOption value="used">Date used</NativeSelectOption>
+					</NativeSelect>
+				{/if}
+			</div>
 			{#if groupThemes.length > 0}
 				<div class="grid gap-3 sm:grid-cols-2">
 					{#each groupThemes as theme (theme.id)}

@@ -44,7 +44,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Theme name must be at least 2 characters.' });
 		}
 
-		await createTheme(locals.db, {
+		const theme = await createTheme(locals.db, {
 			name,
 			description: getOptionalString(data, 'description'),
 			exampleText: getOptionalString(data, 'exampleText'),
@@ -52,6 +52,6 @@ export const actions: Actions = {
 			submittedByUserId: locals.user?.id ?? null
 		});
 
-		return { created: true };
+		return { created: true as const, theme };
 	}
 };

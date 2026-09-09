@@ -58,6 +58,7 @@ export async function createTheme(db: ORM, input: CreateThemeInput) {
 		submittedByUserId: input.submittedByUserId ?? null,
 		selectedAt: status === 'selected' ? now : null,
 		archivedAt: status === 'archived' ? now : null,
+		createdAt: now,
 		updatedAt: now
 	};
 
