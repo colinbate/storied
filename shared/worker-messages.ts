@@ -62,6 +62,11 @@ export interface SubjectSessionReadingChoice {
 	previousBookId?: string | null;
 }
 
+export interface SubjectThemeBookLink {
+	themeId: string;
+	addedByUserId?: string | null;
+}
+
 export interface SubjectResolvePayload {
 	subjectSourceId: string;
 	sourceType: SubjectSourceType;
@@ -73,6 +78,7 @@ export interface SubjectResolvePayload {
 	seriesBookLink?: SubjectSeriesBookLink;
 	userFeatureLink?: SubjectUserFeatureLink;
 	sessionReadingChoice?: SubjectSessionReadingChoice;
+	themeBookLink?: SubjectThemeBookLink;
 }
 
 // ────────────────────────────────────────────────

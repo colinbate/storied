@@ -9,6 +9,7 @@ import {
 	sessionReadingChoices,
 	sessions,
 	sessionSubjects,
+	themeBooks,
 	users
 } from '$lib/server/db/schema';
 import { eq, and, desc, asc, sql, isNull, inArray, count } from 'drizzle-orm';
@@ -193,6 +194,24 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.filter((x): x is NonNullable<typeof x> => x !== null);
 
 	const allThemes = await listThemes(locals.db);
+	const curatedThemeBooks = session.themeId
+		? await locals.db
+				.select({
+					link: themeBooks,
+					book: {
+						id: books.id,
+						slug: books.slug,
+						title: books.title,
+						authorText: books.authorText,
+						coverUrl: books.coverUrl
+					}
+				})
+				.from(themeBooks)
+				.innerJoin(books, eq(themeBooks.bookId, books.id))
+				.where(and(eq(themeBooks.themeId, session.themeId), isNull(books.deletedAt)))
+				.orderBy(asc(books.title))
+				.all()
+		: [];
 
 	const readingChoices = await locals.db
 		.select({
@@ -262,6 +281,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		session,
 		themes: allThemes,
 		linkedSubjects,
+		curatedThemeBooks,
 		readingChoices,
 		allBooks,
 		allSeries,
@@ -312,7 +332,7 @@ export const actions: Actions = {
 			themeId: sessionTheme.themeId,
 			theme: themeTitle,
 			themeTitle,
-			themeSummary: getOptionalString(data, 'themeSummary'),
+			themeSummary: row.themeSummary,
 			bodySource,
 			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
 			startsAt,
@@ -577,6 +597,43 @@ export const actions: Actions = {
 			);
 
 		return { linkRemoved: true };
+	},
+
+	promoteThemeBook: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+		if (!row.themeId) return fail(400, { error: 'Choose a theme for this session first.' });
+
+		const data = await request.formData();
+		const bookId = data.get('bookId')?.toString();
+		if (!bookId) return fail(400, { error: 'Missing theme book.' });
+		const relation = await locals.db
+			.select({ bookId: themeBooks.bookId })
+			.from(themeBooks)
+			.innerJoin(books, eq(themeBooks.bookId, books.id))
+			.where(
+				and(
+					eq(themeBooks.themeId, row.themeId),
+					eq(themeBooks.bookId, bookId),
+					isNull(books.deletedAt)
+				)
+			)
+			.get();
+		if (!relation) return fail(404, { error: 'That book is not linked to this theme.' });
+
+		await locals.db
+			.insert(sessionSubjects)
+			.values({
+				sessionId: row.id,
+				subjectType: 'book',
+				subjectId: bookId,
+				status: 'starter',
+				addedByUserId: locals.user?.id ?? null
+			})
+			.onConflictDoNothing();
+
+		return { themeBookPromoted: true };
 	},
 
 	upsertReadingChoice: async ({ request, params, locals, platform }) => {

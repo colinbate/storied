@@ -1,16 +1,16 @@
 import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { sessions, themes } from '$lib/server/db/schema';
+import { books, sessions, themeBooks, themes } from '$lib/server/db/schema';
 import { createTheme } from '$lib/server/themes';
-import { asc, desc, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
 
 function getOptionalString(data: FormData, key: string) {
 	return data.get(key)?.toString()?.trim() || null;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const [themeRows, sessionRows] = await Promise.all([
+	const [themeRows, sessionRows, themeBookRows] = await Promise.all([
 		locals.db
 			.select()
 			.from(themes)
@@ -29,10 +29,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.from(sessions)
 			.where(sessionAccessCondition(locals))
 			.orderBy(desc(sessions.startsAt), desc(sessions.createdAt))
+			.all(),
+		locals.db
+			.select({
+				themeId: themeBooks.themeId,
+				book: {
+					id: books.id,
+					slug: books.slug,
+					title: books.title,
+					authorText: books.authorText,
+					coverUrl: books.coverUrl
+				}
+			})
+			.from(themeBooks)
+			.innerJoin(books, eq(themeBooks.bookId, books.id))
+			.innerJoin(themes, eq(themeBooks.themeId, themes.id))
+			.where(and(ne(themes.status, 'archived'), isNull(books.deletedAt)))
+			.orderBy(asc(books.title))
 			.all()
 	]);
 
-	return { themes: themeRows, sessions: sessionRows };
+	return { themes: themeRows, sessions: sessionRows, themeBooks: themeBookRows };
 };
 
 export const actions: Actions = {

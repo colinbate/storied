@@ -198,9 +198,18 @@
 		</div>
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">{data.session.title}</h1>
-			{#if data.session.themeTitle ?? data.session.theme}
+			{#if data.theme || data.session.themeTitle || data.session.theme}
 				<p class="mt-2 text-xl text-muted-foreground">
-					{data.session.themeTitle ?? data.session.theme}
+					{#if data.theme}
+						<a
+							href={resolve('/themes/[slug]', { slug: data.theme.slug })}
+							class="hover:text-foreground hover:underline"
+						>
+							{data.theme.name}
+						</a>
+					{:else}
+						{data.session.themeTitle ?? data.session.theme}
+					{/if}
 				</p>
 			{/if}
 		</div>
@@ -231,8 +240,10 @@
 					</span>
 				{/if}
 			</div>
-			{#if data.session.themeSummary}
-				<p class="max-w-3xl text-base leading-7">{data.session.themeSummary}</p>
+			{#if data.theme?.description ?? data.session.themeSummary}
+				<p class="max-w-3xl text-base leading-7">
+					{data.theme?.description ?? data.session.themeSummary}
+				</p>
 			{/if}
 			{#if canManageSession || data.canFacilitate}
 				<div class="flex flex-wrap gap-2">
@@ -305,10 +316,22 @@
 			{/if}
 		</div>
 
-		{#if data.session.bodyHtml}
-			<section class="prose max-w-none wrap-anywhere dark:prose-invert">
+		{#if data.theme?.guideHtml}
+			<section class="prose max-w-3xl wrap-anywhere dark:prose-invert">
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				{@html data.session.bodyHtml}
+				{@html data.theme.guideHtml}
+			</section>
+		{/if}
+
+		{#if data.session.bodyHtml}
+			<section class="max-w-3xl space-y-3">
+				{#if data.theme?.guideHtml}
+					<h2 class="text-lg font-semibold">Session-specific Theme Notes</h2>
+				{/if}
+				<div class="prose max-w-none wrap-anywhere dark:prose-invert">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+					{@html data.session.bodyHtml}
+				</div>
 			</section>
 		{/if}
 

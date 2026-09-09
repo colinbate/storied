@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { sessions } from '$lib/server/db/schema';
+import { sessions, themes } from '$lib/server/db/schema';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import { canAcceptSessionRsvps } from '$lib/server/rsvp';
 
@@ -29,6 +29,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 			themeTitle: sessions.themeTitle,
 			themeSummary: sessions.themeSummary,
 			body: sessions.bodySource,
+			themeName: themes.name,
+			themeSlug: themes.slug,
+			themeDescription: themes.description,
+			themeGuideSource: themes.guideSource,
+			themeGuideHtml: themes.guideHtml,
 			durationMinutes: sessions.durationMinutes,
 			locationName: sessions.locationName,
 			isPublic: sessions.isPublic,
@@ -42,13 +47,25 @@ export const GET: RequestHandler = async ({ locals }) => {
 			updatedAt: sessions.updatedAt
 		})
 		.from(sessions)
+		.leftJoin(themes, eq(sessions.themeId, themes.id))
 		.where(and(eq(sessions.isPublic, true), ne(sessions.status, 'draft')))
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
 	return json(
 		rows.map((r) => {
-			const { rsvpSlug, rsvpEnabled, publicRecap, publicRecapHtml, ...session } = r;
+			const {
+				rsvpSlug,
+				rsvpEnabled,
+				publicRecap,
+				publicRecapHtml,
+				themeName,
+				themeDescription,
+				themeGuideSource,
+				themeGuideHtml,
+				body: sessionNotes,
+				...session
+			} = r;
 			const acceptsRsvps = canAcceptSessionRsvps({
 				status: r.status,
 				rsvpEnabled,
@@ -58,6 +75,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 			return {
 				...session,
+				theme: themeName ?? session.theme,
+				themeTitle: themeName ?? session.themeTitle ?? session.theme,
+				themeSummary: themeDescription ?? session.themeSummary,
+				body: themeGuideSource ?? sessionNotes,
+				themeGuide: themeGuideSource ?? undefined,
+				themeGuideHtml: themeGuideHtml ?? undefined,
+				...(themeGuideSource && sessionNotes ? { sessionNotes } : {}),
 				date: r.date?.split('T')[0],
 				start: r.start?.split('T')[1],
 				...(acceptsRsvps ? { rsvpSlug: rsvpSlug ?? r.slug } : {}),

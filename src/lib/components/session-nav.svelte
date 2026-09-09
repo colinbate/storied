@@ -8,7 +8,7 @@
 	];
 
 	function isActive(href: (typeof links)[number]['href']) {
-		if (href === '/themes') return page.url.pathname === '/themes';
+		if (href === '/themes') return page.url.pathname.startsWith('/themes');
 		return page.url.pathname.startsWith('/sessions') || page.url.pathname.startsWith('/thread/');
 	}
 </script>

@@ -164,6 +164,18 @@
 						{/each}
 					</div>
 				{/if}
+				{#if data.themeLinks.length > 0}
+					<div class="flex flex-wrap items-center gap-2">
+						<span class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+							>Themes</span
+						>
+						{#each data.themeLinks as theme (theme.id)}
+							<a href={resolve('/themes/[slug]', { slug: theme.slug })}>
+								<Badge variant="outline">{theme.name}</Badge>
+							</a>
+						{/each}
+					</div>
+				{/if}
 			</div>
 
 			<!-- Stats -->

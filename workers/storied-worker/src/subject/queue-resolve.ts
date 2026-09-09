@@ -5,6 +5,7 @@ import {
 	linkSessionSubject,
 	linkSessionReadingChoice,
 	linkSeriesBook,
+	linkThemeBook,
 	linkUserFeaturedSubject,
 	markSourceFailed
 } from './links';
@@ -30,7 +31,8 @@ export async function handleSubjectResolve(
 		sessionLink,
 		seriesBookLink,
 		userFeatureLink,
-		sessionReadingChoice
+		sessionReadingChoice,
+		themeBookLink
 	} = payload;
 
 	const source = await env.DB.prepare(
@@ -57,6 +59,7 @@ export async function handleSubjectResolve(
 		await linkSeriesBook(env.DB, resolvedType, source.subject_id, seriesBookLink);
 		await linkUserFeaturedSubject(env.DB, resolvedType, source.subject_id, userFeatureLink);
 		await linkSessionReadingChoice(env.DB, resolvedType, source.subject_id, sessionReadingChoice);
+		await linkThemeBook(env.DB, resolvedType, source.subject_id, themeBookLink);
 		await reindexSubject(env.DB, resolvedType, source.subject_id);
 		if (threadId) await reindexThread(env.DB, threadId);
 		if (sessionLink?.sessionId) await reindexSession(env.DB, sessionLink.sessionId);

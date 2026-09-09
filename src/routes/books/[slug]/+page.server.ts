@@ -7,6 +7,7 @@ import {
 	genreLinks,
 	sessions,
 	sessionSubjects,
+	themeBooks,
 	themes,
 	userSubjects,
 	threadSubjects,
@@ -163,7 +164,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(desc(userSubjects.isRecommended), desc(userSubjects.updatedAt))
 		.all();
 
-	const [sessionLinks, accessOptions, suggestionSessions] = await Promise.all([
+	const [sessionLinks, accessOptions, suggestionSessions, themeLinks] = await Promise.all([
 		locals.db
 			.select({
 				link: {
@@ -218,6 +219,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				and(inArray(sessions.status, SUGGESTIBLE_SESSION_STATUSES), sessionAccessCondition(locals))
 			)
 			.orderBy(asc(sessions.startsAt), asc(sessions.title))
+			.all(),
+		locals.db
+			.select({
+				id: themes.id,
+				name: themes.name,
+				slug: themes.slug,
+				status: themes.status
+			})
+			.from(themeBooks)
+			.innerJoin(themes, eq(themeBooks.themeId, themes.id))
+			.where(eq(themeBooks.bookId, book.id))
+			.orderBy(asc(themes.name))
 			.all()
 	]);
 
@@ -238,6 +251,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		})),
 		relatedThreads: uniqueThreads,
 		sessionLinks,
+		themeLinks,
 		accessOptions,
 		suggestionSessions: suggestionSessions.filter(
 			(session) => !linkedSessionIds.has(session.id) && acceptsBookSuggestions(session)

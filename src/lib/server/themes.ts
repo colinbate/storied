@@ -41,6 +41,8 @@ export interface CreateThemeInput {
 	name: string;
 	description?: string | null;
 	exampleText?: string | null;
+	guideSource?: string | null;
+	guideHtml?: string | null;
 	status?: ThemeStatus;
 	submittedByUserId?: string | null;
 }
@@ -54,6 +56,8 @@ export async function createTheme(db: ORM, input: CreateThemeInput) {
 		name: input.name,
 		description: input.description ?? null,
 		exampleText: input.exampleText ?? null,
+		guideSource: input.guideSource ?? null,
+		guideHtml: input.guideHtml ?? null,
 		status,
 		submittedByUserId: input.submittedByUserId ?? null,
 		selectedAt: status === 'selected' ? now : null,

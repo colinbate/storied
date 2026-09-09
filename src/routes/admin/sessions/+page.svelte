@@ -7,7 +7,6 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import SessionThemePicker from '$lib/components/admin/session-theme-picker.svelte';
@@ -15,7 +14,6 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import { toast } from 'svelte-sonner';
-	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { formatDate } from '$lib/date-format';
 	import { supportedTimeZones } from '$lib/timezone-options';
 	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
@@ -158,15 +156,6 @@
 									above if it still stands.
 								</p>
 							{/if}
-						</div>
-						<div class="space-y-2 sm:col-span-2">
-							<Label for="create-themeSummary">Theme Summary</Label>
-							<Textarea id="create-themeSummary" name="themeSummary" rows={2} />
-						</div>
-						<div class="space-y-2 sm:col-span-2">
-							<Label for="create-bodySource">Session description</Label>
-							<Textarea id="create-bodySource" name="bodySource" rows={6} />
-							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
 							<Label for="create-rsvpCapacity">RSVP Capacity</Label>

@@ -10,6 +10,7 @@ import {
 	sessionParticipants,
 	sessionSubjects,
 	sessions,
+	themes,
 	subscriptions,
 	threads,
 	users
@@ -77,6 +78,9 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends, 
 	}
 
 	const session = await requireSession(locals, params.slug);
+	const theme = session.themeId
+		? await locals.db.select().from(themes).where(eq(themes.id, session.themeId)).get()
+		: null;
 
 	const [
 		bookSubjectRows,
@@ -328,6 +332,7 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends, 
 
 	return {
 		session,
+		theme: theme ?? null,
 		discussion,
 		canCreateDiscussion: locals.permissions.has('sessions:edit'),
 		relatedThreads,

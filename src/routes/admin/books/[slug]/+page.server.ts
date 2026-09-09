@@ -9,6 +9,8 @@ import {
 	genreLinks,
 	sessions,
 	sessionSubjects,
+	themeBooks,
+	themes,
 	subjectSources,
 	type BookAccessFormat,
 	type BookAccessProviderType,
@@ -139,6 +141,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(asc(bookAccessOptions.providerName), asc(bookAccessOptions.format))
 		.all();
 
+	const themeLinks = await locals.db
+		.select({ link: themeBooks, theme: themes })
+		.from(themeBooks)
+		.innerJoin(themes, eq(themeBooks.themeId, themes.id))
+		.where(eq(themeBooks.bookId, book.id))
+		.orderBy(asc(themes.name))
+		.all();
+
 	// Subject sources tied to this book
 	const sources = await locals.db
 		.select()
@@ -157,6 +167,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		sessionLinks: sessionRows,
 		allSessions,
 		accessOptions,
+		themeLinks,
 		sources
 	};
 };

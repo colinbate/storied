@@ -117,6 +117,9 @@
 	);
 
 	const books = $derived(data.linkedSubjects.filter((l) => l.kind === 'book'));
+	const selectedTheme = $derived(
+		data.themes.find((theme) => theme.id === data.session.themeId) ?? null
+	);
 	const seriesLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'series'));
 	const authorLinks = $derived(data.linkedSubjects.filter((l) => l.kind === 'author'));
 	const readingBookPickerItems = $derived(
@@ -358,24 +361,27 @@
 									: 'Theme (can be decided later)'}
 								required={data.session.status === 'current' || data.session.status === 'past'}
 							/>
+							{#if selectedTheme}
+								<a
+									class="mt-2 inline-block text-xs text-primary hover:underline"
+									href={resolve('/admin/themes/[slug]', { slug: selectedTheme.slug })}
+								>
+									Edit the theme guide
+								</a>
+							{/if}
 						</div>
 						<div class="space-y-2 sm:col-span-2">
-							<Label for="themeSummary">Theme Summary</Label>
-							<Textarea
-								id="themeSummary"
-								name="themeSummary"
-								rows={2}
-								value={data.session.themeSummary ?? ''}
-							/>
-						</div>
-						<div class="space-y-2 sm:col-span-2">
-							<Label for="bodySource">Session description</Label>
+							<Label for="bodySource">Session-specific Theme Notes</Label>
 							<Textarea
 								id="bodySource"
 								name="bodySource"
-								rows={8}
+								rows={5}
 								value={data.session.bodySource ?? ''}
+								placeholder="Optional notes about how this session applies the theme"
 							/>
+							<p class="text-xs text-muted-foreground">
+								Use this only when the session needs context beyond the theme guide.
+							</p>
 							<MarkdownHint />
 						</div>
 						<div class="space-y-2">
@@ -649,6 +655,68 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.curatedThemeBooks.length > 0}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title class="text-base">
+					Books for {selectedTheme?.name ?? data.session.themeTitle ?? data.session.theme}
+				</Card.Title>
+				<Card.Description>
+					Add a curated theme book to this session as a starter book.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="p-0">
+				<div class="divide-y">
+					{#each data.curatedThemeBooks as entry (entry.book.id)}
+						<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+							{#if entry.book.coverUrl}
+								<img src={entry.book.coverUrl} alt="" class="h-10 w-7 rounded object-cover" />
+							{:else}
+								<div class="flex h-10 w-7 items-center justify-center rounded bg-muted">
+									<BookOpenIcon class="h-4 w-4 text-muted-foreground" />
+								</div>
+							{/if}
+							<a
+								class="min-w-0 flex-1 hover:underline"
+								href={resolve('/admin/books/[slug]', { slug: entry.book.slug })}
+							>
+								<span class="block truncate font-medium">{entry.book.title}</span>
+								{#if entry.book.authorText}
+									<span class="block truncate text-sm text-muted-foreground"
+										>{entry.book.authorText}</span
+									>
+								{/if}
+							</a>
+							{#if linkedBookStatus(entry.book.id)}
+								<Badge variant="secondary">{linkedBookStatus(entry.book.id)}</Badge>
+							{:else}
+								<form
+									method="POST"
+									action="?/promoteThemeBook"
+									use:enhance={() => {
+										saving = true;
+										return async ({ result, update }) => {
+											saving = false;
+											await update({ reset: false });
+											if (result.type === 'success' && result.data?.themeBookPromoted) {
+												toast.success('Book added as a starter.');
+											}
+										};
+									}}
+								>
+									<input type="hidden" name="bookId" value={entry.book.id} />
+									<Button type="submit" size="sm" variant="outline" disabled={saving}>
+										Add as Starter
+									</Button>
+								</form>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<!-- Linked books -->
 	<Card.Root class={books.length === 0 ? 'hidden' : undefined}>

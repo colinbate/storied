@@ -36,6 +36,10 @@
 		return data.sessions.filter((session) => session.themeId === themeId);
 	}
 
+	function booksForTheme(themeId: string) {
+		return data.themeBooks.filter((entry) => entry.themeId === themeId);
+	}
+
 	function isTheme(value: unknown): value is Theme {
 		return (
 			typeof value === 'object' &&
@@ -210,7 +214,14 @@
 							<Card.Header>
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<Card.Title class="text-base">{theme.name}</Card.Title>
+										<Card.Title class="text-base">
+											<a
+												href={resolve('/themes/[slug]', { slug: theme.slug })}
+												class="hover:underline"
+											>
+												{theme.name}
+											</a>
+										</Card.Title>
 									</div>
 
 									{#if linkedSessions.length > 0}
@@ -224,7 +235,7 @@
 									{/if}
 								</div>
 							</Card.Header>
-							{#if theme.description || theme.exampleText}
+							{#if theme.description || theme.exampleText || booksForTheme(theme.id).length > 0}
 								<Card.Content class="space-y-3 text-sm">
 									{#if theme.description}
 										<p class="whitespace-pre-line text-muted-foreground">{theme.description}</p>
@@ -234,6 +245,18 @@
 											<span class="font-medium text-foreground">Examples:</span>
 											{theme.exampleText}
 										</p>
+									{/if}
+									{#if booksForTheme(theme.id).length > 0}
+										<div class="space-y-2">
+											<p class="font-medium">Books</p>
+											<div class="flex flex-wrap gap-2">
+												{#each booksForTheme(theme.id) as entry (entry.book.id)}
+													<a href={resolve('/books/[slug]', { slug: entry.book.slug })}>
+														<Badge variant="secondary">{entry.book.title}</Badge>
+													</a>
+												{/each}
+											</div>
+										</div>
 									{/if}
 								</Card.Content>
 							{/if}

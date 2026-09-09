@@ -281,6 +281,8 @@ export const themes = sqliteTable(
 		name: text('name').notNull(),
 		description: text('description'),
 		exampleText: text('example_text'),
+		guideSource: text('guide_source'),
+		guideHtml: text('guide_html'),
 		status: text('status').notNull().default('idea').$type<ThemeStatus>(),
 		submittedByUserId: text('submitted_by_user_id').references(() => users.id, {
 			onDelete: 'set null'
@@ -676,6 +678,29 @@ export const books = sqliteTable(
 		index('idx_books_slug').on(table.slug),
 		index('idx_books_title').on(table.title),
 		index('idx_books_deleted_at').on(table.deletedAt)
+	]
+);
+
+// ──────────────────────────────────────────────
+// theme_books  (curated many-to-many theme matches)
+// ──────────────────────────────────────────────
+export const themeBooks = sqliteTable(
+	'theme_books',
+	{
+		themeId: text('theme_id')
+			.notNull()
+			.references(() => themes.id, { onDelete: 'cascade' }),
+		bookId: text('book_id')
+			.notNull()
+			.references(() => books.id, { onDelete: 'cascade' }),
+		addedByUserId: text('added_by_user_id').references(() => users.id, {
+			onDelete: 'set null'
+		}),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		primaryKey({ columns: [table.themeId, table.bookId] }),
+		index('idx_theme_books_book').on(table.bookId, table.themeId)
 	]
 );
 

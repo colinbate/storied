@@ -8,6 +8,7 @@ import {
 	threadSubjects,
 	sessionSubjects,
 	seriesBooks,
+	themeBooks,
 	userSubjects,
 	type SessionSubjectStatus
 } from './db/schema';
@@ -21,6 +22,7 @@ import type {
 	SubjectSeriesBookLink,
 	SubjectUserFeatureLink,
 	SubjectSessionReadingChoice,
+	SubjectThemeBookLink,
 	SubjectSourceType
 } from '$shared/worker-messages';
 
@@ -28,7 +30,8 @@ export type {
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
 	SubjectUserFeatureLink,
-	SubjectSessionReadingChoice
+	SubjectSessionReadingChoice,
+	SubjectThemeBookLink
 } from '$shared/worker-messages';
 
 /** Env subset we need to enqueue worker messages. */
@@ -74,6 +77,7 @@ export async function ensureSubjectSource(
 		seriesBookLink?: SubjectSeriesBookLink;
 		userFeatureLink?: SubjectUserFeatureLink;
 		sessionReadingChoice?: SubjectSessionReadingChoice;
+		themeBookLink?: SubjectThemeBookLink;
 	} = {}
 ): Promise<ResolveOrEnqueueResult> {
 	const existing = await db
@@ -120,7 +124,8 @@ export async function ensureSubjectSource(
 			sessionLink: sideEffects.sessionLink,
 			seriesBookLink: sideEffects.seriesBookLink,
 			userFeatureLink: sideEffects.userFeatureLink,
-			sessionReadingChoice: sideEffects.sessionReadingChoice
+			sessionReadingChoice: sideEffects.sessionReadingChoice,
+			themeBookLink: sideEffects.themeBookLink
 		};
 		await publishWorkerMessage(env?.STORIED_WORKER, 'subject.resolve', payload);
 	}
@@ -238,6 +243,16 @@ export async function ensureSubjectSource(
 					bookId: readingChoice.previousBookId
 				});
 			}
+		}
+		if (sideEffects.themeBookLink && resolvedSubjectType === 'book') {
+			await db
+				.insert(themeBooks)
+				.values({
+					themeId: sideEffects.themeBookLink.themeId,
+					bookId: resolvedSubjectId,
+					addedByUserId: sideEffects.themeBookLink.addedByUserId ?? null
+				})
+				.onConflictDoNothing();
 		}
 	}
 

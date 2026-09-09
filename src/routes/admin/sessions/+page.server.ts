@@ -5,7 +5,6 @@ import { desc } from 'drizzle-orm';
 import { newId } from '$lib/server/ids';
 import { slugify } from '$lib/server/slugify';
 import { requirePermission } from '$lib/server/auth';
-import { renderMarkdown } from '$lib/server/markdown';
 import { subscribeActiveMembersToSessionThread } from '$lib/server/discussions';
 import { createClubSession } from '$lib/server/session-lifecycle';
 import { isSessionStatus, sessionPublicationError } from '$shared/session-lifecycle';
@@ -38,7 +37,6 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const title = data.get('title')?.toString()?.trim();
-		const bodySource = getOptionalString(data, 'bodySource');
 		const durationMinutes = Number.parseInt(data.get('durationMinutes')?.toString() ?? '', 10);
 
 		if (!title || title.length < 2) {
@@ -91,9 +89,6 @@ export const actions: Actions = {
 			themeId: sessionTheme.themeId,
 			theme: themeTitle,
 			themeTitle,
-			themeSummary: getOptionalString(data, 'themeSummary'),
-			bodySource,
-			bodyHtml: bodySource ? renderMarkdown(bodySource) : null,
 			startsAt,
 			timezone,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,

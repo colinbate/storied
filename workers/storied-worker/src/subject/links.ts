@@ -3,7 +3,8 @@ import type {
 	SubjectSessionLink,
 	SubjectSeriesBookLink,
 	SubjectUserFeatureLink,
-	SubjectSessionReadingChoice
+	SubjectSessionReadingChoice,
+	SubjectThemeBookLink
 } from '$shared/worker-messages';
 import { generateId } from '../shared/ids';
 
@@ -162,6 +163,28 @@ export async function linkSessionReadingChoice(
 			.bind(choice.sessionId, choice.attendeeId, choice.previousBookId)
 			.run();
 	}
+}
+
+export async function linkThemeBook(
+	db: D1Database,
+	subjectType: SubjectType,
+	bookId: string,
+	themeBookLink?: SubjectThemeBookLink
+): Promise<void> {
+	if (!themeBookLink || subjectType !== 'book') return;
+
+	await db
+		.prepare(
+			`INSERT OR IGNORE INTO theme_books (theme_id, book_id, added_by_user_id, created_at)
+			 VALUES (?, ?, ?, ?)`
+		)
+		.bind(
+			themeBookLink.themeId,
+			bookId,
+			themeBookLink.addedByUserId ?? null,
+			new Date().toISOString()
+		)
+		.run();
 }
 
 export async function markSourceFailed(db: D1Database, subjectSourceId: string): Promise<void> {

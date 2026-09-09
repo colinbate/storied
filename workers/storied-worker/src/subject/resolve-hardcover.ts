@@ -14,6 +14,7 @@ import {
 	linkSessionSubject,
 	linkSessionReadingChoice,
 	linkSeriesBook,
+	linkThemeBook,
 	linkUserFeaturedSubject,
 	markSourceFailed
 } from './links';
@@ -130,7 +131,8 @@ export async function resolveHardcoverBook(
 		sessionLink,
 		seriesBookLink,
 		userFeatureLink,
-		sessionReadingChoice
+		sessionReadingChoice,
+		themeBookLink
 	} = payload;
 
 	const metadata = await fetchHardcoverBook(env, sourceKey);
@@ -200,6 +202,7 @@ export async function resolveHardcoverBook(
 	await linkSeriesBook(env.DB, 'book', bookId, seriesBookLink);
 	await linkUserFeaturedSubject(env.DB, 'book', bookId, userFeatureLink);
 	await linkSessionReadingChoice(env.DB, 'book', bookId, sessionReadingChoice);
+	await linkThemeBook(env.DB, 'book', bookId, themeBookLink);
 	await reindexSubject(env.DB, 'book', bookId);
 	if (seriesBookLink?.seriesId) await reindexSubject(env.DB, 'series', seriesBookLink.seriesId);
 	if (threadId) await reindexThread(env.DB, threadId);

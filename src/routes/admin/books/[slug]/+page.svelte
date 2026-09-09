@@ -310,6 +310,27 @@
 		</Card.Content>
 	</Card.Root>
 
+	<Card.Root>
+		<Card.Header>
+			<Card.Title class="text-base">Themes</Card.Title>
+			<Card.Description>Curated thematic matches for this book.</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			{#if data.themeLinks.length > 0}
+				<div class="flex flex-wrap gap-2">
+					{#each data.themeLinks as entry (entry.theme.id)}
+						<a href={resolve('/admin/themes/[slug]', { slug: entry.theme.slug })}>
+							<Badge variant="secondary">{entry.theme.name}</Badge>
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-sm text-muted-foreground">No themes linked to this book.</p>
+			{/if}
+			<Button variant="outline" size="sm" href={resolve('/admin/themes')}>Manage Themes</Button>
+		</Card.Content>
+	</Card.Root>
+
 	<!-- Availability -->
 	<Card.Root>
 		<Card.Header>
