@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import type { Actions, PageServerLoad } from './$types';
 import { groupMemberships, groups, users } from '$lib/server/db/schema';
@@ -36,6 +36,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		members: activeMembers
 	};
 };
+
+async function selectActiveMemberIds(db: App.Locals['db'], requestedIds: string[]) {
+	if (!requestedIds.length) return [];
+	return db.all<{ id: string }>(sql`
+		SELECT users.id
+		FROM users
+		INNER JOIN json_each(${JSON.stringify(requestedIds)}) requested_member
+			ON requested_member.value = users.id
+		WHERE users.status = 'active'
+	`);
+}
 
 export const actions: Actions = {
 	create: async ({ locals, request }) => {
@@ -86,13 +97,7 @@ export const actions: Actions = {
 		if (!group) return fail(404, { error: 'Group not found.' });
 
 		const requestedIds = [...new Set(data.getAll('memberIds').map((value) => value.toString()))];
-		const validMembers = requestedIds.length
-			? await locals.db
-					.select({ id: users.id })
-					.from(users)
-					.where(and(inArray(users.id, requestedIds), eq(users.status, 'active')))
-					.all()
-			: [];
+		const validMembers = await selectActiveMemberIds(locals.db, requestedIds);
 		const now = new Date().toISOString();
 
 		await locals.db.batch([
@@ -151,13 +156,7 @@ export const actions: Actions = {
 		if (!group) return fail(404, { error: 'Group not found.' });
 
 		const requestedIds = [...new Set(data.getAll('memberIds').map((value) => value.toString()))];
-		const validMembers = requestedIds.length
-			? await locals.db
-					.select({ id: users.id })
-					.from(users)
-					.where(and(inArray(users.id, requestedIds), eq(users.status, 'active')))
-					.all()
-			: [];
+		const validMembers = await selectActiveMemberIds(locals.db, requestedIds);
 
 		await locals.db.batch([
 			locals.db.delete(groupMemberships).where(eq(groupMemberships.groupId, groupId)),

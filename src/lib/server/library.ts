@@ -8,7 +8,7 @@ import {
 	themes,
 	userSubjects
 } from '$lib/server/db/schema';
-import { and, asc, eq, inArray, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
 import { sessionStartDate } from '$shared/session-lifecycle';
 
@@ -88,7 +88,7 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 			'series',
 			seriesRows.map((entry) => entry.id)
 		),
-		context && bookIds.length
+		context
 			? db
 					.select({
 						subjectId: userSubjects.subjectId,
@@ -96,16 +96,17 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 						isRecommended: userSubjects.isRecommended
 					})
 					.from(userSubjects)
+					.innerJoin(books, eq(userSubjects.subjectId, books.id))
 					.where(
 						and(
 							eq(userSubjects.userId, context.userId),
 							eq(userSubjects.subjectType, 'book'),
-							inArray(userSubjects.subjectId, bookIds)
+							isNull(books.deletedAt)
 						)
 					)
 					.all()
 			: Promise.resolve([]),
-		context && bookIds.length
+		context
 			? db
 					.select({
 						bookId: sessionSubjects.subjectId,
@@ -122,12 +123,13 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 						legacyThemeFallback: sessions.theme
 					})
 					.from(sessionSubjects)
+					.innerJoin(books, eq(sessionSubjects.subjectId, books.id))
 					.innerJoin(sessions, eq(sessionSubjects.sessionId, sessions.id))
 					.leftJoin(themes, eq(sessions.themeId, themes.id))
 					.where(
 						and(
 							eq(sessionSubjects.subjectType, 'book'),
-							inArray(sessionSubjects.subjectId, bookIds),
+							isNull(books.deletedAt),
 							context.sessionAccess
 						)
 					)
@@ -138,7 +140,8 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 			? db
 					.select({ bookId: bookAccessOptions.bookId, format: bookAccessOptions.format })
 					.from(bookAccessOptions)
-					.where(inArray(bookAccessOptions.bookId, bookIds))
+					.innerJoin(books, eq(bookAccessOptions.bookId, books.id))
+					.where(isNull(books.deletedAt))
 					.all()
 			: Promise.resolve([]),
 		context

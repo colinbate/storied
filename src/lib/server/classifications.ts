@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { classifications, subjectClassifications, type SubjectType } from '$lib/server/db/schema';
 
@@ -49,26 +49,26 @@ export async function loadClassificationsBySubject(
 	const result: Record<string, ClassificationDisplay[]> = {};
 	if (!subjectIds.length) return result;
 
-	// Keep each query comfortably below SQLite/D1 parameter limits for large libraries.
-	const uniqueSubjectIds = [...new Set(subjectIds)];
-	for (let offset = 0; offset < uniqueSubjectIds.length; offset += 90) {
-		const chunk = uniqueSubjectIds.slice(offset, offset + 90);
-		const rows = await db
-			.select({ subjectId: subjectClassifications.subjectId, classification: classifications })
-			.from(subjectClassifications)
-			.innerJoin(classifications, eq(subjectClassifications.classificationId, classifications.id))
-			.where(
-				and(
-					eq(subjectClassifications.subjectType, subjectType),
-					inArray(subjectClassifications.subjectId, chunk)
-				)
-			)
-			.orderBy(asc(classifications.displayOrder), asc(classifications.name))
-			.all();
+	const rows = await db.all<{ subjectId: string } & ClassificationDisplay>(sql`
+		SELECT
+			subject_classifications.subject_id AS subjectId,
+			classifications.id,
+			classifications.slug,
+			classifications.name,
+			classifications.description,
+			classifications.icon
+		FROM subject_classifications
+		INNER JOIN classifications
+			ON subject_classifications.classification_id = classifications.id
+		INNER JOIN json_each(${JSON.stringify([...new Set(subjectIds)])}) requested_subject
+			ON requested_subject.value = subject_classifications.subject_id
+		WHERE subject_classifications.subject_type = ${subjectType}
+		ORDER BY classifications.display_order, classifications.name
+	`);
 
-		for (const row of rows) {
-			(result[row.subjectId] ??= []).push(row.classification);
-		}
+	for (const row of rows) {
+		const { subjectId, ...classification } = row;
+		(result[subjectId] ??= []).push(classification);
 	}
 	return result;
 }
@@ -81,11 +81,12 @@ export async function replaceSubjectClassifications(
 ) {
 	const uniqueIds = [...new Set(requestedIds.filter((id) => Number.isInteger(id) && id > 0))];
 	const validRows = uniqueIds.length
-		? await db
-				.select({ id: classifications.id })
-				.from(classifications)
-				.where(inArray(classifications.id, uniqueIds))
-				.all()
+		? await db.all<{ id: number }>(sql`
+				SELECT classifications.id
+				FROM classifications
+				INNER JOIN json_each(${JSON.stringify(uniqueIds)}) requested_classification
+					ON requested_classification.value = classifications.id
+			`)
 		: [];
 
 	await db.batch([

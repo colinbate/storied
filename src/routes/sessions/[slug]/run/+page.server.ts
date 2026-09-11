@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { attendeeIdentities, sessionParticipants, sessions, users } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth';
@@ -82,16 +82,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Anyone recorded present or absent who had no RSVP still shows in the attendance list.
 	const extraIds = Object.keys(attendance).filter((id) => !rsvpAttendeeIds.has(id));
 	const extras = extraIds.length
-		? await locals.db
-				.select({
-					attendee: attendeeIdentities,
-					user: { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl }
-				})
-				.from(attendeeIdentities)
-				.leftJoin(users, eq(attendeeIdentities.userId, users.id))
-				.where(inArray(attendeeIdentities.id, extraIds))
-				.orderBy(asc(attendeeIdentities.name))
-				.all()
+		? await locals.db.all<{ attendeeId: string; name: string; userId: string | null }>(sql`
+				SELECT attendee_identities.id AS attendeeId, attendee_identities.name, users.id AS userId
+				FROM attendee_identities
+				INNER JOIN json_each(${JSON.stringify(extraIds)}) extra_attendee
+					ON extra_attendee.value = attendee_identities.id
+				LEFT JOIN users ON attendee_identities.user_id = users.id
+				ORDER BY attendee_identities.name
+			`)
 		: [];
 
 	const roster = [
@@ -103,11 +101,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			attendance: attendance[row.attendee.id]?.status ?? null
 		})),
 		...extras.map((row) => ({
-			attendeeId: row.attendee.id,
-			name: row.attendee.name,
-			isMember: Boolean(row.user),
+			attendeeId: row.attendeeId,
+			name: row.name,
+			isMember: Boolean(row.userId),
 			rsvp: null,
-			attendance: attendance[row.attendee.id]?.status ?? null
+			attendance: attendance[row.attendeeId]?.status ?? null
 		}))
 	];
 	const rosterIds = new Set(roster.map((row) => row.attendeeId));

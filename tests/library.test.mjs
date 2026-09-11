@@ -5,8 +5,10 @@ import { database } from './database.mjs';
 import {
 	bookAccessOptions,
 	books,
+	classifications,
 	sessions,
 	sessionSubjects,
+	subjectClassifications,
 	themes,
 	users,
 	userSubjects
@@ -93,11 +95,17 @@ async function fixture() {
 		providerType: 'library',
 		format: 'ebook'
 	});
-	return { ...context, reader };
+	const classification = await db.select().from(classifications).limit(1).get();
+	await db.insert(subjectClassifications).values({
+		subjectType: 'book',
+		subjectId: 'current-book',
+		classificationId: classification.id
+	});
+	return { ...context, reader, classification };
 }
 
 test('library context combines personal shelves, meeting history, and availability', async () => {
-	const { db } = await fixture();
+	const { db, classification } = await fixture();
 	const library = await loadLibrarySubjects(db, {
 		userId: 'reader',
 		sessionAccess: ne(sessions.status, 'draft')
@@ -109,6 +117,15 @@ test('library context combines personal shelves, meeting history, and availabili
 	assert.equal(current.pageCount, 320);
 	assert.equal(current.accessCount, 1);
 	assert.deepEqual(current.accessFormats, ['ebook']);
+	assert.deepEqual(current.classifications, [
+		{
+			id: classification.id,
+			slug: classification.slug,
+			name: classification.name,
+			description: classification.description,
+			icon: classification.icon
+		}
+	]);
 	assert.equal(current.sessionLinks[0].sessionId, 'next');
 	assert.equal(past.sessionLinks.length, 1);
 	assert.equal(past.sessionLinks[0].role, 'discussed');

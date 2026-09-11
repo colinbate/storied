@@ -17,6 +17,8 @@ import { publishWorkerMessage } from '$lib/server/worker-queue';
 import { fail } from '@sveltejs/kit';
 import { sessionStartDate } from '$shared/session-lifecycle';
 
+const ACTIVE_SESSION_STATUSES = ['current', 'scheduled', 'draft'] as const;
+
 function countBySession<T extends { sessionId: string }>(rows: T[]) {
 	const counts = new Map<string, number>();
 	for (const row of rows) counts.set(row.sessionId, (counts.get(row.sessionId) ?? 0) + 1);
@@ -40,51 +42,54 @@ export const load: PageServerLoad = async ({ locals }) => {
 				? locals.db
 						.select()
 						.from(sessions)
-						.where(inArray(sessions.status, ['current', 'scheduled', 'draft']))
+						.where(inArray(sessions.status, ACTIVE_SESSION_STATUSES))
 						.all()
 				: Promise.resolve([])
 		]);
 
-	const activeSessionIds = activeSessions.map((session) => session.id);
 	const [participants, linkedBooks, readingChoices, agendaItems, failedMessages, failedReminders] =
 		await Promise.all([
-			activeSessionIds.length
+			activeSessions.length
 				? locals.db
 						.select({
 							sessionId: sessionParticipants.sessionId,
 							status: sessionParticipants.attendanceStatus
 						})
 						.from(sessionParticipants)
-						.where(inArray(sessionParticipants.sessionId, activeSessionIds))
+						.innerJoin(sessions, eq(sessionParticipants.sessionId, sessions.id))
+						.where(inArray(sessions.status, ACTIVE_SESSION_STATUSES))
 						.all()
 				: Promise.resolve([]),
-			activeSessionIds.length
+			activeSessions.length
 				? locals.db
 						.select({ sessionId: sessionSubjects.sessionId })
 						.from(sessionSubjects)
+						.innerJoin(sessions, eq(sessionSubjects.sessionId, sessions.id))
 						.where(
 							and(
-								inArray(sessionSubjects.sessionId, activeSessionIds),
-								eq(sessionSubjects.subjectType, 'book')
+								eq(sessionSubjects.subjectType, 'book'),
+								inArray(sessions.status, ACTIVE_SESSION_STATUSES)
 							)
 						)
 						.all()
 				: Promise.resolve([]),
-			activeSessionIds.length
+			activeSessions.length
 				? locals.db
 						.select({ sessionId: sessionReadingChoices.sessionId })
 						.from(sessionReadingChoices)
-						.where(inArray(sessionReadingChoices.sessionId, activeSessionIds))
+						.innerJoin(sessions, eq(sessionReadingChoices.sessionId, sessions.id))
+						.where(inArray(sessions.status, ACTIVE_SESSION_STATUSES))
 						.all()
 				: Promise.resolve([]),
-			activeSessionIds.length
+			activeSessions.length
 				? locals.db
 						.select({
 							sessionId: sessionAgendaItems.sessionId,
 							status: sessionAgendaItems.status
 						})
 						.from(sessionAgendaItems)
-						.where(inArray(sessionAgendaItems.sessionId, activeSessionIds))
+						.innerJoin(sessions, eq(sessionAgendaItems.sessionId, sessions.id))
+						.where(inArray(sessions.status, ACTIVE_SESSION_STATUSES))
 						.all()
 				: Promise.resolve([]),
 			canManageSessions
