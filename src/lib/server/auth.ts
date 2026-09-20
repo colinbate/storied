@@ -25,7 +25,7 @@ const TIMEZONE_COOKIE_NAME = 'storied-signup-tz';
 const INVITE_COOKIE_NAME = 'storied-invite';
 const SIGNUP_NAME_COOKIE_NAME = 'storied-signup-name';
 const TIMEZONE_COOKIE_MAX_AGE_S = 60 * 60; // 1 hour — only needs to outlive the magic-link round-trip
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_DURATION_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_CODE_ATTEMPTS = 5;
 

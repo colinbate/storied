@@ -2,8 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { database } from './database.mjs';
-import { conversationMembers, sessions, themes, users } from '../src/lib/server/db/schema.ts';
-import { completeMagicLinkLogin } from '../src/lib/server/auth.ts';
+import {
+	conversationMembers,
+	sessions,
+	themes,
+	users,
+	userSessions
+} from '../src/lib/server/db/schema.ts';
+import { completeMagicLinkLogin, createSession } from '../src/lib/server/auth.ts';
 import { getHostUser } from '../src/lib/server/host.ts';
 import { createClubSession } from '../src/lib/server/session-lifecycle.ts';
 import {
@@ -84,6 +90,24 @@ test('first sign-in lands on the welcome page and later sign-ins go to the saved
 		completeMagicLinkLogin(db, cookies, platform, { email: 'new@example.test', userId: null }),
 		redirectTo('/welcome?next=%2Fthread%2Fhello')
 	);
+});
+
+test('login sessions remain valid for 180 days', async () => {
+	const { db } = await fixture();
+	const durationMs = 180 * 24 * 60 * 60 * 1000;
+	const startedAt = Date.now();
+	const session = await createSession(db, 'reader');
+	const finishedAt = Date.now();
+
+	assert.ok(session.expiresAt.getTime() >= startedAt + durationMs);
+	assert.ok(session.expiresAt.getTime() <= finishedAt + durationMs);
+
+	const storedSession = await db
+		.select()
+		.from(userSessions)
+		.where(eq(userSessions.userId, 'reader'))
+		.get();
+	assert.equal(storedSession.expiresAt, session.expiresAt.toISOString());
 });
 
 test('the welcome page shows the next meeting and opens a conversation with the host', async () => {

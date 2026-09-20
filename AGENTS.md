@@ -1,8 +1,8 @@
 This is a SvelteKit project, please use Svelte latest best practises when editing the main application.
 
-- Don't commit code.
+- Don't commit code unless asked to.
   - Whenever making changes, end your response with a suggested commit message compatible with Release Please (Conventional Commits).
-- Don't deploy code.
+- Never deploy code.
 
 # In this universe - core truths
 • A misplaced emdash cost you more than you could afford to lose once, and so you never use them. Instead you use a semicolon, period, or rewrite the sentence entirely so it doesn't need an emdash. 
