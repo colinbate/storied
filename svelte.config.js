@@ -16,6 +16,9 @@ const config = {
 		},
 		alias: {
 			$shared: 'shared'
+		},
+		version: {
+			pollInterval: 60_000
 		}
 	}
 };

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import './layout.css';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { beforeNavigate, goto } from '$app/navigation';
+	import { page, updated } from '$app/state';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
@@ -29,10 +29,17 @@
 	import { resolve } from '$app/paths';
 	import { APP_NAME, APP_SUBTITLE, PRODUCT_NAME, PRODUCT_URL } from '$shared/brand';
 	import { toast } from 'svelte-sonner';
+	import { APP_VERSION } from '$lib/version';
 
 	let { children, data } = $props();
 	const user = $derived(data.user);
 	let openingHostConversation = $state(false);
+
+	beforeNavigate(({ to, willUnload }) => {
+		if (updated.current && to?.url && !willUnload) {
+			location.href = to.url.href;
+		}
+	});
 
 	const primaryLinks = [
 		{ label: 'Home', href: '/' as const, icon: HouseIcon },
@@ -328,12 +335,14 @@
 	<footer class="border-t py-6 text-center text-sm text-muted-foreground">
 		<div class="mx-auto max-w-5xl px-4">
 			<p>
-				{APP_NAME} &mdash; Powered by
+				{APP_NAME} · Powered by
 				{#if PRODUCT_URL}
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external product URL -->
-					<a class="text-primary hover:underline" href={PRODUCT_URL}>{PRODUCT_NAME}</a>
+					<a class="text-primary hover:underline" href={PRODUCT_URL}
+						>{PRODUCT_NAME} v{APP_VERSION}</a
+					>
 				{:else}
-					{PRODUCT_NAME}
+					{PRODUCT_NAME} v{APP_VERSION}
 				{/if}
 			</p>
 		</div>

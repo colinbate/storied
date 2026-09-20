@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#6200c0" />
+		<title>Offline | The Archive</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				font-family:
+					ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				background: #fcfbfd;
+				color: #242126;
+			}
+
+			body {
+				display: grid;
+				min-height: 100vh;
+				min-height: 100dvh;
+				margin: 0;
+				place-items: center;
+			}
+
+			main {
+				box-sizing: border-box;
+				width: min(100%, 32rem);
+				padding: 2rem;
+				text-align: center;
+			}
+
+			img {
+				width: 3rem;
+				height: 3rem;
+			}
+
+			h1 {
+				margin: 1.25rem 0 0.5rem;
+				font-size: 1.5rem;
+			}
+
+			p {
+				margin: 0;
+				color: #68616c;
+				line-height: 1.6;
+			}
+
+			button {
+				margin-top: 1.5rem;
+				border: 0;
+				border-radius: 0.5rem;
+				background: #6200c0;
+				color: #fff;
+				font: inherit;
+				font-weight: 600;
+				padding: 0.7rem 1rem;
+				cursor: pointer;
+			}
+
+			button:focus-visible {
+				outline: 3px solid #9b60d2;
+				outline-offset: 3px;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				:root {
+					background: #242126;
+					color: #faf8fb;
+				}
+
+				p {
+					color: #b9b1bd;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<img src="/favicon.svg" alt="" />
+			<h1>You’re offline</h1>
+			<p>The Archive needs an internet connection. Check your connection and try again.</p>
+			<button type="button" onclick="location.reload()">Try again</button>
+		</main>
+	</body>
+</html>
