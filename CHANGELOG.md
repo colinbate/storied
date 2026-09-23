@@ -2,6 +2,18 @@
 
 All notable changes to Storied will be documented in this file.
 
+## [0.6.0](https://github.com/colinbate/storied/compare/storied-v0.5.0...storied-v0.6.0) (2026-09-23)
+
+
+### Features
+
+* Better PWA support with offline warning. ([df1957b](https://github.com/colinbate/storied/commit/df1957bd48259d90c2eb2761235515e8c4f56bd2))
+
+
+### Bug Fixes
+
+* Increase session length ([7347a61](https://github.com/colinbate/storied/commit/7347a612c0381fe5ecbae748e7b96959c0df8860))
+
 ## 0.5.0 (2026-09-20)
 
 Initial versioned release of Storied.
