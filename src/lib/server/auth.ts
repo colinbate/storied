@@ -7,7 +7,9 @@ import {
 	userSessions,
 	notificationPreferences,
 	invites,
-	subscriptions
+	subscriptions,
+	signupIntroductions,
+	signupTickets
 } from './db/schema';
 import { error, redirect, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { isValidTimezone } from './notification-preferences';
@@ -24,6 +26,7 @@ const SESSION_COOKIE_NAME = 'storied_session';
 const TIMEZONE_COOKIE_NAME = 'storied-signup-tz';
 const INVITE_COOKIE_NAME = 'storied-invite';
 const SIGNUP_NAME_COOKIE_NAME = 'storied-signup-name';
+export const SIGNUP_TICKET_COOKIE_NAME = 'storied-signup-ticket';
 const TIMEZONE_COOKIE_MAX_AGE_S = 60 * 60; // 1 hour — only needs to outlive the magic-link round-trip
 const SESSION_DURATION_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
@@ -441,8 +444,47 @@ export async function completeMagicLinkLogin(
 	db: ORM,
 	cookies: Cookies,
 	platform: App.Platform | undefined,
-	result: { email: string; userId: string | null }
+	result: { email: string; userId: string | null },
+	introduction?: string
 ): Promise<never> {
+	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
+	const inviteCode = cookies.get(INVITE_COOKIE_NAME);
+	const invite = inviteCode ? await getValidInviteForEmail(db, inviteCode, result.email) : null;
+	const existing = await db.select().from(users).where(eq(users.email, result.email)).get();
+	const existingIntroduction = existing
+		? await db
+				.select()
+				.from(signupIntroductions)
+				.where(eq(signupIntroductions.userId, existing.id))
+				.get()
+		: null;
+	const needsIntroduction =
+		!invite &&
+		signupMode === 'moderated' &&
+		(!existing || (existing.status === 'pending' && !existingIntroduction));
+	if (needsIntroduction && !introduction?.trim()) {
+		// A verified email gets a short-lived capability for this form only.
+		// It grants no member access and cannot be submitted for another email.
+		const token = nanoid(48);
+		await db
+			.delete(signupTickets)
+			.where(sql`${signupTickets.expiresAt} <= ${new Date().toISOString()}`);
+		await db.insert(signupTickets).values({
+			tokenHash: await hashToken(token),
+			email: result.email,
+			displayName: cookies.get(SIGNUP_NAME_COOKIE_NAME) ?? existing?.displayName,
+			timezone: cookies.get(TIMEZONE_COOKIE_NAME),
+			expiresAt: new Date(Date.now() + TIMEZONE_COOKIE_MAX_AGE_S * 1000).toISOString()
+		});
+		cookies.set(SIGNUP_TICKET_COOKIE_NAME, token, {
+			path: '/auth/introduction',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: TIMEZONE_COOKIE_MAX_AGE_S
+		});
+		redirect(302, '/auth/introduction');
+	}
 	const redir = cookies.get(REDIR_COOKIE_NAME);
 	if (redir) {
 		cookies.delete(REDIR_COOKIE_NAME, { path: '/' });
@@ -461,12 +503,9 @@ export async function completeMagicLinkLogin(
 	if (signupName) {
 		cookies.delete(SIGNUP_NAME_COOKIE_NAME, { path: '/' });
 	}
-	const inviteCode = cookies.get(INVITE_COOKIE_NAME);
 	if (inviteCode) {
 		cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
 	}
-	const invite = inviteCode ? await getValidInviteForEmail(db, inviteCode, result.email) : null;
-	const signupMode = getSignupMode(platform?.env.ALLOW_SIGNUP);
 
 	const {
 		id: userId,
@@ -490,7 +529,19 @@ export async function completeMagicLinkLogin(
 	}
 
 	if (user?.status === 'pending') {
-		if (isNew) {
+		if (needsIntroduction && introduction) {
+			if (signupName && !isNew) {
+				await db
+					.update(users)
+					.set({ displayName: signupName, updatedAt: new Date().toISOString() })
+					.where(and(eq(users.id, userId), eq(users.status, 'pending')));
+			}
+			await db
+				.insert(signupIntroductions)
+				.values({ userId, message: introduction.trim() })
+				.onConflictDoNothing();
+		}
+		if (isNew || (needsIntroduction && introduction)) {
 			await notifyAdminsOfPendingSignup(platform, user);
 		}
 		redirect(302, '/auth/login?error=pending_approval');

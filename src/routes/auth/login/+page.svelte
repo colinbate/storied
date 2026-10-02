@@ -141,6 +141,8 @@
 					email address you are registered with.
 				{:else if data.error === 'suspended'}
 					This account is not currently allowed to sign in.
+				{:else if data.error === 'introduction_expired'}
+					Your introduction form has expired. Request a new sign-in link to continue.
 				{:else}
 					Unknown error.
 				{/if}

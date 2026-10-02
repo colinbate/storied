@@ -588,6 +588,22 @@ export const moderationEvents = sqliteTable(
 // ──────────────────────────────────────────────
 // auth_magic_links
 // ──────────────────────────────────────────────
+// Private signup context. These records never form part of a public member profile.
+export const signupIntroductions = sqliteTable('signup_introductions', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	message: text('message').notNull()
+});
+
+export const signupTickets = sqliteTable('signup_tickets', {
+	tokenHash: text('token_hash').primaryKey(),
+	email: text('email').notNull(),
+	displayName: text('display_name'),
+	timezone: text('timezone'),
+	expiresAt: text('expires_at').notNull()
+});
+
 export const authMagicLinks = sqliteTable(
 	'auth_magic_links',
 	{

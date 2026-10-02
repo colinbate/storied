@@ -254,6 +254,14 @@
 									<Badge variant="outline">pending</Badge>
 								</div>
 								<p class="truncate text-sm text-muted-foreground">{member.email}</p>
+								{#if member.introduction}
+									<p class="mt-3 text-xs font-medium text-muted-foreground">Introduction</p>
+									<p class="mt-1 text-sm wrap-anywhere whitespace-pre-wrap">
+										{member.introduction}
+									</p>
+								{:else}
+									<p class="mt-2 text-sm text-muted-foreground">No introduction provided.</p>
+								{/if}
 								<p class="text-xs text-muted-foreground sm:hidden">
 									Requested {formatDate(member.createdAt, { time: 'never', timeZone })}
 								</p>

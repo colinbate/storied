@@ -1,6 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { invites, moderationEvents, userProfiles, users } from '$lib/server/db/schema';
+import {
+	invites,
+	moderationEvents,
+	userProfiles,
+	users,
+	signupIntroductions
+} from '$lib/server/db/schema';
 import { desc, eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import {
@@ -40,19 +46,22 @@ async function notifyIfActivatedFromPending({
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requirePermission(locals, 'members:edit');
-	const [allUsers, allInvites, profiles] = await Promise.all([
+	const [allUsers, allInvites, profiles, introductions] = await Promise.all([
 		locals.db.select().from(users).orderBy(desc(users.createdAt)).all(),
 		locals.db.select().from(invites).orderBy(desc(invites.createdAt)).all(),
 		locals.db
 			.select({ userId: userProfiles.userId, showInMemberList: userProfiles.showInMemberList })
 			.from(userProfiles)
-			.all()
+			.all(),
+		locals.db.select().from(signupIntroductions).all()
 	]);
 	const visibility = new Map(profiles.map((profile) => [profile.userId, profile.showInMemberList]));
+	const messages = new Map(introductions.map((intro) => [intro.userId, intro.message]));
 
 	return {
 		members: allUsers.map((member) => ({
 			...member,
+			introduction: messages.get(member.id) ?? null,
 			showInMemberList: visibility.get(member.id) ?? true
 		})),
 		invites: allInvites
