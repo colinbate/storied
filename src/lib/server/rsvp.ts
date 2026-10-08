@@ -426,7 +426,8 @@ export async function submitSessionRsvp(
 				args.session,
 				result.promoted.participant,
 				result.promoted.attendee,
-				args.baseUrl
+				args.baseUrl,
+				args.db
 			);
 		if (!result.duplicate && result.status !== 'declined') {
 			const send =
@@ -438,7 +439,8 @@ export async function submitSessionRsvp(
 				args.session,
 				result.participant,
 				args.attendee,
-				args.baseUrl
+				args.baseUrl,
+				args.db
 			);
 			confirmationEmailFailed = !delivery.success;
 		}

@@ -112,7 +112,7 @@ export function formatSessionDateInTimeZone(startsAt: string, rawTimeZone: strin
 	const timeZone = validSessionTimeZone(rawTimeZone);
 	const instant = sessionStartInstant(startsAt, timeZone);
 	if (!instant) return 'Date to be confirmed';
-	return new Intl.DateTimeFormat('en-US', {
+	const formatted = new Intl.DateTimeFormat('en-US', {
 		timeZone,
 		weekday: 'long',
 		year: 'numeric',
@@ -122,4 +122,5 @@ export function formatSessionDateInTimeZone(startsAt: string, rawTimeZone: strin
 		minute: '2-digit',
 		timeZoneName: 'short'
 	}).format(instant);
+	return `${formatted} (${timeZone})`;
 }

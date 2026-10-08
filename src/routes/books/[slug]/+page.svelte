@@ -19,6 +19,7 @@
 	import MarkdownHint from '$lib/components/markdown-hint.svelte';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select/index.js';
 	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import LibraryNav from '$lib/components/library-nav.svelte';
 	import LibraryBreadcrumb from '$lib/components/library-breadcrumb.svelte';
 	import ClassificationBadges from '$lib/components/classification-badges.svelte';
@@ -311,10 +312,7 @@
 							<div class="min-w-0">
 								<p class="font-medium">{item.session.title}</p>
 								<p class="text-sm text-muted-foreground">
-									{formatDate(item.session.startsAt, {
-										time: 'never',
-										timeZone: item.session.timezone
-									})}
+									<SessionTime session={item.session} memberTimeZone={timeZone} />
 									{#if item.themeName ?? item.session.themeTitle ?? item.session.theme}
 										· {item.themeName ?? item.session.themeTitle ?? item.session.theme}
 									{/if}

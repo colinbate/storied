@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SessionRsvp from '$lib/components/session-rsvp.svelte';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
@@ -72,11 +73,7 @@
 							{#if data.currentSession.startsAt}
 								<span class="inline-flex items-center gap-1">
 									<CalendarIcon class="h-4 w-4" />
-									{formatDate(data.currentSession.startsAt, {
-										time: 'always',
-										timeZone: data.currentSession.timezone ?? timeZone,
-										dateStyle: 'medium'
-									})}
+									<SessionTime session={data.currentSession} memberTimeZone={timeZone} />
 								</span>
 							{/if}
 							{#if data.currentSession.locationName}
@@ -170,6 +167,9 @@
 					href={resolve('/sessions/[slug]', { slug: data.upcomingSession.slug })}
 					class="font-medium hover:underline">{data.upcomingSession.title}</a
 				>
+				<p class="mt-1 text-sm text-muted-foreground">
+					<SessionTime session={data.upcomingSession} memberTimeZone={timeZone} />
+				</p>
 			</div>
 			{#if data.permissions.has('sessions:edit')}
 				<Button

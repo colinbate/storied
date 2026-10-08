@@ -3,6 +3,7 @@ import {
 	formatSessionDateInTimeZone,
 	sessionOccursOnNextLocalDay
 } from '$shared/session-reminder-timezone';
+import { formatSessionTimes } from '$shared/session-time';
 import type { HandlerContext } from '../dispatch';
 import type { Env } from '../env';
 import { generateId } from '../shared/ids';
@@ -26,6 +27,7 @@ interface ReminderRecipient {
 	email: string;
 	confirmation_token: string | null;
 	user_id: string | null;
+	timezone: string | null;
 }
 
 function escapeHtml(value: string): string {
@@ -66,7 +68,11 @@ function cancellationUrl(recipient: ReminderRecipient): string | null {
 }
 
 function renderReminderEmail(session: ReminderSession, recipient: ReminderRecipient) {
-	const when = formatSessionDate(session);
+	const times = formatSessionTimes(
+		{ startsAt: session.starts_at, timezone: session.timezone },
+		recipient.timezone
+	);
+	const when = times.local ? `${times.event}\nYour time: ${times.local}` : times.event;
 	const sessionUrl = publicSessionUrl(session, recipient);
 	const cancelUrl = cancellationUrl(recipient);
 	const locationLine = session.location_name ? `\nLocation: ${session.location_name}` : '';
@@ -81,7 +87,7 @@ function renderReminderEmail(session: ReminderSession, recipient: ReminderRecipi
 	return {
 		subject: `Reminder: ${session.title} is tomorrow`,
 		textBody: `Hi ${recipient.attendee_name},\n\nJust a reminder that you're registered for ${session.title} tomorrow.\n\nWhen: ${when}${locationLine}\n\nView session details: ${sessionUrl}${cancelLine}`,
-		htmlBody: `<div style="font-family:system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.6;max-width:600px;margin:0 auto;padding:20px"><h2>See you tomorrow!</h2><p>Hi ${escapeHtml(recipient.attendee_name)},</p><p>Just a reminder that you’re registered for tomorrow’s session.</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when)}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(sessionUrl)}">View session details</a></p></div>${cancelHtml}</div>`
+		htmlBody: `<div style="font-family:system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.6;max-width:600px;margin:0 auto;padding:20px"><h2>See you tomorrow!</h2><p>Hi ${escapeHtml(recipient.attendee_name)},</p><p>Just a reminder that you’re registered for tomorrow’s session.</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when).replaceAll('\n', '<br>')}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(sessionUrl)}">View session details</a></p></div>${cancelHtml}</div>`
 	};
 }
 
@@ -104,9 +110,11 @@ async function selectAttendingRecipients(
 		        attendee.name AS attendee_name,
 		        attendee.email AS email,
 		        attendee.user_id AS user_id,
+		        member.timezone AS timezone,
 		        participant.confirmation_token AS confirmation_token
 		   FROM session_participants participant
 		   INNER JOIN attendee_identities attendee ON attendee.id = participant.attendee_id
+		   LEFT JOIN users member ON member.id = attendee.user_id
 		  WHERE participant.session_id = ?
 		    AND participant.attendance_status = 'attending'
 		    AND attendee.email IS NOT NULL`

@@ -25,7 +25,7 @@
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
 	import SkipForwardIcon from '@lucide/svelte/icons/skip-forward';
 	import { pageTitle } from '$shared/brand';
-	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 
 	let { data, form } = $props();
 	const timeZone = $derived(data.session.timezone ?? data.user?.timezone);
@@ -166,11 +166,8 @@
 			<div class="min-w-0">
 				<h1 class="text-2xl font-bold tracking-tight">{data.session.title}</h1>
 				<p class="text-sm text-muted-foreground">
-					{formatDate(data.session.startsAt, {
-						time: 'always',
-						timeZone,
-						dateStyle: 'medium'
-					})}{data.session.locationName ? ` · ${data.session.locationName}` : ''}
+					<SessionTime session={data.session} memberTimeZone={data.user?.timezone} />
+					{data.session.locationName ? ` · ${data.session.locationName}` : ''}
 				</p>
 				{#if data.session.themeTitle ?? data.session.theme}
 					<p class="text-sm text-muted-foreground">
@@ -515,13 +512,7 @@
 							{data.nextSession.title}
 						</a>
 						<p class="text-sm text-muted-foreground">
-							{data.nextSession.startsAt
-								? formatDate(data.nextSession.startsAt, {
-										time: 'always',
-										timeZone: data.nextSession.timezone ?? timeZone,
-										dateStyle: 'medium'
-									})
-								: 'Date to be set'}
+							<SessionTime session={data.nextSession} memberTimeZone={data.user?.timezone} />
 							{#if data.nextSession.status === 'draft'}
 								· draft{/if}
 						</p>

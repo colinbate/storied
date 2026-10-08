@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { formatSessionDateInTimeZone } from '$shared/session-reminder-timezone';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { pageTitle } from '$shared/brand';
 
 	let { data, form } = $props();
@@ -29,7 +29,7 @@
 		</Card.Header>
 		<Card.Content>
 			{#if data.session?.startsAt}<p class="mb-4 text-sm">
-					{formatSessionDateInTimeZone(data.session.startsAt, data.session.timezone)}
+					<SessionTime session={data.session} memberTimeZone={data.user?.timezone} />
 				</p>{/if}
 			{#if data.error}
 				<p class="rounded-md border border-destructive/50 p-4 text-sm text-destructive">

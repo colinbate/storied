@@ -17,4 +17,5 @@
 	sessionOptions={data.sessionOptions}
 	themeOptions={data.themeOptions}
 	nextSession={data.nextSession}
+	memberTimeZone={data.user?.timezone}
 />

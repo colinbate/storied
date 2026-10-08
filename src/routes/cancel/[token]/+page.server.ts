@@ -19,14 +19,15 @@ export const actions = {
 		if ('cannotCancel' in result && result.cannotCancel)
 			throw error(400, 'This registration cannot be cancelled.');
 		if (!result.alreadyCancelled) {
-			await sendCancellationConfirmationEmail(platform, result.session, result.attendee);
+			await sendCancellationConfirmationEmail(platform, result.session, result.attendee, locals.db);
 			if (result.promoted)
 				await sendWaitlistPromotionEmail(
 					platform,
 					result.session,
 					result.promoted.participant,
 					result.promoted.attendee,
-					url.origin
+					url.origin,
+					locals.db
 				);
 		}
 		return { cancelled: true, alreadyCancelled: result.alreadyCancelled };

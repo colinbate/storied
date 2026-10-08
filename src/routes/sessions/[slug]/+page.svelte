@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SessionRsvp from '$lib/components/session-rsvp.svelte';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -27,7 +28,6 @@
 	import XIcon from '@lucide/svelte/icons/x';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import { formatDate } from '$lib/date-format';
 	import { toast } from 'svelte-sonner';
 	import SessionNav from '$lib/components/session-nav.svelte';
 	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
@@ -221,11 +221,7 @@
 			<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
 				<span class="inline-flex items-center gap-2">
 					<CalendarIcon class="h-4 w-4" />
-					{formatDate(data.session.startsAt, {
-						time: 'always',
-						timeZone: data.session.timezone ?? timeZone,
-						dateStyle: 'full'
-					})}
+					<SessionTime session={data.session} memberTimeZone={timeZone} />
 				</span>
 				{#if data.session.durationMinutes}
 					<span class="inline-flex items-center gap-2">

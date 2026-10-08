@@ -207,7 +207,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			? await attendingCount(locals.db, featuredSession.id)
 			: 0,
 		upcomingSession: upcomingSession
-			? { title: upcomingSession.title, slug: upcomingSession.slug }
+			? {
+					title: upcomingSession.title,
+					slug: upcomingSession.slug,
+					startsAt: upcomingSession.startsAt,
+					timezone: upcomingSession.timezone
+				}
 			: null,
 		upcomingSessionAttendingCount,
 		canDeclineCurrentSessionRsvp: featuredSession ? canDeclineSessionRsvp(featuredSession) : false,

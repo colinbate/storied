@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -848,10 +849,7 @@
 							{#if view.session.startsAt}
 								<span class="inline-flex items-center gap-1">
 									<CalendarIcon class="h-3.5 w-3.5" />
-									{formatDate(view.session.startsAt, {
-										time: 'never',
-										timeZone: view.session.timezone ?? timeZone
-									})}
+									<SessionTime session={view.session} memberTimeZone={timeZone} />
 								</span>
 							{/if}
 							{#if view.session.locationName}

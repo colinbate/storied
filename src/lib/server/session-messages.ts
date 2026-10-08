@@ -36,6 +36,7 @@ type StoriedSession = typeof sessions.$inferSelect;
 type SessionMessage = typeof sessionMessages.$inferSelect;
 
 export type SessionMessageRecipient = {
+	timezone?: string | null;
 	attendeeId: string;
 	name: string;
 	email: string;
@@ -169,7 +170,7 @@ function renderMessageEmail(
 ) {
 	const reason = SESSION_MESSAGE_AUDIENCE_LABELS[recipient.audience].reason;
 	const url = sessionPublicUrl(session, recipient);
-	const when = formatSessionDate(session);
+	const when = formatSessionDate(session, recipient.timezone);
 	const locationText = session.locationName ? `\nLocation: ${session.locationName}` : '';
 	const locationHtml = session.locationName
 		? `<p style="margin:4px 0"><strong>Location:</strong> ${escapeHtml(session.locationName)}</p>`
@@ -179,7 +180,7 @@ function renderMessageEmail(
 		subject: message.subject,
 		textBody: `Hi ${recipient.name},\n\n${message.bodySource}\n\n${session.title}\nWhen: ${when}${locationText}\nView session details: ${url}\n\nYou are receiving this because ${reason}.`,
 		htmlBody: emailWrapper(
-			`<p>Hi ${escapeHtml(recipient.name)},</p>${message.bodyHtml}<div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when)}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(url)}">View session details</a></p></div><p style="color:#6b7280;font-size:13px">You are receiving this because ${escapeHtml(reason)}.</p>`
+			`<p>Hi ${escapeHtml(recipient.name)},</p>${message.bodyHtml}<div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when).replaceAll('\n', '<br>')}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(url)}">View session details</a></p></div><p style="color:#6b7280;font-size:13px">You are receiving this because ${escapeHtml(reason)}.</p>`
 		)
 	};
 }
@@ -209,11 +210,13 @@ async function attemptDelivery(args: {
 		audience: delivery.audience as SessionMessageAudience
 	};
 	const attendee = await db
-		.select({ userId: attendeeIdentities.userId })
+		.select({ userId: attendeeIdentities.userId, timezone: users.timezone })
 		.from(attendeeIdentities)
+		.leftJoin(users, eq(attendeeIdentities.userId, users.id))
 		.where(eq(attendeeIdentities.id, delivery.attendeeId))
 		.get();
 	recipient.userId = attendee?.userId ?? null;
+	recipient.timezone = attendee?.timezone ?? null;
 
 	const now = new Date().toISOString();
 	const result = await deliverOne(

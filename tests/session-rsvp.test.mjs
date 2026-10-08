@@ -466,6 +466,13 @@ test('reminders include scheduled meetings, members and guests, exclude drafts a
 	const context = { env: { ...platform.env, DB: binding } };
 	await runSessionReminders(context);
 	assert.equal(sent.length, 3);
+	const memberReminder = sent.find((message) => message.to === reader.email);
+	assert.match(memberReminder.text, /\(UTC\)/);
+	assert.match(memberReminder.text, /Your time:.*\(Atlantic\/Bermuda\)/);
+	assert.match(memberReminder.html, /Your time:.*\(Atlantic\/Bermuda\)/s);
+	const guestReminder = sent.find((message) => message.to === 'guest@example.test');
+	assert.match(guestReminder.text, /\(UTC\)/);
+	assert.doesNotMatch(guestReminder.text, /Your time:/);
 	assert.equal(
 		sent.some((message) => message.to === 'waitlisted@example.test'),
 		false

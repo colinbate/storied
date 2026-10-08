@@ -8,7 +8,7 @@
 	import SessionNav from '$lib/components/session-nav.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -87,10 +87,7 @@
 								<Card.Title class="text-base">{session.title}</Card.Title>
 								{#if session.startsAt}
 									<Card.Description>
-										{formatDate(session.startsAt, {
-											time: 'always',
-											timeZone: session.timezone ?? timeZone
-										})}
+										<SessionTime {session} memberTimeZone={timeZone} />
 									</Card.Description>
 								{/if}
 							</Card.Header>

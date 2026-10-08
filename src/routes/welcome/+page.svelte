@@ -24,7 +24,7 @@
 		PUBLIC_CONDUCT_URL,
 		pageTitle
 	} from '$shared/brand';
-	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { RSVP_STATUS_LABELS } from '$lib/rsvp-status';
 
 	let { data, form } = $props();
@@ -130,11 +130,8 @@
 						{/if}
 						{#if data.nextSession.startsAt}
 							<p class="text-sm text-muted-foreground">
-								{formatDate(data.nextSession.startsAt, {
-									time: 'always',
-									timeZone: data.nextSession.timezone ?? timeZone,
-									dateStyle: 'full'
-								})}{data.nextSession.locationName ? ` · ${data.nextSession.locationName}` : ''}
+								<SessionTime session={data.nextSession} memberTimeZone={timeZone} />
+								{data.nextSession.locationName ? ` · ${data.nextSession.locationName}` : ''}
 							</p>
 						{/if}
 					</div>

@@ -216,7 +216,8 @@ export const actions = {
 				result.session,
 				result.promoted.participant,
 				result.promoted.attendee,
-				PRIMARY_ORIGIN
+				PRIMARY_ORIGIN,
+				locals.db
 			);
 		return { updated: true };
 	},
@@ -253,7 +254,8 @@ export const actions = {
 				row.session,
 				participant,
 				row.attendee,
-				PRIMARY_ORIGIN
+				PRIMARY_ORIGIN,
+				locals.db
 			);
 		else if (['attending', 'attended'].includes(participant.attendanceStatus))
 			await sendRegistrationConfirmationEmail(
@@ -261,7 +263,8 @@ export const actions = {
 				row.session,
 				participant,
 				row.attendee,
-				PRIMARY_ORIGIN
+				PRIMARY_ORIGIN,
+				locals.db
 			);
 		else return fail(400, { error: 'This status does not have a confirmation email.' });
 		return { resent: true };
@@ -293,7 +296,8 @@ export const actions = {
 				row.session,
 				promoted.participant,
 				promoted.attendee,
-				PRIMARY_ORIGIN
+				PRIMARY_ORIGIN,
+				locals.db
 			);
 		return { deleted: true };
 	},

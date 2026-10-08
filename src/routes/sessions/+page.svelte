@@ -5,7 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import MapPinIcon from '@lucide/svelte/icons/map-pin';
-	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { SESSION_STATUS_LABELS } from '$shared/session-lifecycle';
 	import { RSVP_STATUS_LABELS } from '$lib/rsvp-status';
 	import { Button } from '$lib/components/ui/button';
@@ -34,7 +34,7 @@
 <div class="space-y-8">
 	<SessionNav />
 
-	<div class="flex justify-between items-start">
+	<div class="flex items-start justify-between">
 		<h1 class="text-2xl font-bold">Sessions</h1>
 		{#if data.permissions.has('sessions:edit')}<Button
 				class="mt-3"
@@ -70,12 +70,7 @@
 										</p>{/if}
 									<div class="flex items-center gap-2">
 										<CalendarIcon class="h-4 w-4" />
-										<span
-											>{formatDate(session.startsAt, {
-												time: 'always',
-												timeZone: session.timezone ?? timeZone
-											})}</span
-										>
+										<SessionTime {session} memberTimeZone={timeZone} />
 									</div>
 									{#if session.locationName}
 										<div class="flex items-center gap-2">

@@ -12,7 +12,7 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import UserIcon from '@lucide/svelte/icons/user';
 	import LibraryIcon from '@lucide/svelte/icons/library';
-	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 	import { spoilerSafeExcerpt } from '$shared/spoilers';
 
 	let { data } = $props();
@@ -156,10 +156,7 @@
 								</div>
 								{#if session.startsAt}
 									<p class="text-sm text-muted-foreground">
-										{formatDate(session.startsAt, {
-											time: 'always',
-											timeZone: session.timezone
-										})}
+										<SessionTime {session} memberTimeZone={data.user?.timezone} />
 									</p>
 								{/if}
 								{#if summaryText(session.themeSummary)}

@@ -14,6 +14,7 @@
 	import ClassificationBadges from '$lib/components/classification-badges.svelte';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 
 	type Classification = {
 		slug: string;
@@ -94,7 +95,8 @@
 		organized = false,
 		sessionOptions = [],
 		themeOptions = [],
-		nextSession = null
+		nextSession = null,
+		memberTimeZone
 	}: {
 		books: Book[];
 		series: Series[];
@@ -106,6 +108,7 @@
 		sessionOptions?: SessionOption[];
 		themeOptions?: Array<{ key: string; name: string }>;
 		nextSession?: Omit<SessionOption, 'status'> | null;
+		memberTimeZone?: string | null;
 	} = $props();
 
 	let filter = $state('');
@@ -317,10 +320,10 @@
 				{#if nextSession}
 					<p class="flex items-center gap-2 text-sm text-muted-foreground">
 						<CalendarIcon class="h-4 w-4" />
-						Next meeting: {nextSession.title}, {formatDate(nextSession.startsAt, {
-							time: 'never',
-							timeZone: nextSession.timezone
-						})}
+						<span>
+							Next meeting: {nextSession.title}
+							<span class="block"><SessionTime session={nextSession} {memberTimeZone} /></span>
+						</span>
 					</p>
 				{/if}
 			</div>
