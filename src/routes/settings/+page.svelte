@@ -764,7 +764,7 @@
 		<Card.Header>
 			<Card.Title>Notifications</Card.Title>
 			<Card.Description>
-				Choose how you receive email notifications from the forum.
+				Choose how you receive email notifications, including reactions and private messages.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -809,7 +809,8 @@
 						<span>
 							<span class="block font-medium">Immediately</span>
 							<span class="block text-xs text-muted-foreground">
-								A message arrives as soon as someone replies in a thread you're watching.
+								Receive watched-thread replies, reactions, and private messages as they arrive.
+								Reaction emails are grouped for up to ten minutes.
 							</span>
 						</span>
 					</label>
@@ -825,7 +826,8 @@
 						<span>
 							<span class="block font-medium">Once a day (digest)</span>
 							<span class="block text-xs text-muted-foreground">
-								One roll-up message at a time you choose, in your local timezone.
+								One roll-up message, including reactions and unread private messages, at a time you
+								choose in your local timezone.
 							</span>
 						</span>
 					</label>

@@ -303,6 +303,23 @@ export type DigestSiteActivityItem =
 			createdAt: string;
 	  };
 
+export type DigestPersonalActivityItem =
+	| {
+			kind: 'reaction';
+			threadSlug: string;
+			threadTitle: string;
+			postId: string | null;
+			actors: string;
+			summary: string;
+	  }
+	| {
+			kind: 'private_message';
+			conversationId: string;
+			authorDisplayName: string;
+			messageCount: number;
+			bodyPreview: string;
+	  };
+
 export interface DigestEmailTemplateArgs {
 	displayName: string;
 	windowStart: string; // ISO-8601 - start of the digest window
@@ -310,6 +327,7 @@ export interface DigestEmailTemplateArgs {
 	followedCategories: DigestFollowedCategory[];
 	siteCounts: DigestSiteCounts;
 	siteActivity: DigestSiteActivityItem[];
+	personalActivity?: DigestPersonalActivityItem[];
 	baseUrl: string;
 }
 
@@ -337,11 +355,17 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 	textBody: string;
 	htmlBody: string;
 } {
+	const personalActivity = args.personalActivity ?? [];
+	const personalUpdates = personalActivity.reduce(
+		(count, item) => count + (item.kind === 'private_message' ? item.messageCount : 1),
+		0
+	);
 	const totalUpdates =
 		args.followedThreads.reduce((acc, t) => acc + t.posts.length, 0) +
 		args.followedCategories.reduce((acc, c) => acc + c.threads.length, 0) +
 		args.siteCounts.newThreads +
-		args.siteCounts.newPosts;
+		args.siteCounts.newPosts +
+		personalUpdates;
 
 	const subject =
 		totalUpdates > 0
@@ -412,6 +436,26 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 			);
 		}
 		textLines.push('');
+	}
+	if (personalActivity.length) {
+		textLines.push('Reactions and private messages');
+		for (const item of personalActivity) {
+			if (item.kind === 'reaction') {
+				textLines.push(
+					`${item.actors} reacted to your post in ${item.threadTitle}: ${item.summary}`
+				);
+				textLines.push(
+					`${args.baseUrl}/thread/${item.threadSlug}${item.postId ? `?post=${encodeURIComponent(item.postId)}#post-${encodeURIComponent(item.postId)}` : '#opening-post'}`
+				);
+			} else {
+				textLines.push(
+					`${item.authorDisplayName}: ${item.messageCount} unread private message${item.messageCount === 1 ? '' : 's'}`
+				);
+				textLines.push(truncate(item.bodyPreview, 200));
+				textLines.push(`${args.baseUrl}/messages/${item.conversationId}`);
+			}
+			textLines.push('');
+		}
 	}
 	textLines.push('Update your preferences at ' + args.baseUrl + '/settings.');
 
@@ -502,6 +546,24 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		}
 	}
 
+	if (personalActivity.length) {
+		htmlParts.push(
+			'<h3 style="color: #6d28d9; font-size: 15px; margin: 32px 0 8px;">Reactions and private messages</h3>'
+		);
+		for (const item of personalActivity) {
+			const url =
+				item.kind === 'reaction'
+					? `${args.baseUrl}/thread/${item.threadSlug}${item.postId ? `?post=${encodeURIComponent(item.postId)}#post-${encodeURIComponent(item.postId)}` : '#opening-post'}`
+					: `${args.baseUrl}/messages/${item.conversationId}`;
+			const label =
+				item.kind === 'reaction'
+					? `${item.actors} reacted to your post in ${item.threadTitle}: ${item.summary}`
+					: `${item.authorDisplayName}: ${item.messageCount} unread private message${item.messageCount === 1 ? '' : 's'}`;
+			htmlParts.push(
+				`<p><a href="${escapeHtml(url)}" style="color: #6d28d9;">${escapeHtml(label)}</a>${item.kind === 'private_message' ? `<br>${escapeHtml(truncate(item.bodyPreview, 200))}` : ''}</p>`
+			);
+		}
+	}
 	htmlParts.push(
 		`<p style="color: #aaa; font-size: 12px; margin-top: 40px;">You're receiving this digest because of your notification preferences. <a href="${escapeHtml(args.baseUrl)}/settings" style="color: #6d28d9;">Change them</a>.</p>`
 	);

@@ -5,13 +5,14 @@ import {
 	authors,
 	genres,
 	notificationPreferences,
+	notificationEvents,
 	series,
 	userProfileLinks,
 	userProfiles,
 	userSubjects,
 	users
 } from '$lib/server/db/schema';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseProfileGenres, serializeProfileGenres } from '$lib/profile-genres';
 import {
 	DEFAULT_TIMEZONE,
@@ -583,7 +584,7 @@ export const actions: Actions = {
 
 		// Ensure a row exists, then update.
 		await getOrCreateNotificationPreferences(locals.db, locals.user.id);
-		await locals.db
+		const preferenceUpdate = locals.db
 			.update(notificationPreferences)
 			.set({
 				emailEnabled,
@@ -594,6 +595,24 @@ export const actions: Actions = {
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(notificationPreferences.userId, locals.user.id));
+		if (mode !== 'daily_digest') {
+			// Leaving digest mode discards its backlog instead of replaying it on a later opt-in.
+			await locals.db.batch([
+				preferenceUpdate,
+				locals.db
+					.update(notificationEvents)
+					.set({ status: 'cancelled', updatedAt: new Date().toISOString() })
+					.where(
+						and(
+							eq(notificationEvents.userId, locals.user.id),
+							eq(notificationEvents.status, 'pending'),
+							sql`json_extract(${notificationEvents.payloadJson}, '$.deliveryMode') = 'daily_digest'`
+						)
+					)
+			]);
+		} else {
+			await preferenceUpdate;
+		}
 
 		// Guard in case TS complains later — keep helper imported.
 		void isDefaultSubMode;

@@ -1,7 +1,7 @@
 import { PRIMARY_ORIGIN } from '$shared/brand';
 import type { HandlerContext } from '../dispatch';
 import { spoilerSafeExcerpt } from '$shared/spoilers';
-import { generateId } from '../shared/ids';
+import { loadPersonalDigestActivity } from './digest-personal-activity';
 import {
 	renderDigestEmail,
 	sendEmail,
@@ -484,88 +484,115 @@ async function runDigestForUser(
 	nowIso: string,
 	baseUrl: string
 ): Promise<void> {
-	// Determine window start. If never delivered, default to 24h back; if
-	// delivered long ago, clamp to MAX_WINDOW_HOURS so the payload stays sane.
-	const defaultStart = subtractHours(nowIso, DEFAULT_WINDOW_HOURS);
-	const cap = subtractHours(nowIso, MAX_WINDOW_HOURS);
-	let windowStart = user.last_digest_at ?? defaultStart;
-	if (windowStart < cap) windowStart = cap;
-
-	const { followedThreads, followedCategories, siteCounts, siteActivity } = await loadDigestContent(
-		env,
-		user.user_id,
-		windowStart
-	);
-
-	const hasContent =
-		followedThreads.length > 0 ||
-		followedCategories.length > 0 ||
-		siteCounts.newThreads > 0 ||
-		siteCounts.newPosts > 0;
-
-	if (!hasContent) {
-		// No payload → skip send but still advance last_digest_at so the next
-		// run only considers newer activity.
-		await env.DB.prepare(
-			`UPDATE notification_preferences SET last_digest_at = ?, updated_at = ? WHERE user_id = ?`
-		)
-			.bind(nowIso, nowIso, user.user_id)
-			.run();
-		return;
-	}
-
-	const template = renderDigestEmail({
-		displayName: user.display_name,
-		windowStart,
-		followedThreads,
-		followedCategories,
-		siteCounts,
-		siteActivity,
-		baseUrl
-	});
-
-	const send = await sendEmail(env, {
-		to: user.email,
-		subject: template.subject,
-		textBody: template.textBody,
-		htmlBody: template.htmlBody
-	});
-
-	// Compact summary of what was in this digest, stored for audit.
-	const payload = {
-		windowStart,
-		followedThreadCount: followedThreads.length,
-		followedPostCount: followedThreads.reduce((acc, t) => acc + t.posts.length, 0),
-		followedCategoryCount: followedCategories.length,
-		followedCategoryThreadCount: followedCategories.reduce((acc, c) => acc + c.threads.length, 0),
-		siteCounts
-	};
-
+	// A daily claim prevents overlapping cron deliveries. Failed sends can retry;
+	// interrupted claims become available after ten minutes.
+	const localDay = new Intl.DateTimeFormat('en-CA', {
+		timeZone: user.timezone,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(new Date(nowIso));
+	const digestId = `digest:${user.user_id}:${localDay}`;
 	await env.DB.prepare(
 		`INSERT INTO notification_events
-		   (id, user_id, event_type, payload_json, status, sent_at, failure_reason, created_at, updated_at)
-		 VALUES (?, ?, 'digest', ?, ?, ?, ?, ?, ?)`
+		(id, user_id, event_type, status, created_at, updated_at)
+		VALUES (?, ?, 'digest', 'pending', ?, ?) ON CONFLICT DO NOTHING`
 	)
-		.bind(
-			generateId(),
+		.bind(digestId, user.user_id, nowIso, nowIso)
+		.run();
+	const claim = await env.DB.prepare(
+		`UPDATE notification_events
+		SET status = 'pending', available_at = ?, updated_at = ?
+		WHERE id = ? AND (status = 'failed' OR
+			(status = 'pending' AND (available_at IS NULL OR available_at <= ?)))
+		RETURNING id`
+	)
+		.bind(new Date(Date.parse(nowIso) + 10 * 60_000).toISOString(), nowIso, digestId, nowIso)
+		.first();
+	if (!claim) return;
+	try {
+		const cap = subtractHours(nowIso, MAX_WINDOW_HOURS);
+		const windowStart =
+			(user.last_digest_at ?? subtractHours(nowIso, DEFAULT_WINDOW_HOURS)) < cap
+				? cap
+				: (user.last_digest_at ?? subtractHours(nowIso, DEFAULT_WINDOW_HOURS));
+		const { followedThreads, followedCategories, siteCounts, siteActivity } =
+			await loadDigestContent(env, user.user_id, windowStart);
+		const { activity: personalActivity, eventIds } = await loadPersonalDigestActivity(
+			env,
 			user.user_id,
-			JSON.stringify(payload),
-			send.success ? 'sent' : 'failed',
-			send.success ? nowIso : null,
-			send.success ? null : (send.error ?? 'Unknown error'),
-			nowIso,
 			nowIso
+		);
+		// Preferences may change while this cron run is preparing other members' digests.
+		const current = await env.DB.prepare(
+			`SELECT u.email FROM users u
+			JOIN notification_preferences np ON np.user_id = u.id
+			WHERE u.id = ? AND u.status = 'active' AND np.email_enabled = 1
+			AND np.digest_hour_local = ?`
 		)
-		.run();
-
-	// Always advance last_digest_at — even on send failure we don't want to
-	// re-send the same window on the next run. The notification_events row
-	// records the failure for follow-up.
-	await env.DB.prepare(
-		`UPDATE notification_preferences SET last_digest_at = ?, updated_at = ? WHERE user_id = ?`
-	)
-		.bind(nowIso, nowIso, user.user_id)
-		.run();
+			.bind(user.user_id, user.digest_hour_local)
+			.first<{ email: string }>();
+		if (!current) {
+			await env.DB.prepare(
+				"UPDATE notification_events SET status = 'cancelled', updated_at = ? WHERE id = ?"
+			)
+				.bind(nowIso, digestId)
+				.run();
+			return;
+		}
+		const hasContent =
+			followedThreads.length > 0 ||
+			followedCategories.length > 0 ||
+			siteCounts.newThreads > 0 ||
+			siteCounts.newPosts > 0 ||
+			personalActivity.length > 0;
+		const payload = {
+			windowStart,
+			followedThreadCount: followedThreads.length,
+			followedPostCount: followedThreads.reduce((acc, t) => acc + t.posts.length, 0),
+			followedCategoryCount: followedCategories.length,
+			siteCounts,
+			personalActivityCount: personalActivity.length,
+			personalEventIds: eventIds
+		};
+		let sentAt: string | null = null;
+		if (hasContent) {
+			const template = renderDigestEmail({
+				displayName: user.display_name,
+				windowStart,
+				followedThreads,
+				followedCategories,
+				siteCounts,
+				siteActivity,
+				personalActivity,
+				baseUrl
+			});
+			const send = await sendEmail(env, { to: current.email, ...template });
+			if (!send.success) throw new Error(send.error ?? 'Digest email could not be sent');
+			sentAt = nowIso;
+		}
+		await env.DB.batch([
+			env.DB.prepare(
+				`UPDATE notification_events SET status = ?, sent_at = ?, payload_json = ?,
+				failure_reason = NULL, updated_at = ? WHERE id = ?`
+			).bind(hasContent ? 'sent' : 'cancelled', sentAt, JSON.stringify(payload), nowIso, digestId),
+			env.DB.prepare(
+				`UPDATE notification_events SET status = ?, sent_at = ?, updated_at = ?
+				WHERE id IN (SELECT value FROM json_each(?)) AND status = 'pending'`
+			).bind(hasContent ? 'sent' : 'cancelled', sentAt, nowIso, JSON.stringify(eventIds)),
+			env.DB.prepare(
+				`UPDATE notification_preferences SET last_digest_at = ?, updated_at = ? WHERE user_id = ?`
+			).bind(nowIso, nowIso, user.user_id)
+		]);
+	} catch (err) {
+		await env.DB.prepare(
+			`UPDATE notification_events SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ?`
+		)
+			.bind(err instanceof Error ? err.message : 'Unknown error', nowIso, digestId)
+			.run();
+		// Leave the window and deferred events untouched so the next run can retry.
+		throw err;
+	}
 }
 
 /**
@@ -573,8 +600,7 @@ async function runDigestForUser(
  * digest_hour_local equals the current hour in their timezone, then
  * processes each in a try/catch so one bad user doesn't kill the batch.
  */
-export async function runDailyDigest({ env }: HandlerContext): Promise<void> {
-	const now = new Date();
+export async function runDailyDigest({ env }: HandlerContext, now = new Date()): Promise<void> {
 	const nowIso = now.toISOString();
 
 	const users = await selectUsersForThisHour(env, nowIso);

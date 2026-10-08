@@ -20,7 +20,7 @@ export async function handleReactionNotification(
 	const target = await env.DB.prepare(
 		`
 		SELECT t.title, t.slug, COALESCE(p.author_user_id, t.author_user_id) AS author_id,
-			u.email, COALESCE(np.email_enabled, 1) AS email_enabled,
+			u.email, COALESCE(np.email_enabled, 1) AS email_enabled, np.digest_hour_local,
 			CASE WHEN np.pushover_enabled = 1 THEN np.pushover_user_key END AS pushover_user_key,
 			np.pushover_device
 		FROM threads t
@@ -45,6 +45,7 @@ export async function handleReactionNotification(
 			author_id: string;
 			email: string;
 			email_enabled: number;
+			digest_hour_local: number | null;
 			pushover_user_key: string | null;
 			pushover_device: string | null;
 		}>();
@@ -117,7 +118,16 @@ export async function handleReactionNotification(
 	const postUrl = `${baseUrl}/thread/${target.slug}${postId ? `?post=${encodeURIComponent(postId)}#post-${encodeURIComponent(postId)}` : '#opening-post'}`;
 	// Reuse the batch after a partial delivery failure, so email is not repeated when push retries.
 	const eventId = `reaction:${targetKey}:${state.last_reaction_at}`;
-	let batch = { actors, summary, postUrl, cutoff: now, emailSent: false, pushoverQueued: false };
+	let batch = {
+		actors,
+		summary,
+		postUrl,
+		cutoff: now,
+		windowStart: state.last_reaction_at,
+		emailSent: false,
+		emailDeferred: false,
+		pushoverQueued: false
+	};
 	async function saveBatch() {
 		await env.DB.prepare(
 			'UPDATE notification_events SET payload_json = ?, updated_at = ? WHERE id = ?'
@@ -137,7 +147,38 @@ export async function handleReactionNotification(
 			.bind(eventId)
 			.first<{ payload_json: string }>();
 		if (saved) batch = JSON.parse(saved.payload_json) as typeof batch;
-		if (target.email_enabled && !batch.emailSent) {
+		batch.windowStart ??= state.last_reaction_at;
+		if (
+			target.email_enabled &&
+			!batch.emailSent &&
+			!batch.emailDeferred &&
+			target.digest_hour_local != null
+		) {
+			batch.emailDeferred = true;
+			await env.DB.batch([
+				env.DB.prepare(
+					`INSERT INTO notification_events
+					(id, user_id, event_type, thread_id, post_id, payload_json, status, created_at, updated_at)
+					VALUES (?, ?, 'reaction', ?, ?, ?, 'pending', ?, ?) ON CONFLICT DO NOTHING`
+				).bind(
+					`${eventId}:email`,
+					target.author_id,
+					threadId,
+					postId,
+					JSON.stringify({
+						deliveryMode: 'daily_digest',
+						windowStart: batch.windowStart,
+						cutoff: batch.cutoff
+					}),
+					now,
+					now
+				),
+				env.DB.prepare(
+					'UPDATE notification_events SET payload_json = ?, updated_at = ? WHERE id = ?'
+				).bind(JSON.stringify(batch), now, eventId)
+			]);
+		}
+		if (target.email_enabled && !batch.emailSent && !batch.emailDeferred) {
 			const template = renderReactionNotificationEmail({
 				threadTitle: target.title,
 				actors: batch.actors,
