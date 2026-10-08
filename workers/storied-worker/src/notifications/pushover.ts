@@ -15,11 +15,10 @@ interface PushoverApiResponse {
 }
 
 export class RetryablePushoverError extends Error {
-	constructor(
-		message: string,
-		public readonly retryAfterSeconds = 5
-	) {
+	readonly retryAfterSeconds: number;
+	constructor(message: string, retryAfterSeconds = 5) {
 		super(message);
+		this.retryAfterSeconds = retryAfterSeconds;
 		this.name = 'RetryablePushoverError';
 	}
 }

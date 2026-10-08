@@ -16,6 +16,8 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import PostComposer from '$lib/components/post-composer.svelte';
 	import MarkdownHint from '$lib/components/markdown-hint.svelte';
+	import PostReactions from '$lib/components/post-reactions.svelte';
+	import { reactionTargetKey } from '$shared/reactions';
 	import PostImage from '$lib/components/post-image.svelte';
 	import AuthorCard from '$lib/components/author-card.svelte';
 	import BookCard from '$lib/components/BookCard.svelte';
@@ -871,7 +873,7 @@
 		{/if}
 
 		<!-- Opening post -->
-		<Card.Root>
+		<Card.Root id="opening-post">
 			<Card.Content class="pt-1">
 				<div class="flex items-start gap-3">
 					<Avatar.Root class="h-10 w-10 shrink-0">
@@ -936,6 +938,12 @@
 								{@html view.thread.bodyHtml}
 							</div>
 						{/if}
+						<div class="mt-3">
+							<PostReactions
+								reactions={view.reactions[reactionTargetKey(view.thread.id, null)] ?? []}
+								disabled={!currentUserId || view.thread.isLocked}
+							/>
+						</div>
 					</div>
 				</div>
 			</Card.Content>
@@ -1069,6 +1077,11 @@
 									{/if}
 									{#if editingId !== post.id}
 										<div class="mt-2 flex flex-wrap items-center gap-3">
+											<PostReactions
+												postId={post.id}
+												reactions={view.reactions[reactionTargetKey(view.thread.id, post.id)] ?? []}
+												disabled={!currentUserId || view.thread.isLocked}
+											/>
 											{#if !view.thread.isLocked}
 												<button
 													type="button"

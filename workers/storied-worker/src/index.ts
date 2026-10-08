@@ -1,4 +1,5 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
+import { REACTION_NOTIFICATION_DELAY_SECONDS } from '$shared/reactions';
 import type { WorkerMessage } from '$shared/worker-messages';
 import type { Env } from './env';
 import { dispatchWorkerMessage, dispatchScheduled } from './dispatch';
@@ -14,7 +15,12 @@ export class WorkerQueue extends WorkerEntrypoint<Env> {
 			return;
 		}
 
-		await queue.send(message);
+		await queue.send(
+			message,
+			message.topic === 'notifications.reaction'
+				? { delaySeconds: REACTION_NOTIFICATION_DELAY_SECONDS }
+				: undefined
+		);
 	}
 }
 

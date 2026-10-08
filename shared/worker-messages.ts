@@ -98,6 +98,12 @@ export interface ThreadReplyFanoutPayload {
 // notifications.new-thread — fan out category or announcement emails
 // ────────────────────────────────────────────────
 
+export interface ReactionNotificationPayload {
+	threadId: string;
+	postId: string | null;
+	baseUrl: string;
+}
+
 export interface NewThreadFanoutPayload {
 	threadId: string;
 	threadAuthorUserId: string;
@@ -140,6 +146,7 @@ export interface PushoverNotificationPayload {
 	urlTitle?: string | null;
 	priority?: -2 | -1 | 0 | 1;
 	eventType?:
+		| 'reaction'
 		| 'reply'
 		| 'mention'
 		| 'new_thread'
@@ -179,6 +186,7 @@ export interface SearchRebuildPayload {
 
 export type WorkerMessage =
 	| { topic: 'subject.resolve'; payload: SubjectResolvePayload }
+	| { topic: 'notifications.reaction'; payload: ReactionNotificationPayload }
 	| { topic: 'notifications.thread-reply'; payload: ThreadReplyFanoutPayload }
 	| { topic: 'notifications.new-thread'; payload: NewThreadFanoutPayload }
 	| { topic: 'notifications.pending-signup'; payload: PendingSignupNotificationPayload }

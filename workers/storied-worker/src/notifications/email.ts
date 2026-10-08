@@ -513,3 +513,21 @@ export function renderDigestEmail(args: DigestEmailTemplateArgs): {
 		htmlBody: htmlParts.join('')
 	};
 }
+
+export function renderReactionNotificationEmail(args: {
+	threadTitle: string;
+	actors: string;
+	summary: string;
+	postUrl: string;
+}) {
+	return {
+		subject: `Reactions to your post in "${args.threadTitle}" | ${APP_NAME}`,
+		textBody: `${args.actors} reacted to your post in "${args.threadTitle}":\n\n${args.summary}\n\nView your post: ${args.postUrl}`,
+		htmlBody: `<div style="font-family: system-ui, sans-serif; max-width: 480px; margin: auto; padding: 24px;">
+			<h3>${escapeHtml(args.actors)} reacted to your post in "${escapeHtml(args.threadTitle)}"</h3>
+			<p style="font-size: 24px;">${escapeHtml(args.summary)}</p>
+			<p><a href="${escapeHtml(args.postUrl)}">View your post</a></p>
+			<p style="color: #777; font-size: 12px;">You received this because someone reacted to your post. Reactions are grouped, with at most one notification per post every ten minutes.</p>
+		</div>`
+	};
+}

@@ -1,3 +1,4 @@
+@import '../lib/emoji-font.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin '@tailwindcss/forms';
@@ -232,4 +233,13 @@
 	.prose .spoiler-whole-content > :last-child {
 		margin-bottom: 0;
 	}
+}
+
+/* Preserve the emoji face even when the reading font overrides all descendants. */
+.reaction-emoji,
+body:has([data-dyslexic='true']) .reaction-emoji {
+	font-family: 'Noto Color Emoji', sans-serif !important;
+	font-weight: 400;
+	font-style: normal;
+	line-height: 1;
 }

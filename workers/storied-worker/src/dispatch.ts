@@ -4,6 +4,7 @@ import { handleSubjectResolve } from './subject/queue-resolve';
 import { handleNewThreadFanout } from './notifications/queue-new-thread-fanout';
 import { handlePendingSignupNotification } from './notifications/queue-pending-signup';
 import { handlePrivateMessageNotification } from './notifications/queue-private-message';
+import { handleReactionNotification } from './notifications/queue-reaction';
 import { handleThreadReplyFanout } from './notifications/queue-thread-reply-fanout';
 import { handlePushoverNotification } from './notifications/pushover';
 import { runDailyDigest } from './notifications/scheduled-digest';
@@ -28,6 +29,9 @@ export async function dispatchWorkerMessage(
 	switch (message.topic) {
 		case 'subject.resolve':
 			await handleSubjectResolve(message.payload, context);
+			return;
+		case 'notifications.reaction':
+			await handleReactionNotification(message.payload, context);
 			return;
 		case 'notifications.thread-reply':
 			await handleThreadReplyFanout(message.payload, context);

@@ -20,6 +20,8 @@ import {
 	type SessionSubjectStatus,
 	type SubjectType
 } from '$lib/server/db/schema';
+import { loadReactions, normalizeReactionEmoji, setReaction } from '$lib/server/reactions';
+import { MAX_REACTION_EMOJIS, reactionTargetKey } from '$shared/reactions';
 import { newId } from '$lib/server/ids';
 import { renderMarkdown } from '$lib/server/markdown';
 import { listActiveMentionableUsers } from '$lib/server/mentions';
@@ -440,6 +442,14 @@ export async function loadThreadView(args: {
 		author: row.author,
 		category: row.category,
 		audienceGroup: row.audienceGroup,
+		reactions: await loadReactions(
+			db,
+			[
+				reactionTargetKey(thread.id, null),
+				...postPage.posts.map(({ post }) => reactionTargetKey(thread.id, post.id))
+			],
+			args.userId
+		),
 		posts: postPage.posts,
 		pagination: postPage.pagination,
 		subscriptionMode: (subscription?.mode ?? 'none') as
@@ -550,6 +560,60 @@ export function createThreadActions(options: {
 				}
 				throw err;
 			}
+		},
+
+		setReaction: async (event: RequestEvent) => {
+			const { locals, request, platform, url } = event;
+			if (!locals.user) throw redirect(302, '/auth/login');
+			const thread = await requireThread(event);
+			if (thread.isLocked) return fail(403, { error: 'This thread is locked.' });
+			const data = await request.formData();
+			const emoji = normalizeReactionEmoji(data.get('emoji')?.toString() ?? '');
+			const mode = data.get('mode')?.toString();
+			if (!emoji || (mode !== 'add' && mode !== 'remove')) {
+				return fail(400, { error: 'Choose a valid emoji reaction.' });
+			}
+			const postId = data.get('postId')?.toString() || null;
+			const post = postId
+				? await locals.db
+						.select()
+						.from(posts)
+						.where(
+							and(eq(posts.id, postId), eq(posts.threadId, thread.id), isNull(posts.deletedAt))
+						)
+						.get()
+				: null;
+			if (postId && !post) return fail(404, { error: 'Post not found.' });
+			const result = await setReaction({
+				db: locals.db,
+				threadId: thread.id,
+				postId,
+				userId: locals.user.id,
+				emoji,
+				remove: mode === 'remove'
+			});
+			if (result.atLimit)
+				return fail(400, {
+					error: `A post can have up to ${MAX_REACTION_EMOJIS} different emojis. You can still use an existing reaction.`
+				});
+			if (result.added && (post?.authorUserId ?? thread.authorUserId) !== locals.user.id) {
+				const task = publishWorkerMessage(platform?.env.STORIED_WORKER, 'notifications.reaction', {
+					threadId: thread.id,
+					postId,
+					baseUrl: url.origin
+				}).catch((err) => {
+					console.error('[REACTION NOTIFICATION QUEUE ERROR]', err);
+				});
+				if (platform?.ctx) platform.ctx.waitUntil(task);
+				else await task;
+			}
+			return {
+				success: true,
+				reactions:
+					(await loadReactions(locals.db, [reactionTargetKey(thread.id, postId)], locals.user.id))[
+						reactionTargetKey(thread.id, postId)
+					] ?? []
+			};
 		},
 
 		setSubscriptionMode: async (event: RequestEvent) => {

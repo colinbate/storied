@@ -454,6 +454,42 @@ export const posts = sqliteTable(
 	]
 );
 
+export const postReactions = sqliteTable(
+	'post_reactions',
+	{
+		id: text('id').primaryKey(),
+		targetKey: text('target_key').notNull(),
+		threadId: text('thread_id')
+			.notNull()
+			.references(() => threads.id, { onDelete: 'cascade' }),
+		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		emoji: text('emoji').notNull(),
+		createdAt: text('created_at').notNull().default(timestampDefault)
+	},
+	(table) => [
+		uniqueIndex('post_reactions_target_user_emoji_unique').on(
+			table.targetKey,
+			table.userId,
+			table.emoji
+		),
+		index('idx_post_reactions_thread').on(table.threadId, table.targetKey),
+		index('idx_post_reactions_target_created').on(table.targetKey, table.createdAt)
+	]
+);
+
+export const reactionNotificationState = sqliteTable('reaction_notification_state', {
+	targetKey: text('target_key').primaryKey(),
+	threadId: text('thread_id')
+		.notNull()
+		.references(() => threads.id, { onDelete: 'cascade' }),
+	postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),
+	lastNotifiedAt: text('last_notified_at').notNull().default('1970-01-01T00:00:00.000Z'),
+	lastReactionAt: text('last_reaction_at').notNull().default('1970-01-01T00:00:00.000Z')
+});
+
 // ──────────────────────────────────────────────
 // thread_read_states
 // ──────────────────────────────────────────────
@@ -545,7 +581,7 @@ export const notificationEvents = sqliteTable(
 		userId: text('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' | 'pushover_test' | 'private_message' */
+		/** Allowed values: 'reply' | 'mention' | 'new_thread' | 'digest' | 'announcement' | 'pending_signup' | 'pushover_test' | 'private_message' | 'reaction' */
 		eventType: text('event_type').notNull(),
 		threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
 		postId: text('post_id').references(() => posts.id, { onDelete: 'cascade' }),
