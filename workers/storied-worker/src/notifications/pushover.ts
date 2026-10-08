@@ -59,6 +59,15 @@ export async function handlePushoverNotification(
 	payload: PushoverNotificationPayload,
 	{ env }: HandlerContext
 ): Promise<void> {
+	const eligible = await env.DB.prepare(
+		`SELECT u.id FROM users u
+		JOIN notification_preferences np ON np.user_id = u.id
+		WHERE u.id = ? AND u.status = 'active' AND np.pushover_user_key = ?
+		AND (np.pushover_enabled = 1 OR (? = 1 AND u.role = 'admin'))`
+	)
+		.bind(payload.userId, payload.userKey, payload.eventType === 'pushover_test' ? 1 : 0)
+		.first();
+	if (!eligible) return;
 	const response = await sendPushover(env, payload);
 	const now = new Date().toISOString();
 

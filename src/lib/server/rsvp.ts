@@ -6,7 +6,7 @@ import {
 	sessions,
 	type SessionAttendanceStatus,
 	type SessionParticipantSource,
-	type users
+	users
 } from '$lib/server/db/schema';
 import type { ORM } from '$lib/server/db';
 import { newId } from '$lib/server/ids';
@@ -202,6 +202,15 @@ export async function setAttendeeRsvp({
 	confirmationToken?: string | null;
 	note?: string | null;
 }): Promise<RsvpMutationResult> {
+	if (attendee.userId) {
+		const member = await db
+			.select({ leftAt: users.leftAt })
+			.from(users)
+			.where(eq(users.id, attendee.userId))
+			.get();
+		if (member?.leftAt)
+			throw new RsvpIdentityConflictError('Contact an administrator to rejoin before registering.');
+	}
 	let existing = await getParticipantForAttendee(db, session.id, attendee.id);
 	if (existing && !existing.confirmationToken) {
 		existing = await db
@@ -286,7 +295,8 @@ export async function promoteNextWaitlisted(db: ORM, sessionId: string) {
 		.where(
 			and(
 				eq(sessionParticipants.sessionId, sessionId),
-				eq(sessionParticipants.attendanceStatus, 'waitlisted')
+				eq(sessionParticipants.attendanceStatus, 'waitlisted'),
+				sql`(${attendeeIdentities.userId} IS NULL OR EXISTS (SELECT 1 FROM users u WHERE u.id = ${attendeeIdentities.userId} AND u.status = 'active'))`
 			)
 		)
 		.orderBy(asc(sessionParticipants.createdAt))

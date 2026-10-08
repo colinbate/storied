@@ -131,6 +131,10 @@
 	</section>
 
 	<div class="space-y-4">
+		{#if data.leftClub}<p role="status" class="rounded border p-3 text-sm">
+				You have left the club and signed out on every device. Contact an administrator to rejoin
+				with the same email address. Your saved contributions remain.
+			</p>{/if}
 		{#if data.error && data.error !== 'pending_approval'}
 			<div class="rounded border border-destructive p-3 text-sm">
 				<strong>Error:</strong>
@@ -141,6 +145,9 @@
 					email address you are registered with.
 				{:else if data.error === 'suspended'}
 					This account is not currently allowed to sign in.
+				{:else if data.error === 'left'}
+					You have left the club. Contact an administrator to reactivate your account before signing
+					in again.
 				{:else if data.error === 'introduction_expired'}
 					Your introduction form has expired. Request a new sign-in link to continue.
 				{:else}

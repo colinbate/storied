@@ -28,6 +28,8 @@ import {
 	PROFILE_LINK_URL_MAX_LENGTH
 } from '$lib/profile-links';
 import { newId } from '$lib/server/ids';
+import { SESSION_COOKIE_NAME } from '$lib/server/auth';
+import { canLeaveClub, leaveClub, notifyDeparturePromotions } from '$lib/server/member-departure';
 import {
 	createCalendarSubscription,
 	ownCalendarSubscription,
@@ -266,11 +268,31 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 		profileLinks,
 		preferences,
 		calendarSubscription: await ownCalendarSubscription(locals.db, locals.user.id),
+		canLeaveClub: await canLeaveClub(locals.db, locals.user.id),
 		defaultTimezone: DEFAULT_TIMEZONE
 	};
 };
 
 export const actions: Actions = {
+	leaveClub: async ({ locals, request, cookies, platform, url }) => {
+		if (!locals.user) throw redirect(302, '/auth/login');
+		const data = await request.formData();
+		if (
+			data.get('confirmDeparture') !== 'on' ||
+			data.get('confirmation')?.toString().trim() !== 'LEAVE'
+		)
+			return fail(400, { departureError: 'Confirm the departure and type LEAVE to continue.' });
+		const result = await leaveClub(locals.db, locals.user.id);
+		if (!result.left)
+			return fail(409, {
+				departureError: result.registrationsChanged
+					? 'Meeting registrations changed while leaving. Please try again.'
+					: 'Only an active member can leave. The final active administrator must appoint another administrator first.'
+			});
+		cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+		await notifyDeparturePromotions(locals.db, result.promotedIds, platform, url.origin);
+		redirect(303, '/auth/login?left=1');
+	},
 	createCalendarSubscription: async ({ locals, request, setHeaders }) => {
 		const member = await calendarMember(locals);
 		setHeaders({ 'Cache-Control': 'private, no-store' });

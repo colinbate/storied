@@ -57,6 +57,7 @@ export const users = sqliteTable(
 		role: text('role').notNull().default('member'),
 		/** Allowed values: 'active' | 'pending' | 'suspended' */
 		status: text('status').notNull().default('active'),
+		leftAt: text('left_at'),
 		/** IANA timezone identifier, e.g. 'Atlantic/Bermuda' */
 		timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
 		/** 0 = default fonts, 1 = use OpenDyslexic for all site text */

@@ -7,6 +7,7 @@ import {
 	getSessionByRsvpSlug,
 	isValidRsvpEmail,
 	RsvpCapacityError,
+	RsvpIdentityConflictError,
 	submitSessionRsvp
 } from '$lib/server/rsvp';
 
@@ -95,7 +96,7 @@ export const actions = {
 				)
 			);
 		} catch (error) {
-			if (error instanceof RsvpCapacityError) {
+			if (error instanceof RsvpCapacityError || error instanceof RsvpIdentityConflictError) {
 				return fail(400, { name, email, error: error.message });
 			}
 			throw error;

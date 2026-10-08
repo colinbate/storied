@@ -7,7 +7,7 @@ import {
 	users,
 	signupIntroductions
 } from '$lib/server/db/schema';
-import { desc, eq, and } from 'drizzle-orm';
+import { desc, eq, and, isNotNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import {
 	findOrCreateUser,
@@ -61,6 +61,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		members: allUsers.map((member) => ({
 			...member,
+			status: member.leftAt ? 'left' : member.status,
 			introduction: messages.get(member.id) ?? null,
 			showInMemberList: visibility.get(member.id) ?? true
 		})),
@@ -178,6 +179,8 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const userId = data.get('userId')?.toString();
 		const statusValue = data.get('status')?.toString();
+		if (statusValue === 'left')
+			return fail(400, { error: 'Members leave through their own Settings page.' });
 
 		if (!userId) {
 			return fail(400, { error: 'Missing user id.' });
@@ -192,8 +195,15 @@ export const actions: Actions = {
 		}
 
 		let approvalEmailSent = false;
+		const member = await locals.db.select().from(users).where(eq(users.id, userId)).get();
+		if (member?.leftAt && statusValue !== 'active')
+			return fail(400, { error: 'Choose Active to allow a departed member to rejoin.' });
 		if (statusValue === 'active') {
 			approvalEmailSent = await notifyIfActivatedFromPending({ userId, locals, platform, url });
+			await locals.db
+				.update(users)
+				.set({ status: 'active', leftAt: null, updatedAt: new Date().toISOString() })
+				.where(and(eq(users.id, userId), isNotNull(users.leftAt)));
 		} else {
 			await locals.db.update(users).set({ status: statusValue }).where(eq(users.id, userId));
 		}

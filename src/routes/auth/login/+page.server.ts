@@ -22,6 +22,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
 	const mode: 'join' | 'signin' =
 		url.searchParams.get('mode') === 'join' && canSignup ? 'join' : 'signin';
 	return {
+		leftClub: url.searchParams.get('left') === '1',
 		error,
 		signupMode,
 		canSignup,

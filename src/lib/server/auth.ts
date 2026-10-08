@@ -383,6 +383,12 @@ export async function createSession(
 	const tokenHash = await hashToken(token);
 	const id = nanoid();
 	const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+	const member = await db
+		.select({ leftAt: users.leftAt })
+		.from(users)
+		.where(eq(users.id, userId))
+		.get();
+	if (member?.leftAt) throw error(403, 'Contact an administrator to rejoin.');
 
 	await db.insert(userSessions).values({
 		id,
@@ -419,7 +425,7 @@ export async function validateSession(
 		.where(and(eq(userSessions.tokenHash, tokenHash), gt(userSessions.expiresAt, now)))
 		.get();
 
-	if (!result) return null;
+	if (!result || result.user.leftAt) return null;
 	return { user: result.user, sessionId: result.sessionId };
 }
 
@@ -451,6 +457,11 @@ export async function completeMagicLinkLogin(
 	const inviteCode = cookies.get(INVITE_COOKIE_NAME);
 	const invite = inviteCode ? await getValidInviteForEmail(db, inviteCode, result.email) : null;
 	const existing = await db.select().from(users).where(eq(users.email, result.email)).get();
+	if (existing?.leftAt) {
+		cookies.delete(INVITE_COOKIE_NAME, { path: '/' });
+		cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+		redirect(302, '/auth/login?error=left');
+	}
 	const existingIntroduction = existing
 		? await db
 				.select()
@@ -525,7 +536,10 @@ export async function completeMagicLinkLogin(
 
 	if (invite) {
 		await claimInvite(db, invite.id, userId);
-		await db.update(users).set({ status: 'active' }).where(eq(users.id, userId));
+		await db
+			.update(users)
+			.set({ status: 'active' })
+			.where(and(eq(users.id, userId), isNull(users.leftAt)));
 	}
 
 	if (user?.status === 'pending') {

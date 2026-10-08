@@ -42,7 +42,8 @@
 	const statusOptions = [
 		{ value: 'active', label: 'Active' },
 		{ value: 'pending', label: 'Pending' },
-		{ value: 'suspended', label: 'Suspended' }
+		{ value: 'suspended', label: 'Suspended' },
+		{ value: 'left', label: 'Left' }
 	];
 
 	function getInitial(name: string) {
@@ -535,7 +536,11 @@
 										class="w-full"
 									>
 										{#each statusOptions as opt (opt.value)}
-											<NativeSelectOption value={opt.value} selected={opt.value === member.status}
+											<NativeSelectOption
+												value={opt.value}
+												selected={opt.value === member.status}
+												disabled={opt.value === 'left' ||
+													(!!member.leftAt && opt.value !== 'active')}
 												>{opt.label}</NativeSelectOption
 											>
 										{/each}

@@ -33,6 +33,7 @@
 	let profileLoading = $state(false);
 	let avatarLoading = $state(false);
 	let avatarPreview: string | null = $state(null);
+	let leavingClub = $state(false);
 
 	let timezoneSaving = $state(false);
 	let prefsSaving = $state(false);
@@ -1068,6 +1069,69 @@
 			<form method="POST" action="/auth/logout">
 				<Button variant="outline" type="submit">Sign Out</Button>
 			</form>
+			<Separator class="my-4" />
+			<h3 class="font-medium">Leave the club</h3>
+			<p class="mt-2 text-sm text-muted-foreground">
+				Leaving signs you out on every device, stops club notifications, revokes your calendar
+				subscription, and cancels future RSVPs and waitlist places. Freed places go to the next
+				eligible people on the waitlist. Past attendance and RSVPs remain.
+			</p>
+			<p class="mt-2 text-sm text-muted-foreground">
+				Your posts, reading activity, and private messages remain. Other conversation participants
+				can still read your messages. Your saved profile remains, but its page and member list entry
+				become unavailable. Your name remains on existing contributions. Leaving does not erase or
+				export your data; contact an administrator about those requests.
+			</p>
+			<p class="mt-2 text-sm text-muted-foreground">
+				To rejoin, contact an administrator to reactivate this account, then sign in with the same
+				email address. Notifications stay off until you enable them in Settings. Groups and
+				administrator roles require reassignment, and future meetings require a new RSVP.
+			</p>
+			{#if data.canLeaveClub}
+				<form
+					method="POST"
+					action="?/leaveClub"
+					class="mt-4 space-y-3"
+					use:enhance={() => {
+						leavingClub = true;
+						return async ({ update }) => {
+							try {
+								await update({ reset: false });
+							} finally {
+								leavingClub = false;
+							}
+						};
+					}}
+				>
+					<label class="flex items-start gap-2 text-sm"
+						><input type="checkbox" name="confirmDeparture" required />I understand what happens to
+						my access and saved data.</label
+					>
+					<Label for="leave-confirmation">Type LEAVE to confirm</Label>
+					<Input
+						id="leave-confirmation"
+						name="confirmation"
+						autocomplete="off"
+						required
+						pattern="LEAVE"
+					/>
+					{#if form?.departureError}<p role="alert" class="text-sm text-destructive">
+							{form.departureError}
+						</p>{/if}
+					<Button type="submit" variant="destructive" disabled={leavingClub}
+						>{leavingClub ? 'Leaving…' : 'Leave the club'}</Button
+					>
+				</form>
+			{:else}
+				<p class="mt-3 text-sm">
+					The final active administrator must appoint another active administrator before leaving.
+					Use the member administration page to transfer responsibility; contact an administrator if
+					you need assistance.
+				</p>
+				<Button href={resolve('/admin/members')} variant="outline" class="mt-3"
+					>Manage administrators</Button
+				>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>
