@@ -14,7 +14,7 @@ import { defaultAgendaCopyStatements } from './session-workflow';
 type BatchItem = Parameters<ORM['batch']>[0][number];
 
 /** Draft access is independent of public-site visibility. */
-export function sessionAccessCondition(locals: App.Locals) {
+export function sessionAccessCondition(locals: Pick<App.Locals, 'permissions'>) {
 	return locals.permissions.has('sessions:edit') ? sql`1 = 1` : ne(sessions.status, 'draft');
 }
 

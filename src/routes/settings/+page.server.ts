@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	books,
@@ -28,6 +28,22 @@ import {
 	PROFILE_LINK_URL_MAX_LENGTH
 } from '$lib/profile-links';
 import { newId } from '$lib/server/ids';
+import {
+	createCalendarSubscription,
+	ownCalendarSubscription,
+	revokeCalendarSubscription
+} from '$lib/server/session-calendar';
+
+async function calendarMember(locals: App.Locals) {
+	if (!locals.user) throw redirect(302, '/auth/login');
+	const member = await locals.db
+		.select()
+		.from(users)
+		.where(and(eq(users.id, locals.user.id), eq(users.status, 'active')))
+		.get();
+	if (!member) throw error(403, 'Active membership required.');
+	return member;
+}
 
 type NotificationMode = 'off' | 'immediate' | 'daily_digest';
 type DefaultSubMode = 'immediate' | 'daily_digest';
@@ -112,8 +128,9 @@ async function ensureUserProfile(locals: App.Locals) {
 		.onConflictDoNothing({ target: userProfiles.userId });
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, setHeaders }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
+	setHeaders({ 'Cache-Control': 'private, no-store' });
 	const preferences = await getOrCreateNotificationPreferences(locals.db, locals.user.id);
 	const [
 		profileRows,
@@ -248,11 +265,28 @@ export const load: PageServerLoad = async ({ locals }) => {
 		allGenres,
 		profileLinks,
 		preferences,
+		calendarSubscription: await ownCalendarSubscription(locals.db, locals.user.id),
 		defaultTimezone: DEFAULT_TIMEZONE
 	};
 };
 
 export const actions: Actions = {
+	createCalendarSubscription: async ({ locals, request, setHeaders }) => {
+		const member = await calendarMember(locals);
+		setHeaders({ 'Cache-Control': 'private, no-store' });
+		const data = await request.formData();
+		const calendarUrl = await createCalendarSubscription(
+			locals.db,
+			member.id,
+			data.get('includeWaitlist') === 'on'
+		);
+		return { calendarUrl };
+	},
+	revokeCalendarSubscription: async ({ locals }) => {
+		const member = await calendarMember(locals);
+		await revokeCalendarSubscription(locals.db, member.id);
+		return { calendarRevoked: true };
+	},
 	updateAccount: async ({ request, locals }) => {
 		if (!locals.user) throw redirect(302, '/auth/login');
 

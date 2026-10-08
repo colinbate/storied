@@ -1,9 +1,10 @@
-import { ORGANIZATION_NAME } from './brand';
 import { sessionStartDate, type SessionTiming } from './session-lifecycle';
 
 type CalendarSession = SessionTiming & {
 	id: string;
 	slug: string;
+	title?: string;
+	status?: string;
 	theme?: string | null;
 	themeTitle?: string | null;
 	locationName?: string | null;
@@ -21,14 +22,23 @@ function utcDateTime(date: Date) {
 
 export function createSessionCalendarLinks(
 	session: CalendarSession,
-	urls: { detailsUrl: string; icsUrl?: string | null }
+	urls: { detailsUrl: string; icsUrl?: string | null; attendanceStatus?: string | null }
 ): SessionCalendarLink[] {
 	const start = sessionStartDate(session);
 	if (!start || !session.durationMinutes) return [];
 	const end = new Date(start.getTime() + session.durationMinutes * 60_000);
-	const title = `${ORGANIZATION_NAME} Meeting`;
+	if (
+		session.status === 'cancelled' ||
+		['cancelled', 'declined'].includes(urls.attendanceStatus ?? '')
+	)
+		return urls.icsUrl ? [{ kind: 'ical', label: 'iCal', href: urls.icsUrl }] : [];
+	const title = `${session.title ?? 'Meeting'}${urls.attendanceStatus === 'waitlisted' ? ' (Waitlisted)' : urls.attendanceStatus === 'maybe' ? ' (Tentative)' : ''}`;
 	const theme = session.themeTitle ?? session.theme;
-	const description = [theme ? `Theme: ${theme}` : null, `View session details: ${urls.detailsUrl}`]
+	const description = [
+		calendarRsvpLabel(urls.attendanceStatus),
+		theme ? `Theme: ${theme}` : null,
+		`View session details: ${urls.detailsUrl}`
+	]
 		.filter(Boolean)
 		.join('\n');
 
@@ -80,4 +90,11 @@ export function createSessionCalendarLinks(
 	];
 	if (urls.icsUrl) links.push({ kind: 'ical', label: 'iCal', href: urls.icsUrl });
 	return links;
+}
+
+export function calendarRsvpLabel(status?: string | null) {
+	if (status === 'waitlisted') return 'RSVP: Waitlisted. Your place is not confirmed.';
+	if (status === 'maybe') return 'RSVP: Tentative.';
+	if (status === 'cancelled' || status === 'declined') return 'RSVP: Cancelled.';
+	return status === 'attending' ? 'RSVP: Confirmed.' : '';
 }

@@ -762,6 +762,65 @@
 
 	<Card.Root>
 		<Card.Header>
+			<Card.Title>Meeting calendar</Card.Title>
+			<Card.Description
+				>Subscribe to your registered meetings to receive calendar updates.</Card.Description
+			>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<p class="text-sm text-muted-foreground">
+				Add the private URL as a calendar subscription in your calendar app. The app controls
+				refresh timing; meeting changes and cancellations appear on its next refresh. Recent
+				meetings and cancellations remain in the feed for 90 days. Downloading a calendar file
+				creates a snapshot.
+			</p>
+			{#if form?.calendarUrl}
+				<Label for="calendar-url">Private calendar URL</Label>
+				<Input
+					id="calendar-url"
+					readonly
+					value={form.calendarUrl}
+					onclick={(event) => event.currentTarget.select()}
+				/>
+				<!-- Calendar subscriptions use the external webcal protocol. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a
+					href={form.calendarUrl.replace(/^https:/, 'webcal:')}
+					class="inline-block text-sm underline">Subscribe in calendar app</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<p class="text-sm text-muted-foreground">
+					Save this URL now. It is shown once. Anyone with it can read your meeting calendar.
+				</p>
+			{/if}
+			{#if data.calendarSubscription}
+				<p class="text-sm">
+					Your subscription is active{data.calendarSubscription.includeWaitlist
+						? ', including waitlisted meetings'
+						: ''}.
+				</p>
+				<form method="POST" action="?/revokeCalendarSubscription" use:enhance>
+					<Button type="submit" variant="outline">Revoke calendar URL</Button>
+				</form>
+				<p class="text-sm text-muted-foreground">
+					Revoking stops future access. Remove the subscription in your calendar app to clear saved
+					events.
+				</p>
+			{:else}
+				<form method="POST" action="?/createCalendarSubscription" use:enhance class="space-y-3">
+					<label class="flex items-center gap-2 text-sm"
+						><input type="checkbox" name="includeWaitlist" checked />Include waitlisted meetings as
+						tentative</label
+					>
+					<Button type="submit">Create calendar URL</Button>
+				</form>
+			{/if}
+			{#if form?.calendarRevoked}<p class="text-sm">Your calendar URL has been revoked.</p>{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
 			<Card.Title>Notifications</Card.Title>
 			<Card.Description>
 				Choose how you receive email notifications, including reactions and private messages.

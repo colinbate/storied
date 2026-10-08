@@ -1143,6 +1143,9 @@ export const sessionParticipants = sqliteTable(
 			.$type<SessionAttendanceStatus>(),
 		rsvpSource: text('rsvp_source').$type<SessionParticipantSource>(),
 		confirmationToken: text('confirmation_token'),
+		calendarToken: text('calendar_token').$defaultFn(
+			() => crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
+		),
 		legacyRsvpRegistrationId: integer('legacy_rsvp_registration_id'),
 		note: text('note'),
 		createdAt: text('created_at').notNull().default(timestampDefault),
@@ -1154,6 +1157,7 @@ export const sessionParticipants = sqliteTable(
 			table.attendeeId
 		),
 		uniqueIndex('session_participants_confirmation_token_unique').on(table.confirmationToken),
+		uniqueIndex('session_participants_calendar_token_unique').on(table.calendarToken),
 		uniqueIndex('session_participants_legacy_rsvp_registration_unique').on(
 			table.legacyRsvpRegistrationId
 		),
@@ -1205,6 +1209,35 @@ export const sessionReminderDeliveries = sqliteTable(
 			table.status,
 			table.attemptedAt
 		)
+	]
+);
+
+export const calendarSubscriptions = sqliteTable('calendar_subscriptions', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	tokenHash: text('token_hash').notNull().unique(),
+	includeWaitlist: integer('include_waitlist', { mode: 'boolean' }).notNull().default(true),
+	createdAt: text('created_at').notNull().default(timestampDefault)
+});
+
+export const sessionCalendarEntries = sqliteTable(
+	'session_calendar_entries',
+	{
+		sessionId: text('session_id').notNull(),
+		attendeeId: text('attendee_id')
+			.notNull()
+			.references(() => attendeeIdentities.id, { onDelete: 'cascade' }),
+		startsAt: text('starts_at'),
+		timezone: text('timezone').notNull(),
+		durationMinutes: integer('duration_minutes'),
+		sequence: integer('sequence').notNull().default(0),
+		changedAt: text('changed_at').notNull().default(timestampDefault),
+		removed: integer('removed', { mode: 'boolean' }).notNull().default(false)
+	},
+	(table) => [
+		primaryKey({ columns: [table.sessionId, table.attendeeId] }),
+		index('idx_session_calendar_entries_attendee').on(table.attendeeId)
 	]
 );
 

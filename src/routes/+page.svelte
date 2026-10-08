@@ -25,6 +25,7 @@
 		data.currentSession
 			? createSessionCalendarLinks(data.currentSession, {
 					detailsUrl: new URL(`/sessions/${data.currentSession.slug}`, PRIMARY_ORIGIN).toString(),
+					attendanceStatus: data.currentSessionRsvp?.attendanceStatus,
 					icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.currentSession.slug })
 				})
 			: []

@@ -615,7 +615,7 @@ test('a member with an RSVP can download the session calendar event', async () =
 	assert.equal(response.status, 200);
 	assert.equal(response.headers.get('content-type'), 'text/calendar; charset=utf-8');
 	assert.match(response.headers.get('content-disposition'), /attachment/);
-	assert.match(calendar, /SUMMARY:Bermuda Triangle Society Meeting/);
+	assert.match(calendar, /SUMMARY:calendar/);
 	assert.match(calendar, /DURATION:PT90M/);
 	assert.match(calendar, /LOCATION:Bermuda National Library/);
 });

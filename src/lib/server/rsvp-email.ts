@@ -1,8 +1,8 @@
 import { sendEmail } from '$lib/server/email';
-import type { attendeeIdentities, sessionParticipants, sessions } from '$lib/server/db/schema';
-import { users } from '$lib/server/db/schema';
+import type { attendeeIdentities, sessions } from '$lib/server/db/schema';
+import { users, sessionParticipants } from '$lib/server/db/schema';
 import type { ORM } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { PRIMARY_ORIGIN, PUBLIC_ORIGIN } from '$shared/brand';
 import { formatSessionTimes } from '$shared/session-time';
 import { createSessionCalendarLinks } from '$shared/session-calendar-links';
@@ -57,28 +57,40 @@ export function sessionDetailsHtml(
 	return `<div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p><strong>When:</strong> ${escapeHtml(times.event)}</p>${local}${location}<p><a href="${escapeHtml(sessionPublicUrl(session, attendee))}">View session details</a></p></div>`;
 }
 
-function calendarLinks(session: StoriedSession, attendee: Attendee) {
+function calendarLinks(session: StoriedSession, attendee: Attendee, participant: Participant) {
 	const detailsUrl = sessionPublicUrl(session, attendee);
-	const publicPath = session.astroPath?.trim().replace(/\/$/, '');
-	const icsUrl = attendee.userId
-		? new URL(`/sessions/${session.slug}/calendar.ics`, PRIMARY_ORIGIN).toString()
-		: session.isPublic && publicPath
-			? new URL(`${publicPath}.ics`, PUBLIC_ORIGIN).toString()
-			: null;
-	return createSessionCalendarLinks(session, { detailsUrl, icsUrl });
+	const ics = new URL(`/sessions/${session.slug}/calendar.ics`, PRIMARY_ORIGIN);
+	if (!attendee.userId && participant.calendarToken)
+		ics.searchParams.set('token', participant.calendarToken);
+	const icsUrl = attendee.userId || participant.calendarToken ? ics.toString() : null;
+	return createSessionCalendarLinks(session, {
+		detailsUrl,
+		icsUrl,
+		attendanceStatus: participant.attendanceStatus
+	});
 }
 
-function calendarLinksText(session: StoriedSession, attendee: Attendee) {
-	const links = calendarLinks(session, attendee);
+function calendarLinksText(session: StoriedSession, attendee: Attendee, participant: Participant) {
+	const links = calendarLinks(session, attendee, participant);
+	const heading =
+		session.status === 'cancelled' ||
+		['cancelled', 'declined'].includes(participant.attendanceStatus)
+			? 'Update calendar'
+			: 'Add to calendar';
 	return links.length > 0
-		? `\nAdd to calendar:\n${links.map((link) => `${link.label}: ${link.href}`).join('\n')}\n`
+		? `\n${heading}:\n${links.map((link) => `${link.label}: ${link.href}`).join('\n')}\n`
 		: '';
 }
 
-function calendarLinksHtml(session: StoriedSession, attendee: Attendee) {
-	const links = calendarLinks(session, attendee);
+function calendarLinksHtml(session: StoriedSession, attendee: Attendee, participant: Participant) {
+	const links = calendarLinks(session, attendee, participant);
+	const heading =
+		session.status === 'cancelled' ||
+		['cancelled', 'declined'].includes(participant.attendanceStatus)
+			? 'Update calendar:'
+			: 'Add to';
 	return links.length > 0
-		? `<p>Add to ${links.map((link) => `<a href="${escapeHtml(link.href)}">${link.label}</a>`).join(' ')}</p>`
+		? `<p>${heading} ${links.map((link) => `<a href="${escapeHtml(link.href)}">${link.label}</a>`).join(' ')}</p>`
 		: '';
 }
 
@@ -117,9 +129,9 @@ export async function sendRegistrationConfirmationEmail(
 		platform,
 		attendee.email,
 		`RSVP confirmed: ${session.title}`,
-		`Hi ${attendee.name},\n\nYour RSVP for ${session.title} is confirmed.\n${formatSessionDate(session, memberTimeZone)}\n${session.locationName ?? ''}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
+		`Hi ${attendee.name},\n\nYour RSVP for ${session.title} is confirmed.\n${formatSessionDate(session, memberTimeZone)}\n${session.locationName ?? ''}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee, participant)}${cancelUrl ?? ''}`,
 		emailWrapper(
-			`<h2>You're registered!</h2><p>Hi ${escapeHtml(attendee.name)},</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
+			`<h2>You're registered!</h2><p>Hi ${escapeHtml(attendee.name)},</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee, participant)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
 		)
 	);
 }
@@ -138,9 +150,9 @@ export async function sendWaitlistConfirmationEmail(
 		platform,
 		attendee.email,
 		`Waitlisted: ${session.title}`,
-		`Hi ${attendee.name},\n\nThis session is full, so you have been added to the waitlist. We'll email you when your place is confirmed.\n${formatSessionDate(session, memberTimeZone)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
+		`Hi ${attendee.name},\n\nThis session is full, so you have been added to the waitlist. We'll email you when your place is confirmed.\n${formatSessionDate(session, memberTimeZone)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee, participant)}${cancelUrl ?? ''}`,
 		emailWrapper(
-			`<h2>You're on the waitlist</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>We'll let you know if a spot opens.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Leave the waitlist</a></p>` : ''}`
+			`<h2>You're on the waitlist</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>We'll let you know if a spot opens.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee, participant)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Leave the waitlist</a></p>` : ''}`
 		)
 	);
 }
@@ -159,9 +171,9 @@ export async function sendWaitlistPromotionEmail(
 		platform,
 		attendee.email,
 		`A spot opened up: ${session.title}`,
-		`Hi ${attendee.name},\n\nA spot opened up and your RSVP is now confirmed.\n${formatSessionDate(session, memberTimeZone)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee)}${cancelUrl ?? ''}`,
+		`Hi ${attendee.name},\n\nA spot opened up and your RSVP is now confirmed.\n${formatSessionDate(session, memberTimeZone)}\nView session details: ${sessionPublicUrl(session, attendee)}\n${calendarLinksText(session, attendee, participant)}${cancelUrl ?? ''}`,
 		emailWrapper(
-			`<h2>A spot opened up!</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your RSVP is now confirmed.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
+			`<h2>A spot opened up!</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your RSVP is now confirmed.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${calendarLinksHtml(session, attendee, participant)}${cancelUrl ? `<p><a href="${escapeHtml(cancelUrl)}">Cancel this registration</a></p>` : ''}`
 		)
 	);
 }
@@ -173,13 +185,27 @@ export async function sendCancellationConfirmationEmail(
 	db?: ORM
 ) {
 	const memberTimeZone = await attendeeTimeZone(db, attendee);
+	const participant = db
+		? await db
+				.select()
+				.from(sessionParticipants)
+				.where(
+					and(
+						eq(sessionParticipants.sessionId, session.id),
+						eq(sessionParticipants.attendeeId, attendee.id)
+					)
+				)
+				.get()
+		: null;
+	const linksText = participant ? calendarLinksText(session, attendee, participant) : '';
+	const linksHtml = participant ? calendarLinksHtml(session, attendee, participant) : '';
 	return deliver(
 		platform,
 		attendee.email,
 		`Registration cancelled: ${session.title}`,
-		`Hi ${attendee.name},\n\nYour registration for ${session.title} has been cancelled.\n${formatSessionDate(session, memberTimeZone)}`,
+		`Hi ${attendee.name},\n\nYour registration for ${session.title} has been cancelled.\n${formatSessionDate(session, memberTimeZone)}${linksText}`,
 		emailWrapper(
-			`<h2>Registration cancelled</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your registration has been cancelled.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}`
+			`<h2>Registration cancelled</h2><p>Hi ${escapeHtml(attendee.name)},</p><p>Your registration has been cancelled.</p>${sessionDetailsHtml(session, attendee, memberTimeZone)}${linksHtml}`
 		)
 	);
 }
