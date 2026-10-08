@@ -38,6 +38,42 @@ export function hasSessionEnded(session: SessionTiming, now = new Date()) {
 	);
 }
 
+type SessionPreparationCandidate = SessionTiming & {
+	status: string;
+	liveStartedAt?: string | null;
+	liveEndedAt?: string | null;
+};
+
+/** Live meetings remain active until the facilitator ends them, even if they run over. */
+export function isCompletedSession(session: SessionPreparationCandidate, now = new Date()) {
+	return (
+		!!session.liveEndedAt ||
+		session.status === 'past' ||
+		(!session.liveStartedAt && hasSessionEnded(session, now))
+	);
+}
+
+/** Select from visible sessions; drafts and cancelled meetings never become preparation targets. */
+export function selectNextSession<T extends SessionPreparationCandidate>(
+	candidates: readonly T[],
+	now = new Date()
+): T | null {
+	const eligible = candidates.filter(
+		(session) =>
+			(session.status === 'current' || session.status === 'scheduled') &&
+			!isCompletedSession(session, now) &&
+			(!!session.liveStartedAt || sessionStartDate(session) !== null)
+	);
+	const priority = (session: T) =>
+		session.liveStartedAt ? 0 : session.status === 'current' ? 1 : 2;
+	eligible.sort(
+		(a, b) =>
+			priority(a) - priority(b) ||
+			(sessionStartDate(a)?.getTime() ?? Infinity) - (sessionStartDate(b)?.getTime() ?? Infinity)
+	);
+	return eligible[0] ?? null;
+}
+
 export function canAcceptSessionRsvps(
 	session: SessionTiming & { status: string; rsvpEnabled?: boolean },
 	now = new Date()

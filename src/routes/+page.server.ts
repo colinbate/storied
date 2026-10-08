@@ -1,4 +1,4 @@
-import { isFutureSession } from '$shared/session-lifecycle';
+import { isCompletedSession, selectNextSession } from '$shared/session-lifecycle';
 import { sessionAccessCondition } from '$lib/server/session-lifecycle';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -117,19 +117,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
 
-	const featuredSession =
-		currentSessions.find((session) => session.status === 'current') ??
-		currentSessions.find((session) => session.status === 'scheduled' && isFutureSession(session)) ??
-		null;
+	const now = new Date();
+	const featuredSession = selectNextSession(currentSessions, now);
+	const featuredRecap =
+		currentSessions.find(
+			(session) => session.status === 'current' && isCompletedSession(session, now)
+		) ?? null;
 	const canManageSessions =
 		locals.permissions.has('admin:view') && locals.permissions.has('sessions:edit');
-	const upcomingSession =
-		currentSessions.find(
-			(session) =>
-				session.id !== featuredSession?.id &&
-				(session.status === 'scheduled' || session.status === 'current') &&
-				isFutureSession(session)
-		) ?? null;
+	const upcomingSession = selectNextSession(
+		currentSessions.filter((session) => session.id !== featuredSession?.id),
+		now
+	);
 	const [currentSessionAttendingCount, upcomingSessionAttendingCount] = await Promise.all([
 		canManageSessions && featuredSession ? attendingCount(locals.db, featuredSession.id) : null,
 		canManageSessions && upcomingSession ? attendingCount(locals.db, upcomingSession.id) : null
@@ -202,6 +201,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		categories: allCategories,
 		recentThreads,
 		currentSession: featuredSession,
+		featuredRecap: featuredRecap ? { title: featuredRecap.title, slug: featuredRecap.slug } : null,
 		currentSessionAttendingCount,
 		currentSessionCapacity: featuredSession
 			? await attendingCount(locals.db, featuredSession.id)
@@ -218,7 +218,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 				: null,
 		featuredDiscussion,
 		pastSessions: currentSessions
-			.filter((session) => session.status === 'past')
+			.filter(
+				(session) =>
+					session.status !== 'draft' &&
+					session.status !== 'cancelled' &&
+					isCompletedSession(session, now)
+			)
 			.reverse()
 			.slice(0, 2)
 	};

@@ -10,7 +10,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
-import { sessionStartDate } from '$shared/session-lifecycle';
+import { selectNextSession, sessionStartDate } from '$shared/session-lifecycle';
 
 type LibraryContextOptions = {
 	userId: string;
@@ -152,7 +152,10 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 						title: sessions.title,
 						startsAt: sessions.startsAt,
 						timezone: sessions.timezone,
-						status: sessions.status
+						status: sessions.status,
+						durationMinutes: sessions.durationMinutes,
+						liveStartedAt: sessions.liveStartedAt,
+						liveEndedAt: sessions.liveEndedAt
 					})
 					.from(sessions)
 					.where(context.sessionAccess)
@@ -191,20 +194,7 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 		accessByBook.set(row.bookId, existing);
 	}
 
-	const nextSession =
-		allSessionRows.find((session) => session.status === 'current') ??
-		allSessionRows
-			.filter((session) => session.status === 'scheduled')
-			.filter((session) => {
-				const start = sessionStartDate(session);
-				return start === null || start >= new Date();
-			})
-			.sort((a, b) => {
-				const aStart = sessionStartDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-				const bStart = sessionStartDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-				return aStart - bStart;
-			})[0] ??
-		null;
+	const nextSession = selectNextSession(allSessionRows);
 
 	const sessionOptions = allSessionRows
 		.slice()

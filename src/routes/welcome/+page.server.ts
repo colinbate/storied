@@ -3,7 +3,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { sessions, threads } from '$lib/server/db/schema';
 import { sessionAccessCondition } from '$lib/server/session-lifecycle';
-import { isFutureSession } from '$shared/session-lifecycle';
+import { selectNextSession } from '$shared/session-lifecycle';
 import { getCurrentUserSessionRsvp } from '$lib/server/rsvp';
 import { getHostUser } from '$lib/server/host';
 import { getOrCreateDirectConversation } from '$lib/server/private-messages';
@@ -22,10 +22,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.where(sessionAccessCondition(locals))
 		.orderBy(asc(sessions.startsAt), desc(sessions.createdAt))
 		.all();
-	const nextSession =
-		candidates.find((session) => session.status === 'current') ??
-		candidates.find((session) => session.status === 'scheduled' && isFutureSession(session)) ??
-		null;
+	const nextSession = selectNextSession(candidates);
 
 	const [host, rsvp, discussion] = await Promise.all([
 		getHostUser(locals.db, locals.user.id),

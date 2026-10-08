@@ -150,6 +150,18 @@
 		</section>
 	{/if}
 
+	{#if data.featuredRecap}
+		<section class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+			<h2 class="font-medium">{data.featuredRecap.title}</h2>
+			<Button
+				variant="outline"
+				href={resolve('/sessions/[slug]', { slug: data.featuredRecap.slug })}
+			>
+				View session recap
+			</Button>
+		</section>
+	{/if}
+
 	{#if data.upcomingSession}
 		<section class="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
 			<div>
