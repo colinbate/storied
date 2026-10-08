@@ -309,6 +309,7 @@ export const sessions = sqliteTable(
 		slug: text('slug').notNull().unique(),
 		title: text('title').notNull(),
 		startsAt: text('starts_at'),
+		reminderRevision: integer('reminder_revision').notNull().default(1),
 		timezone: text('timezone').notNull().default('Atlantic/Bermuda'),
 		status: text('status').notNull().default('draft').$type<SessionStatus>(),
 		themeId: text('theme_id').references(() => themes.id, { onDelete: 'set null' }),
@@ -1166,7 +1167,7 @@ export const sessionParticipants = sqliteTable(
 );
 
 // ──────────────────────────────────────────────
-// session_reminder_deliveries  (at-most-once RSVP reminders)
+// session_reminder_deliveries  (one successful reminder per schedule revision)
 // ──────────────────────────────────────────────
 export const sessionReminderDeliveries = sqliteTable(
 	'session_reminder_deliveries',
@@ -1180,6 +1181,12 @@ export const sessionReminderDeliveries = sqliteTable(
 		attendeeId: text('attendee_id').notNull(),
 		participantId: text('participant_id').notNull(),
 		recipientEmail: text('recipient_email').notNull(),
+		scheduleRevision: integer('schedule_revision').notNull().default(1),
+		scheduleStartsAt: text('schedule_starts_at'),
+		scheduleTimezone: text('schedule_timezone'),
+		activeAttemptId: text('active_attempt_id'),
+		leaseExpiresAt: text('lease_expires_at'),
+		attemptCount: integer('attempt_count').notNull().default(1),
 		status: text('status').notNull().default('sending').$type<SessionReminderDeliveryStatus>(),
 		failureReason: text('failure_reason'),
 		attemptedAt: text('attempted_at').notNull().default(timestampDefault),
@@ -1188,15 +1195,39 @@ export const sessionReminderDeliveries = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(timestampDefault)
 	},
 	(table) => [
-		uniqueIndex('session_reminder_deliveries_session_attendee_unique').on(
+		uniqueIndex('session_reminder_deliveries_session_attendee_revision_unique').on(
 			table.sessionId,
-			table.attendeeId
+			table.attendeeId,
+			table.scheduleRevision
 		),
 		index('idx_session_reminder_deliveries_session_status').on(
 			table.sessionId,
 			table.status,
 			table.attemptedAt
 		)
+	]
+);
+
+export const sessionReminderAttempts = sqliteTable(
+	'session_reminder_attempts',
+	{
+		id: text('id').primaryKey(),
+		deliveryId: text('delivery_id')
+			.notNull()
+			.references(() => sessionReminderDeliveries.id, { onDelete: 'cascade' }),
+		recipientEmail: text('recipient_email').notNull(),
+		status: text('status')
+			.notNull()
+			.default('sending')
+			.$type<'sending' | 'sent' | 'failed' | 'expired' | 'skipped'>(),
+		failureReason: text('failure_reason'),
+		source: text('source').notNull().$type<'scheduled' | 'facilitator'>(),
+		requestedByUserId: text('requested_by_user_id'),
+		attemptedAt: text('attempted_at').notNull(),
+		completedAt: text('completed_at')
+	},
+	(table) => [
+		index('idx_session_reminder_attempts_delivery').on(table.deliveryId, table.attemptedAt)
 	]
 );
 

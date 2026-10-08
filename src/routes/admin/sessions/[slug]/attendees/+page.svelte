@@ -18,9 +18,24 @@
 	import { pageTitle } from '$shared/brand';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formatDate } from '$lib/date-format';
+	import SessionTime from '$lib/components/session-time.svelte';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
+	let retryingReminder = $state(false);
+	const enhanceReminderRetry: SubmitFunction = () => {
+		retryingReminder = true;
+		return async ({ result, update }) => {
+			try {
+				await update({ reset: false });
+				if (result.type === 'success') toast.success('Reminder sent.');
+				else if (result.type === 'failure' && result.data?.error)
+					toast.error(String(result.data.error));
+			} finally {
+				retryingReminder = false;
+			}
+		};
+	};
 	const statusOptions = ['attending', 'waitlisted', 'maybe', 'declined', 'cancelled'] as const;
 	const confirmationStatuses = new Set(['attending', 'waitlisted']);
 	const attendanceCounts = $derived.by(() => {
@@ -354,10 +369,64 @@
 														<span class="text-destructive">
 															Reminder failed: {reminder.failureReason ?? 'unknown error'}
 														</span>
+													{:else if data.expiredReminderIds.includes(reminder.id)}
+														Reminder send expired
 													{:else}
 														Reminder in progress
 													{/if}
 												</p>
+												{#if data.retryableReminderIds.includes(reminder.id)}
+													<form
+														method="POST"
+														action="?/retryReminder"
+														use:enhance={enhanceReminderRetry}
+														class="mt-2"
+													>
+														<input type="hidden" name="deliveryId" value={reminder.id} />
+														<Button
+															type="submit"
+															size="sm"
+															variant="outline"
+															disabled={retryingReminder}>Retry reminder</Button
+														>
+													</form>
+													{#if reminder.status === 'sending'}
+														<p class="mt-1 text-xs text-muted-foreground">
+															The interrupted send may have reached this person. Retrying can send
+															another copy.
+														</p>
+													{/if}
+												{/if}
+											{/if}
+											{#if data.reminderHistory[row.attendee.id]?.length}
+												<details class="mt-2 text-xs text-muted-foreground">
+													<summary class="cursor-pointer"
+														>Reminder attempts ({data.reminderHistory[row.attendee.id]
+															.length})</summary
+													>
+													<ol class="mt-2 space-y-2">
+														{#each data.reminderHistory[row.attendee.id] as history (history.attempt.id)}
+															<li>
+																<p>
+																	{history.attempt.status} · {history.attempt.source ===
+																	'facilitator'
+																		? 'Manual retry'
+																		: 'Scheduled reminder'} · {formatDate(
+																		history.attempt.attemptedAt,
+																		{ time: 'always', timeZone }
+																	)}
+																</p>
+																<p>Meeting: <SessionTime session={history} /></p>
+																{#if history.scheduleRevision !== data.session.reminderRevision}<p>
+																		Previous meeting schedule
+																	</p>{/if}
+																{#if history.attempt.failureReason}<p>
+																		{history.attempt.failureReason}
+																	</p>{/if}
+															</li>
+														{/each}
+													</ol>
+												</details>
 											{/if}
 										</div>
 										<div class="flex items-center gap-2">

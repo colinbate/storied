@@ -29,6 +29,13 @@ import {
 } from '$lib/server/rsvp-email';
 import { PRIMARY_ORIGIN } from '$shared/brand';
 import { listReminderDeliveriesByAttendee } from '$lib/server/session-messages';
+import { reminderAttemptHistory, reminderForSession } from '$lib/server/session-reminders';
+import {
+	deliverSessionReminder,
+	reminderSessionEligible,
+	retryableReminder
+} from '$shared/session-reminder-delivery';
+import { sendEmail } from '$lib/server/email';
 import {
 	clearAttendance,
 	getAttendanceByAttendee,
@@ -57,42 +64,68 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.get();
 	if (!session) throw error(404, 'Session not found');
 
-	const [participants, allUsers, identities, reminderDeliveries, attendance] = await Promise.all([
-		locals.db
-			.select({
-				participant: sessionParticipants,
-				attendee: attendeeIdentities,
-				user: {
-					id: users.id,
-					displayName: users.displayName,
-					email: users.email
-				}
-			})
-			.from(sessionParticipants)
-			.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
-			.leftJoin(users, eq(attendeeIdentities.userId, users.id))
-			.where(eq(sessionParticipants.sessionId, session.id))
-			.orderBy(asc(attendeeIdentities.name))
-			.all(),
-		locals.db
-			.select()
-			.from(users)
-			.where(eq(users.status, 'active'))
-			.orderBy(asc(users.displayName))
-			.all(),
-		locals.db.select().from(attendeeIdentities).orderBy(asc(attendeeIdentities.name)).all(),
-		listReminderDeliveriesByAttendee(locals.db, session.id),
-		getAttendanceByAttendee(locals.db, session.id)
-	]);
+	const [participants, allUsers, identities, reminderDeliveries, attendance, reminderHistory] =
+		await Promise.all([
+			locals.db
+				.select({
+					participant: sessionParticipants,
+					attendee: attendeeIdentities,
+					user: {
+						id: users.id,
+						status: users.status,
+						displayName: users.displayName,
+						email: users.email
+					}
+				})
+				.from(sessionParticipants)
+				.innerJoin(attendeeIdentities, eq(sessionParticipants.attendeeId, attendeeIdentities.id))
+				.leftJoin(users, eq(attendeeIdentities.userId, users.id))
+				.where(eq(sessionParticipants.sessionId, session.id))
+				.orderBy(asc(attendeeIdentities.name))
+				.all(),
+			locals.db
+				.select()
+				.from(users)
+				.where(eq(users.status, 'active'))
+				.orderBy(asc(users.displayName))
+				.all(),
+			locals.db.select().from(attendeeIdentities).orderBy(asc(attendeeIdentities.name)).all(),
+			listReminderDeliveriesByAttendee(locals.db, session.id, session.reminderRevision),
+			getAttendanceByAttendee(locals.db, session.id),
+			reminderAttemptHistory(locals.db, session.id)
+		]);
 	const participantIdentityIds = new Set(participants.map((row) => row.attendee.id));
 	const participantUserIds = new Set(
 		participants.flatMap((row) => (row.user?.id ? [row.user.id] : []))
 	);
+	const now = new Date();
+	const eligible = reminderSessionEligible(session, now);
+	const retryableReminderIds =
+		locals.permissions.has('sessions:facilitate') && eligible
+			? participants
+					.filter((row) => {
+						const reminder = reminderDeliveries[row.attendee.id];
+						return (
+							reminder &&
+							retryableReminder(reminder, now) &&
+							row.participant.attendanceStatus === 'attending' &&
+							row.attendee.email &&
+							isValidRsvpEmail(row.attendee.email) &&
+							(!row.attendee.userId || row.user?.status === 'active')
+						);
+					})
+					.map((row) => reminderDeliveries[row.attendee.id].id)
+			: [];
 
 	return {
 		session,
 		participants,
 		reminderDeliveries,
+		reminderHistory,
+		retryableReminderIds,
+		expiredReminderIds: Object.values(reminderDeliveries)
+			.filter((delivery) => delivery.status === 'sending' && retryableReminder(delivery, now))
+			.map((delivery) => delivery.id),
 		attendance,
 		users: allUsers,
 		addableUsers: allUsers.filter((user) => !participantUserIds.has(user.id)),
@@ -107,6 +140,41 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions = {
+	retryReminder: async ({ request, params, locals, platform }) => {
+		requirePermission(locals, 'sessions:edit');
+		requirePermission(locals, 'sessions:facilitate');
+		const session = await locals.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.slug, params.slug))
+			.get();
+		if (!session) return fail(404, { error: 'Session not found.' });
+		const deliveryId = (await request.formData()).get('deliveryId')?.toString();
+		if (!deliveryId) return fail(400, { error: 'Missing reminder.' });
+		const delivery = await reminderForSession(locals.db, session.id, deliveryId);
+		if (!delivery) return fail(404, { error: 'Reminder not found.' });
+		if (delivery.scheduleRevision !== session.reminderRevision)
+			return fail(409, { error: 'This reminder belongs to a previous meeting schedule.' });
+		if (!retryableReminder(delivery) || !reminderSessionEligible(session))
+			return fail(409, {
+				error: 'This reminder is already sent, still sending, or no longer eligible.'
+			});
+		if (!platform?.env.EMAIL) return fail(503, { error: 'Email delivery is unavailable.' });
+		const outcome = await deliverSessionReminder(
+			locals.db.$client,
+			session.id,
+			delivery.attendeeId,
+			(email) => sendEmail(platform, email),
+			{ retryDeliveryId: delivery.id, requestedByUserId: locals.user?.id }
+		);
+		if (outcome === 'failed')
+			return fail(502, { error: 'Reminder delivery failed. See attempt history for details.' });
+		if (outcome === 'skipped')
+			return fail(409, {
+				error: 'This reminder is already sending, already sent, or no longer eligible.'
+			});
+		return { reminderRetried: true };
+	},
 	add: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 		const session = await locals.db

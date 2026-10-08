@@ -1,95 +1,10 @@
-import { PRIMARY_ORIGIN, PUBLIC_ORIGIN } from '$shared/brand';
-import {
-	formatSessionDateInTimeZone,
-	sessionOccursOnNextLocalDay
-} from '$shared/session-reminder-timezone';
-import { formatSessionTimes } from '$shared/session-time';
+import type { ReminderSession, ReminderRecipient } from '$shared/session-reminder-email';
+import { sessionOccursTomorrow } from '$shared/session-reminder-email';
+export { sessionOccursTomorrow, formatSessionDate } from '$shared/session-reminder-email';
+import { deliverSessionReminder } from '$shared/session-reminder-delivery';
 import type { HandlerContext } from '../dispatch';
 import type { Env } from '../env';
-import { generateId } from '../shared/ids';
 import { sendEmail } from './email';
-
-interface ReminderSession {
-	id: string;
-	slug: string;
-	title: string;
-	starts_at: string;
-	timezone: string;
-	location_name: string | null;
-	astro_path: string | null;
-	is_public: number;
-}
-
-interface ReminderRecipient {
-	participant_id: string;
-	attendee_id: string;
-	attendee_name: string;
-	email: string;
-	confirmation_token: string | null;
-	user_id: string | null;
-	timezone: string | null;
-}
-
-function escapeHtml(value: string): string {
-	return value
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;')
-		.replaceAll('"', '&quot;')
-		.replaceAll("'", '&#39;');
-}
-
-export function sessionOccursTomorrow(
-	session: Pick<ReminderSession, 'starts_at' | 'timezone'>,
-	now: Date
-): boolean {
-	return sessionOccursOnNextLocalDay(session.starts_at, session.timezone, now);
-}
-
-export function formatSessionDate(
-	session: Pick<ReminderSession, 'starts_at' | 'timezone'>
-): string {
-	return formatSessionDateInTimeZone(session.starts_at, session.timezone);
-}
-
-function publicSessionUrl(session: ReminderSession, recipient: ReminderRecipient): string {
-	if (recipient.user_id || !session.is_public)
-		return new URL(`/sessions/${session.slug}`, PRIMARY_ORIGIN).toString();
-	return new URL(
-		session.astro_path?.trim() || `/sessions/${session.slug}`,
-		PUBLIC_ORIGIN
-	).toString();
-}
-
-function cancellationUrl(recipient: ReminderRecipient): string | null {
-	return recipient.confirmation_token
-		? new URL(`/cancel/${recipient.confirmation_token}`, PRIMARY_ORIGIN).toString()
-		: null;
-}
-
-function renderReminderEmail(session: ReminderSession, recipient: ReminderRecipient) {
-	const times = formatSessionTimes(
-		{ startsAt: session.starts_at, timezone: session.timezone },
-		recipient.timezone
-	);
-	const when = times.local ? `${times.event}\nYour time: ${times.local}` : times.event;
-	const sessionUrl = publicSessionUrl(session, recipient);
-	const cancelUrl = cancellationUrl(recipient);
-	const locationLine = session.location_name ? `\nLocation: ${session.location_name}` : '';
-	const cancelLine = cancelUrl ? `\n\nCan’t make it? Cancel your registration: ${cancelUrl}` : '';
-	const locationHtml = session.location_name
-		? `<p style="margin:4px 0"><strong>Location:</strong> ${escapeHtml(session.location_name)}</p>`
-		: '';
-	const cancelHtml = cancelUrl
-		? `<p style="margin-top:24px"><a href="${escapeHtml(cancelUrl)}" style="color:#6d28d9">Cancel this registration</a></p>`
-		: '';
-
-	return {
-		subject: `Reminder: ${session.title} is tomorrow`,
-		textBody: `Hi ${recipient.attendee_name},\n\nJust a reminder that you're registered for ${session.title} tomorrow.\n\nWhen: ${when}${locationLine}\n\nView session details: ${sessionUrl}${cancelLine}`,
-		htmlBody: `<div style="font-family:system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.6;max-width:600px;margin:0 auto;padding:20px"><h2>See you tomorrow!</h2><p>Hi ${escapeHtml(recipient.attendee_name)},</p><p>Just a reminder that you’re registered for tomorrow’s session.</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when).replaceAll('\n', '<br>')}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(sessionUrl)}">View session details</a></p></div>${cancelHtml}</div>`
-	};
-}
 
 async function selectPublishedSessions(env: Env): Promise<ReminderSession[]> {
 	const result = await env.DB.prepare(
@@ -126,64 +41,9 @@ async function selectAttendingRecipients(
 	);
 }
 
-async function reserveDelivery(
-	env: Env,
-	session: ReminderSession,
-	recipient: ReminderRecipient,
-	nowIso: string
-): Promise<string | null> {
-	const id = generateId();
-	const result = await env.DB.prepare(
-		`INSERT INTO session_reminder_deliveries (
-			id, session_id, attendee_id, participant_id, recipient_email,
-			status, attempted_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, 'sending', ?, ?, ?)
-		ON CONFLICT(session_id, attendee_id) DO NOTHING`
-	)
-		.bind(
-			id,
-			session.id,
-			recipient.attendee_id,
-			recipient.participant_id,
-			recipient.email,
-			nowIso,
-			nowIso,
-			nowIso
-		)
-		.run();
-	return result.meta.changes === 1 ? id : null;
-}
-
-async function sendReminder(
-	env: Env,
-	session: ReminderSession,
-	recipient: ReminderRecipient,
-	nowIso: string
-): Promise<'sent' | 'failed' | 'skipped'> {
-	const deliveryId = await reserveDelivery(env, session, recipient, nowIso);
-	if (!deliveryId) return 'skipped';
-
-	const email = renderReminderEmail(session, recipient);
-	const result = await sendEmail(env, { to: recipient.email, ...email });
-	await env.DB.prepare(
-		`UPDATE session_reminder_deliveries
-		    SET status = ?, failure_reason = ?, sent_at = ?, updated_at = ?
-		  WHERE id = ?`
-	)
-		.bind(
-			result.success ? 'sent' : 'failed',
-			result.success ? null : (result.error ?? 'Unknown email error'),
-			result.success ? nowIso : null,
-			nowIso,
-			deliveryId
-		)
-		.run();
-	return result.success ? 'sent' : 'failed';
-}
-
-/** Run by the 21:00 UTC cron and send one reminder per attending identity. */
-export async function runSessionReminders({ env }: HandlerContext): Promise<void> {
-	const now = new Date();
+/** Run by the 21:00 UTC cron and send one successful reminder per identity and schedule revision. */
+export async function runSessionReminders({ env }: HandlerContext, at?: Date): Promise<void> {
+	const now = at ?? new Date();
 	const nowIso = now.toISOString();
 	const sessions = (await selectPublishedSessions(env)).filter((session) =>
 		sessionOccursTomorrow(session, now)
@@ -195,7 +55,13 @@ export async function runSessionReminders({ env }: HandlerContext): Promise<void
 		const totals = { sent: 0, failed: 0, skipped: 0 };
 		for (const recipient of recipients) {
 			try {
-				const status = await sendReminder(env, session, recipient, nowIso);
+				const status = await deliverSessionReminder(
+					env.DB,
+					session.id,
+					recipient.attendee_id,
+					(email) => sendEmail(env, email),
+					{ now: at }
+				);
 				totals[status] += 1;
 			} catch (error) {
 				totals.failed += 1;

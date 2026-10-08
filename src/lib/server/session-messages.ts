@@ -411,11 +411,20 @@ export async function listSessionMessageDeliveries(db: ORM, sessionId: string) {
 }
 
 /** Latest reminder delivery per attendee for the attendee screen. */
-export async function listReminderDeliveriesByAttendee(db: ORM, sessionId: string) {
+export async function listReminderDeliveriesByAttendee(
+	db: ORM,
+	sessionId: string,
+	scheduleRevision: number
+) {
 	const rows = await db
 		.select()
 		.from(sessionReminderDeliveries)
-		.where(eq(sessionReminderDeliveries.sessionId, sessionId))
+		.where(
+			and(
+				eq(sessionReminderDeliveries.sessionId, sessionId),
+				eq(sessionReminderDeliveries.scheduleRevision, scheduleRevision)
+			)
+		)
 		.all();
 	return Object.fromEntries(rows.map((row) => [row.attendeeId, row]));
 }
