@@ -5,6 +5,7 @@
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 	import LibraryBigIcon from '@lucide/svelte/icons/library-big';
 	import type { ClassValue } from 'svelte/elements';
+	import { createPickerSearchIndex, searchPickerItems } from '$lib/picker-search';
 
 	type SeriesItem = {
 		id: string;
@@ -28,7 +29,10 @@
 		placeholder = 'Select series...'
 	}: Props = $props();
 	let open = $state(false);
+	let query = $state('');
 
+	const searchIndex = $derived(createPickerSearchIndex(series));
+	const results = $derived(searchPickerItems(searchIndex, query));
 	const selected = $derived(series.find((s) => s.id === selectedId));
 </script>
 
@@ -36,7 +40,12 @@
 	<input type="hidden" {name} value={selectedId ?? ''} />
 {/if}
 
-<Popover.Root bind:open>
+<Popover.Root
+	bind:open
+	onOpenChange={(isOpen) => {
+		if (!isOpen) query = '';
+	}}
+>
 	<Popover.Trigger>
 		{#snippet child({ props })}
 			<Button
@@ -64,16 +73,24 @@
 		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-[min(36rem,calc(100vw-2rem))] p-0">
-		<Command.Root>
-			<Command.Input autofocus placeholder="Search series or authors..." class="h-10" />
-			<Command.Empty>No series found.</Command.Empty>
-			<Command.Group>
-				<div style="max-height: 320px; overflow-y: auto;">
-					{#each series as s (s.id)}
+		<Command.Root shouldFilter={false} label="Series picker">
+			<Command.Input
+				autofocus
+				placeholder="Search series or authors..."
+				class="h-10"
+				bind:value={query}
+			/>
+			<Command.List class="max-h-80" aria-label="Series results">
+				{#if results.total === 0}
+					<Command.Empty forceMount>No series found.</Command.Empty>
+				{/if}
+				<Command.Group>
+					{#each results.items as s (s.id)}
 						<Command.Item
-							value={`${s.title} ${s.authorText ?? ''}`}
+							value={s.id}
 							onSelect={() => {
 								selectedId = s.id;
+								query = '';
 								open = false;
 							}}
 							class="items-start px-3 py-2"
@@ -91,8 +108,13 @@
 							</div>
 						</Command.Item>
 					{/each}
-				</div>
-			</Command.Group>
+				</Command.Group>
+			</Command.List>
+			{#if results.total > results.items.length}
+				<p class="px-3 py-2 text-xs text-muted-foreground" role="status">
+					Showing {results.items.length} of {results.total} results. Type more to narrow your search.
+				</p>
+			{/if}
 		</Command.Root>
 	</Popover.Content>
 </Popover.Root>

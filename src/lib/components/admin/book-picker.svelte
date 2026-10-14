@@ -6,6 +6,7 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import type { ClassValue } from 'svelte/elements';
+	import { createPickerSearchIndex, searchPickerItems } from '$lib/picker-search';
 
 	type BookItem = {
 		id: string;
@@ -39,6 +40,8 @@
 	let open = $state(false);
 	let query = $state('');
 
+	const searchIndex = $derived(createPickerSearchIndex(books));
+	const results = $derived(searchPickerItems(searchIndex, query));
 	const selected = $derived(books.find((b) => b.id === selectedId));
 	const urlCandidate = $derived(
 		allowUrl && /^https?:\/\/\S+$/i.test(query.trim()) ? query.trim() : null
@@ -56,7 +59,12 @@
 	<input type="hidden" name={urlName} value={selectedUrl ?? ''} />
 {/if}
 
-<Popover.Root bind:open>
+<Popover.Root
+	bind:open
+	onOpenChange={(isOpen) => {
+		if (!isOpen) query = '';
+	}}
+>
 	<Popover.Trigger>
 		{#snippet child({ props })}
 			<Button
@@ -91,39 +99,41 @@
 		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-[min(36rem,calc(100vw-2rem))] p-0">
-		<Command.Root>
+		<Command.Root shouldFilter={false} label="Book picker">
 			<Command.Input
 				autofocus
 				placeholder={effectiveSearchPlaceholder}
 				class="h-10"
 				bind:value={query}
 			/>
-			<Command.Empty>No books found.</Command.Empty>
-			{#if urlCandidate}
-				<Command.Group heading="URL">
-					<Command.Item
-						value={urlCandidate}
-						onSelect={() => {
-							selectedId = undefined;
-							selectedUrl = urlCandidate;
-							query = '';
-							open = false;
-						}}
-						class="px-3 py-2"
-					>
-						<LinkIcon class="h-4 w-4 text-muted-foreground" />
-						<span class="min-w-0 flex-1">
-							<span class="block font-medium">Use this book URL</span>
-							<span class="block truncate text-xs text-muted-foreground">{urlCandidate}</span>
-						</span>
-					</Command.Item>
-				</Command.Group>
-			{/if}
-			<Command.Group>
-				<div style="max-height: 320px; overflow-y: auto;">
-					{#each books as b (b.id)}
+			<Command.List class="max-h-80" aria-label="Book results">
+				{#if results.total === 0 && !urlCandidate}
+					<Command.Empty forceMount>No books found.</Command.Empty>
+				{/if}
+				{#if urlCandidate}
+					<Command.Group heading="URL">
 						<Command.Item
-							value={`${b.title} ${b.authorText ?? ''}`}
+							value={urlCandidate}
+							onSelect={() => {
+								selectedId = undefined;
+								selectedUrl = urlCandidate;
+								query = '';
+								open = false;
+							}}
+							class="px-3 py-2"
+						>
+							<LinkIcon class="h-4 w-4 text-muted-foreground" />
+							<span class="min-w-0 flex-1">
+								<span class="block font-medium">Use this book URL</span>
+								<span class="block truncate text-xs text-muted-foreground">{urlCandidate}</span>
+							</span>
+						</Command.Item>
+					</Command.Group>
+				{/if}
+				<Command.Group>
+					{#each results.items as b (b.id)}
+						<Command.Item
+							value={b.id}
 							onSelect={() => {
 								selectedId = b.id;
 								selectedUrl = null;
@@ -145,8 +155,13 @@
 							</div>
 						</Command.Item>
 					{/each}
-				</div>
-			</Command.Group>
+				</Command.Group>
+			</Command.List>
+			{#if results.total > results.items.length}
+				<p class="px-3 py-2 text-xs text-muted-foreground" role="status">
+					Showing {results.items.length} of {results.total} results. Type more to narrow your search.
+				</p>
+			{/if}
 		</Command.Root>
 	</Popover.Content>
 </Popover.Root>
