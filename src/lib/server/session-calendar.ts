@@ -1,3 +1,4 @@
+import { logisticsText } from '$shared/session-logistics';
 import { and, eq, type SQL } from 'drizzle-orm';
 import { createEvents, type EventAttributes } from 'ics';
 import type { ORM } from './db';
@@ -152,11 +153,23 @@ function calendarEvent(row: CalendarRow, includeWaitlist = true): EventAttribute
 			: [
 					calendarRsvpLabel(participant!.attendanceStatus),
 					theme ? `Theme: ${theme}` : null,
+					attendee.userId || participant!.attendanceStatus === 'attending'
+						? logisticsText(session!)
+						: null,
 					`View session details: ${detailsUrl}`
 				]
 					.filter(Boolean)
 					.join('\n'),
-		location: cancelled ? undefined : (session!.locationName ?? undefined),
+		location: cancelled
+			? undefined
+			: [
+					session!.locationName,
+					attendee.userId || participant!.attendanceStatus === 'attending'
+						? session!.locationAddress
+						: null
+				]
+					.filter(Boolean)
+					.join(', ') || undefined,
 		url: detailsUrl,
 		organizer: { name: ORGANIZATION_NAME, email: NOTIFICATION_FROM_ADDRESS }
 	};

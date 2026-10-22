@@ -54,6 +54,7 @@ type SessionSummary = {
 	startsAt: string | null;
 	timezone?: string | null;
 	locationName?: string | null;
+	logisticsRevision?: string | null;
 };
 
 export function formatSessionWhen(session: Pick<SessionSummary, 'startsAt' | 'timezone'>) {
@@ -63,7 +64,7 @@ export function formatSessionWhen(session: Pick<SessionSummary, 'startsAt' | 'ti
 }
 
 export type SessionDetailChange = {
-	field: 'when' | 'location';
+	field: 'when' | 'location' | 'logistics';
 	label: string;
 	from: string;
 	to: string;
@@ -90,6 +91,13 @@ export function detectSessionDetailChanges(
 			to: nextLocation
 		});
 	}
+	if ((before.logisticsRevision ?? null) !== (after.logisticsRevision ?? null))
+		changes.push({
+			field: 'logistics',
+			label: 'Joining details',
+			from: 'Previous details',
+			to: 'Updated details available through your RSVP confirmation or member session page'
+		});
 	return changes;
 }
 

@@ -24,6 +24,7 @@
 	const currentSessionCalendarLinks = $derived(
 		data.currentSession
 			? createSessionCalendarLinks(data.currentSession, {
+					includePrivate: true,
 					detailsUrl: new URL(`/sessions/${data.currentSession.slug}`, PRIMARY_ORIGIN).toString(),
 					attendanceStatus: data.currentSessionRsvp?.attendanceStatus,
 					icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.currentSession.slug })

@@ -1,3 +1,4 @@
+import { logisticsText, type MeetingFormat } from './session-logistics';
 import { PRIMARY_ORIGIN, PUBLIC_ORIGIN } from './brand';
 import {
 	formatSessionDateInTimeZone,
@@ -12,6 +13,10 @@ export interface ReminderSession {
 	starts_at: string;
 	timezone: string;
 	location_name: string | null;
+	meeting_format?: MeetingFormat | null;
+	location_address?: string | null;
+	joining_url?: string | null;
+	accessibility_notes?: string | null;
 	astro_path: string | null;
 	is_public: number;
 }
@@ -22,6 +27,7 @@ export interface ReminderRecipient {
 	attendee_name: string;
 	email: string;
 	confirmation_token: string | null;
+	calendar_token?: string | null;
 	user_id: string | null;
 	timezone: string | null;
 }
@@ -49,6 +55,11 @@ export function formatSessionDate(
 }
 
 function publicSessionUrl(session: ReminderSession, recipient: ReminderRecipient): string {
+	if (!recipient.user_id && recipient.calendar_token) {
+		const url = new URL(`/rsvp/${session.slug}`, PRIMARY_ORIGIN);
+		url.searchParams.set('token', recipient.calendar_token);
+		return url.toString();
+	}
 	if (recipient.user_id || !session.is_public)
 		return new URL(`/sessions/${session.slug}`, PRIMARY_ORIGIN).toString();
 	return new URL(
@@ -77,11 +88,16 @@ export function renderSessionReminderEmail(
 	const when = times.local ? `${times.event}\nYour time: ${times.local}` : times.event;
 	const sessionUrl = publicSessionUrl(session, recipient);
 	const cancelUrl = cancellationUrl(recipient);
-	const locationLine = session.location_name ? `\nLocation: ${session.location_name}` : '';
+	const details = logisticsText({
+		locationName: session.location_name,
+		meetingFormat: session.meeting_format,
+		locationAddress: session.location_address,
+		joiningUrl: session.joining_url,
+		accessibilityNotes: session.accessibility_notes
+	});
+	const locationLine = details ? `\n${details}` : '';
 	const cancelLine = cancelUrl ? `\n\nCan’t make it? Cancel your registration: ${cancelUrl}` : '';
-	const locationHtml = session.location_name
-		? `<p style="margin:4px 0"><strong>Location:</strong> ${escapeHtml(session.location_name)}</p>`
-		: '';
+	const locationHtml = details ? `<p>${escapeHtml(details).replaceAll('\n', '<br>')}</p>` : '';
 	const cancelHtml = cancelUrl
 		? `<p style="margin-top:24px"><a href="${escapeHtml(cancelUrl)}" style="color:#6d28d9">Cancel this registration</a></p>`
 		: '';

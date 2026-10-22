@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionLogistics from '$lib/components/session-logistics.svelte';
 	import SessionRsvp from '$lib/components/session-rsvp.svelte';
 	import SessionTime from '$lib/components/session-time.svelte';
 	import { pageTitle } from '$shared/brand';
@@ -47,6 +48,7 @@
 
 	const calendarLinks = $derived(
 		createSessionCalendarLinks(data.session, {
+			includePrivate: true,
 			detailsUrl: new URL(`/sessions/${data.session.slug}`, PRIMARY_ORIGIN).toString(),
 			attendanceStatus: data.currentUserRsvp?.attendanceStatus,
 			icsUrl: resolve('/sessions/[slug]/calendar.ics', { slug: data.session.slug })
@@ -237,6 +239,7 @@
 					</span>
 				{/if}
 			</div>
+			<SessionLogistics session={data.session} />
 			{#if data.theme?.description ?? data.session.themeSummary}
 				<p class="max-w-3xl text-base leading-7">
 					{data.theme?.description ?? data.session.themeSummary}

@@ -1,3 +1,4 @@
+import { publicRsvpSession } from '$lib/server/session-logistics';
 import { error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { cancelParticipantByToken, getParticipantByConfirmationToken } from '$lib/server/rsvp';
@@ -9,7 +10,11 @@ import {
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const row = await getParticipantByConfirmationToken(locals.db, params.token);
 	if (!row) throw error(404, 'Registration not found.');
-	return { session: row.session, participant: row.participant, attendee: row.attendee };
+	return {
+		session: publicRsvpSession(row.session),
+		participant: row.participant,
+		attendee: row.attendee
+	};
 };
 
 export const actions = {

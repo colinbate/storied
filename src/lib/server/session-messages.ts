@@ -1,3 +1,5 @@
+import { logisticsText } from '$shared/session-logistics';
+import { logisticsHtml } from './rsvp-email';
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import type { ORM } from '$lib/server/db';
@@ -171,6 +173,8 @@ function renderMessageEmail(
 	const reason = SESSION_MESSAGE_AUDIENCE_LABELS[recipient.audience].reason;
 	const url = sessionPublicUrl(session, recipient);
 	const when = formatSessionDate(session, recipient.timezone);
+	const privateDetails =
+		session.status !== 'cancelled' && (recipient.userId || recipient.audience === 'attending');
 	const locationText = session.locationName ? `\nLocation: ${session.locationName}` : '';
 	const locationHtml = session.locationName
 		? `<p style="margin:4px 0"><strong>Location:</strong> ${escapeHtml(session.locationName)}</p>`
@@ -178,9 +182,9 @@ function renderMessageEmail(
 
 	return {
 		subject: message.subject,
-		textBody: `Hi ${recipient.name},\n\n${message.bodySource}\n\n${session.title}\nWhen: ${when}${locationText}\nView session details: ${url}\n\nYou are receiving this because ${reason}.`,
+		textBody: `Hi ${recipient.name},\n\n${message.bodySource}\n\n${session.title}\nWhen: ${when}${locationText}${privateDetails ? `\n${logisticsText(session)}` : ''}\nView session details: ${url}\n\nYou are receiving this because ${reason}.`,
 		htmlBody: emailWrapper(
-			`<p>Hi ${escapeHtml(recipient.name)},</p>${message.bodyHtml}<div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when).replaceAll('\n', '<br>')}</p>${locationHtml}<p style="margin:12px 0 0"><a href="${escapeHtml(url)}">View session details</a></p></div><p style="color:#6b7280;font-size:13px">You are receiving this because ${escapeHtml(reason)}.</p>`
+			`<p>Hi ${escapeHtml(recipient.name)},</p>${message.bodyHtml}<div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0"><h3 style="margin:0 0 8px;color:#6d28d9">${escapeHtml(session.title)}</h3><p style="margin:4px 0"><strong>When:</strong> ${escapeHtml(when).replaceAll('\n', '<br>')}</p>${locationHtml}${privateDetails ? logisticsHtml(session) : ''}<p style="margin:12px 0 0"><a href="${escapeHtml(url)}">View session details</a></p></div><p style="color:#6b7280;font-size:13px">You are receiving this because ${escapeHtml(reason)}.</p>`
 		)
 	};
 }
@@ -445,6 +449,7 @@ export function draftFromTemplate(
 	if (template === 'update') {
 		const previous = {
 			title: session.title,
+			logisticsRevision: params.get('logisticsChanged') === 'yes' ? 'previous' : null,
 			startsAt: params.get('prevStartsAt') ?? session.startsAt,
 			timezone: params.get('prevTimezone') ?? session.timezone,
 			locationName: params.has('prevLocation') ? params.get('prevLocation') : session.locationName

@@ -1,3 +1,4 @@
+import { listVenues, resolveSessionLogistics } from '$lib/server/session-logistics';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
@@ -287,7 +288,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		allSeries,
 		allAuthors,
 		allUsers,
-		guestAttendees
+		guestAttendees,
+		venues: await listVenues(locals.db)
 	};
 };
 
@@ -326,6 +328,12 @@ export const actions: Actions = {
 		});
 		if (publicationError) return fail(400, { error: publicationError });
 		const themeTitle = sessionTheme.themeName;
+		let logistics;
+		try {
+			logistics = await resolveSessionLogistics(locals.db, data, row);
+		} catch (error) {
+			return fail(400, { error: (error as Error).message });
+		}
 		const updatedSession = {
 			...row,
 			title,
@@ -338,7 +346,7 @@ export const actions: Actions = {
 			startsAt,
 			timezone,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
-			locationName: getOptionalString(data, 'locationName'),
+			...logistics,
 			rsvpSlug: getOptionalString(data, 'rsvpSlug') ?? getSessionRsvpSlug(row),
 			rsvpCapacity: Math.max(
 				1,
@@ -365,7 +373,7 @@ export const actions: Actions = {
 				startsAt: updatedSession.startsAt,
 				timezone: updatedSession.timezone,
 				durationMinutes: updatedSession.durationMinutes,
-				locationName: updatedSession.locationName,
+				...logistics,
 				rsvpSlug: updatedSession.rsvpSlug,
 				rsvpCapacity: updatedSession.rsvpCapacity,
 				rsvpEnabled: updatedSession.rsvpEnabled,
@@ -397,7 +405,13 @@ export const actions: Actions = {
 			});
 
 		// Offer a prepared attendee update when the time or place of a published session moves.
-		const detailChanges = detectSessionDetailChanges(row, updatedSession);
+		const logisticsChanged = (
+			['meetingFormat', 'locationAddress', 'joiningUrl', 'accessibilityNotes'] as const
+		).some((key) => row[key] !== updatedSession[key]);
+		const detailChanges = detectSessionDetailChanges(
+			{ ...row, logisticsRevision: logisticsChanged ? 'previous' : null },
+			{ ...updatedSession, logisticsRevision: null }
+		);
 		const notifyAttendees =
 			detailChanges.length > 0 &&
 			(row.status === 'scheduled' || row.status === 'current') &&
@@ -406,7 +420,12 @@ export const actions: Actions = {
 			updated: true,
 			detailChanges: notifyAttendees ? detailChanges : [],
 			previousDetails: notifyAttendees
-				? { startsAt: row.startsAt, timezone: row.timezone, locationName: row.locationName }
+				? {
+						startsAt: row.startsAt,
+						timezone: row.timezone,
+						locationName: row.locationName,
+						logisticsChanged
+					}
 				: null
 		};
 	},

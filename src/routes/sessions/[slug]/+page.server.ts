@@ -67,6 +67,7 @@ async function findSession(locals: App.Locals, slug: string) {
 }
 
 async function requireSession(locals: App.Locals, slug: string) {
+	if (locals.user?.status !== 'active') throw error(403, 'Active membership required.');
 	const session = await findSession(locals, slug);
 	if (!session) throw error(404, 'Session not found');
 	return session;

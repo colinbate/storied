@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionLogistics from '$lib/components/session-logistics.svelte';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -22,7 +23,13 @@
 <div class="mx-auto max-w-lg py-12">
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>{data.session ? `RSVP for ${data.session.title}` : 'RSVP'}</Card.Title>
+			<Card.Title
+				>{data.session
+					? data.confirmedRegistration
+						? data.session.title
+						: `RSVP for ${data.session.title}`
+					: 'RSVP'}</Card.Title
+			>
 			{#if data.session?.locationName}<Card.Description
 					>{data.session.locationName}</Card.Description
 				>{/if}
@@ -31,7 +38,12 @@
 			{#if data.session?.startsAt}<p class="mb-4 text-sm">
 					<SessionTime session={data.session} memberTimeZone={data.user?.timezone} />
 				</p>{/if}
-			{#if data.error}
+			<div class="mb-4">
+				{#if data.logistics}<SessionLogistics session={data.logistics} />{/if}
+			</div>
+			{#if data.confirmedRegistration}
+				<p class="text-sm">Your place is confirmed.</p>
+			{:else if data.error}
 				<p class="rounded-md border border-destructive/50 p-4 text-sm text-destructive">
 					{data.error}
 				</p>

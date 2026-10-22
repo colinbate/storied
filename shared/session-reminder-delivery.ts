@@ -59,7 +59,7 @@ export function retryableReminder(
 async function candidate(db: ReminderDatabase, sessionId: string, attendeeId: string, now: Date) {
 	const session = await db
 		.prepare(
-			`SELECT id, slug, title, starts_at, timezone, location_name, astro_path, is_public, status, reminder_revision, live_started_at, live_ended_at FROM sessions WHERE id = ?`
+			`SELECT id, slug, title, starts_at, timezone, location_name, meeting_format, location_address, joining_url, accessibility_notes, astro_path, is_public, status, reminder_revision, live_started_at, live_ended_at FROM sessions WHERE id = ?`
 		)
 		.bind(sessionId)
 		.first<CurrentSession>();
@@ -80,7 +80,7 @@ async function candidate(db: ReminderDatabase, sessionId: string, attendeeId: st
 	const recipient = await db
 		.prepare(
 			`SELECT participant.id AS participant_id, attendee.id AS attendee_id,
-		attendee.name AS attendee_name, attendee.email, attendee.user_id, participant.confirmation_token,
+		attendee.name AS attendee_name, attendee.email, attendee.user_id, participant.confirmation_token, participant.calendar_token,
 		member.timezone, member.status AS member_status
 		FROM session_participants participant
 		INNER JOIN attendee_identities attendee ON attendee.id = participant.attendee_id

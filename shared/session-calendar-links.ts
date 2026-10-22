@@ -1,14 +1,16 @@
+import { logisticsText, type SessionLogistics } from './session-logistics';
 import { sessionStartDate, type SessionTiming } from './session-lifecycle';
 
-type CalendarSession = SessionTiming & {
-	id: string;
-	slug: string;
-	title?: string;
-	status?: string;
-	theme?: string | null;
-	themeTitle?: string | null;
-	locationName?: string | null;
-};
+type CalendarSession = SessionTiming &
+	SessionLogistics & {
+		id: string;
+		slug: string;
+		title?: string;
+		status?: string;
+		theme?: string | null;
+		themeTitle?: string | null;
+		locationName?: string | null;
+	};
 
 export type SessionCalendarLink = {
 	kind: 'google' | 'yahoo' | 'outlook-mobile' | 'outlook-web' | 'ical';
@@ -22,7 +24,12 @@ function utcDateTime(date: Date) {
 
 export function createSessionCalendarLinks(
 	session: CalendarSession,
-	urls: { detailsUrl: string; icsUrl?: string | null; attendanceStatus?: string | null }
+	urls: {
+		detailsUrl: string;
+		icsUrl?: string | null;
+		attendanceStatus?: string | null;
+		includePrivate?: boolean;
+	}
 ): SessionCalendarLink[] {
 	const start = sessionStartDate(session);
 	if (!start || !session.durationMinutes) return [];
@@ -37,18 +44,22 @@ export function createSessionCalendarLinks(
 	const description = [
 		calendarRsvpLabel(urls.attendanceStatus),
 		theme ? `Theme: ${theme}` : null,
+		urls.includePrivate ? logisticsText(session) : null,
 		`View session details: ${urls.detailsUrl}`
 	]
 		.filter(Boolean)
 		.join('\n');
 
+	const location = [session.locationName, urls.includePrivate ? session.locationAddress : null]
+		.filter(Boolean)
+		.join(', ');
 	const google = new URL('https://calendar.google.com/calendar/render');
 	google.search = new URLSearchParams({
 		action: 'TEMPLATE',
 		text: title,
 		dates: `${utcDateTime(start)}/${utcDateTime(end)}`,
 		details: description,
-		location: session.locationName ?? ''
+		location: location
 	}).toString();
 
 	const yahoo = new URL('https://calendar.yahoo.com/');
@@ -62,7 +73,7 @@ export function createSessionCalendarLinks(
 			`${Math.floor(session.durationMinutes / 60)}`.padStart(2, '0') +
 			`${session.durationMinutes % 60}`.padStart(2, '0'),
 		desc: description,
-		in_loc: session.locationName ?? ''
+		in_loc: location
 	}).toString();
 
 	const outlookFields = {
@@ -70,7 +81,7 @@ export function createSessionCalendarLinks(
 		startdt: start.toISOString(),
 		enddt: end.toISOString(),
 		body: description,
-		location: session.locationName ?? ''
+		location: location
 	};
 	const outlookWeb = new URL('https://outlook.live.com/calendar/0/action/compose');
 	outlookWeb.search = new URLSearchParams({ rru: 'addevent', ...outlookFields }).toString();
@@ -79,7 +90,7 @@ export function createSessionCalendarLinks(
 		start: start.toISOString(),
 		end: end.toISOString(),
 		description,
-		location: session.locationName ?? ''
+		location: location
 	})}`;
 
 	const links: SessionCalendarLink[] = [

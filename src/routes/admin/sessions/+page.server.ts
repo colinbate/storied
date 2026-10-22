@@ -1,3 +1,4 @@
+import { listVenues, resolveSessionLogistics } from '$lib/server/session-logistics';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { sessions } from '$lib/server/db/schema';
@@ -28,7 +29,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		latestNextThemeNote(locals.db)
 	]);
 
-	return { sessions: allSessions, themes: allThemes, nextThemeNote };
+	return {
+		sessions: allSessions,
+		themes: allThemes,
+		nextThemeNote,
+		venues: await listVenues(locals.db)
+	};
 };
 
 export const actions: Actions = {
@@ -81,6 +87,12 @@ export const actions: Actions = {
 		if (publicationError) return fail(400, { error: publicationError });
 		const themeTitle = sessionTheme.themeName;
 		const sessionId = newId();
+		let logistics;
+		try {
+			logistics = await resolveSessionLogistics(locals.db, data);
+		} catch (error) {
+			return fail(400, { error: (error as Error).message });
+		}
 		const newSession = {
 			id: sessionId,
 			slug,
@@ -92,7 +104,7 @@ export const actions: Actions = {
 			startsAt,
 			timezone,
 			durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : null,
-			locationName: getOptionalString(data, 'locationName'),
+			...logistics,
 			rsvpSlug,
 			rsvpCapacity: Math.max(
 				1,

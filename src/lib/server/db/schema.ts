@@ -303,6 +303,25 @@ export const themes = sqliteTable(
 // ──────────────────────────────────────────────
 // sessions  (book-club sessions, NOT auth sessions)
 // ──────────────────────────────────────────────
+export const venues = sqliteTable(
+	'venues',
+	{
+		id: text('id').primaryKey(),
+		name: text('name').notNull(),
+		meetingFormat: text('meeting_format')
+			.notNull()
+			.default('in_person')
+			.$type<'in_person' | 'online' | 'hybrid'>(),
+		address: text('address'),
+		joiningUrl: text('joining_url'),
+		accessibilityNotes: text('accessibility_notes'),
+		archivedAt: text('archived_at'),
+		createdAt: text('created_at').notNull().default(timestampDefault),
+		updatedAt: text('updated_at').notNull().default(timestampDefault)
+	},
+	(table) => [index('idx_venues_archived_name').on(table.archivedAt, table.name)]
+);
+
 export const sessions = sqliteTable(
 	'sessions',
 	{
@@ -321,6 +340,11 @@ export const sessions = sqliteTable(
 		bodyHtml: text('body_html'),
 		durationMinutes: integer('duration_minutes'),
 		locationName: text('location_name'),
+		venueId: text('venue_id').references(() => venues.id, { onDelete: 'set null' }),
+		meetingFormat: text('meeting_format').$type<'in_person' | 'online' | 'hybrid'>(),
+		locationAddress: text('location_address'),
+		joiningUrl: text('joining_url'),
+		accessibilityNotes: text('accessibility_notes'),
 		rsvpSlug: text('rsvp_slug'),
 		rsvpCapacity: integer('rsvp_capacity').notNull().default(12),
 		rsvpEnabled: integer('rsvp_enabled', { mode: 'boolean' }).notNull().default(true),

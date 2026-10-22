@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionLogisticsEditor from '$lib/components/admin/session-logistics-editor.svelte';
 	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -137,9 +138,8 @@
 							<Label for="create-durationMinutes">Duration Minutes</Label>
 							<Input id="create-durationMinutes" name="durationMinutes" type="number" min="0" />
 						</div>
-						<div class="space-y-2">
-							<Label for="create-locationName">Location</Label>
-							<Input id="create-locationName" name="locationName" />
+						<div class="sm:col-span-2">
+							<SessionLogisticsEditor venues={data.venues} id="create-logistics" />
 						</div>
 						<div class="sm:col-span-2">
 							<SessionThemePicker

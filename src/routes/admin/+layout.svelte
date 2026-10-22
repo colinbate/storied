@@ -41,6 +41,12 @@
 			show: data.permissions.has('sessions:edit')
 		},
 		{
+			href: '/admin/venues',
+			label: 'Venues',
+			icon: CalendarIcon,
+			show: data.permissions.has('sessions:edit')
+		},
+		{
 			href: '/admin/attendees',
 			label: 'Attendees',
 			icon: UsersIcon,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SessionLogisticsEditor from '$lib/components/admin/session-logistics-editor.svelte';
 	import { pageTitle } from '$shared/brand';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -38,7 +39,12 @@
 	let savingStatus = $state(false);
 	let detailChangePrompt = $state<{
 		changes: SessionDetailChange[];
-		previous: { startsAt: string | null; timezone: string; locationName: string | null };
+		previous: {
+			startsAt: string | null;
+			timezone: string;
+			locationName: string | null;
+			logisticsChanged?: boolean;
+		};
 	} | null>(null);
 	let cancellationPrompt = $state(false);
 	const messagesHref = $derived(
@@ -51,7 +57,8 @@
 			['template', 'update'],
 			['prevStartsAt', previous.startsAt ?? ''],
 			['prevTimezone', previous.timezone],
-			['prevLocation', previous.locationName ?? '']
+			['prevLocation', previous.locationName ?? ''],
+			['logisticsChanged', previous.logisticsChanged ? 'yes' : '']
 		]
 			.filter(([, value]) => value !== '' || true)
 			.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
@@ -298,7 +305,12 @@
 								if (result.data?.error) toast.error(String(result.data.error));
 								const changes = (result.data?.detailChanges ?? []) as SessionDetailChange[];
 								const previous = result.data?.previousDetails as
-									| { startsAt: string | null; timezone: string; locationName: string | null }
+									| {
+											startsAt: string | null;
+											timezone: string;
+											locationName: string | null;
+											logisticsChanged?: boolean;
+									  }
 									| null
 									| undefined;
 								detailChangePrompt = changes.length > 0 && previous ? { changes, previous } : null;
@@ -344,13 +356,8 @@
 								value={data.session.durationMinutes ?? ''}
 							/>
 						</div>
-						<div class="space-y-2">
-							<Label for="locationName">Location</Label>
-							<Input
-								id="locationName"
-								name="locationName"
-								value={data.session.locationName ?? ''}
-							/>
+						<div class="sm:col-span-2">
+							<SessionLogisticsEditor venues={data.venues} initial={data.session} />
 						</div>
 						<div class="sm:col-span-2">
 							<SessionThemePicker
