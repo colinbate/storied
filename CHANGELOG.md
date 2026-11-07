@@ -2,6 +2,29 @@
 
 All notable changes to Storied will be documented in this file.
 
+## [0.6.0](https://github.com/colinbate/storied/compare/storied-v0.5.0...storied-v0.6.0) (2026-11-07)
+
+
+### Features
+
+* add emoji reactions with throttled notifications ([8f9fc4d](https://github.com/colinbate/storied/commit/8f9fc4de872f2e4714bc72d08beb1da1303358ce))
+* add RSVP-aware calendar exports and revocable subscriptions ([2a8803d](https://github.com/colinbate/storied/commit/2a8803d855e306fc74b13db2395ccfeba9270023))
+* Better PWA support with offline warning. ([df1957b](https://github.com/colinbate/storied/commit/df1957bd48259d90c2eb2761235515e8c4f56bd2))
+* let members leave the club ([7c9abd9](https://github.com/colinbate/storied/commit/7c9abd90891bb75252f3ccf6de40eb9ce3f48525))
+* require introductions for moderated signups ([3cd9dfd](https://github.com/colinbate/storied/commit/3cd9dfdddafaeef0bc4a36d8b37bd5aace1909a2))
+* **sessions:** add saved venues and private joining details ([e5faa23](https://github.com/colinbate/storied/commit/e5faa23ca67f6dc2f0284f27508c1509795ab662))
+
+
+### Bug Fixes
+
+* exclude completed sessions from next meeting ([b63c681](https://github.com/colinbate/storied/commit/b63c681c3ce9baaff8048c9b3da37accd5acf10f))
+* improve book and series picker performance and ranking ([e2b010b](https://github.com/colinbate/storied/commit/e2b010bf6fcb5c8fc086f158007082c42dc5f79f))
+* Increase session length ([7347a61](https://github.com/colinbate/storied/commit/7347a612c0381fe5ecbae748e7b96959c0df8860))
+* recover failed and stale session reminders ([5239226](https://github.com/colinbate/storied/commit/523922639fefaa3a11b89406ebf67fa2d844eb04))
+* respect email delivery mode for reactions and messages ([afb07b1](https://github.com/colinbate/storied/commit/afb07b170ce1828b28b58f63c51d4932391d0105))
+* show event timezone and member local meeting time ([274a11a](https://github.com/colinbate/storied/commit/274a11a8a064ccee532cd27e46b089c67cec4e24))
+* sync reading choices with personal book status ([672f2db](https://github.com/colinbate/storied/commit/672f2db4c94c0ca9b6e2fb37fedc07d029a40138))
+
 ## 0.5.0 (2026-09-20)
 
 Initial versioned release of Storied.
