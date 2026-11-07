@@ -7,6 +7,7 @@ import type {
 	SubjectThemeBookLink
 } from '$shared/worker-messages';
 import { generateId } from '../shared/ids';
+import { BOOK_READING_STATUS } from '$shared/session-reading';
 
 export async function linkThreadSubject(
 	db: D1Database,
@@ -142,7 +143,7 @@ export async function linkSessionReadingChoice(
 	if (!choice || subjectType !== 'book') return;
 
 	const now = new Date().toISOString();
-	await db
+	const saveChoice = db
 		.prepare(
 			`INSERT INTO session_reading_choices (
 				session_id, attendee_id, book_id, reading_status, created_at, updated_at
@@ -151,8 +152,19 @@ export async function linkSessionReadingChoice(
 				reading_status = excluded.reading_status,
 				updated_at = excluded.updated_at`
 		)
-		.bind(choice.sessionId, choice.attendeeId, bookId, choice.readingStatus, now, now)
-		.run();
+		.bind(choice.sessionId, choice.attendeeId, bookId, choice.readingStatus, now, now);
+	const saveBookStatus = db
+		.prepare(
+			`INSERT INTO user_subjects (
+				user_id, subject_type, subject_id, reading_status, created_at, updated_at
+			) SELECT user_id, 'book', ?, ?, ?, ?
+			FROM attendee_identities WHERE id = ? AND user_id IS NOT NULL
+			ON CONFLICT(user_id, subject_type, subject_id) DO UPDATE SET
+				reading_status = excluded.reading_status,
+				updated_at = excluded.updated_at`
+		)
+		.bind(bookId, BOOK_READING_STATUS[choice.readingStatus], now, now, choice.attendeeId);
+	await db.batch([saveChoice, saveBookStatus]);
 
 	if (choice.previousBookId && choice.previousBookId !== bookId) {
 		await db

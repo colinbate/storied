@@ -1,6 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import type { ORM } from '$lib/server/db';
-import { sessionReadingChoices, type SessionReadingStatus } from '$lib/server/db/schema';
+import {
+	attendeeIdentities,
+	sessionReadingChoices,
+	userSubjects,
+	type SessionReadingStatus
+} from '$lib/server/db/schema';
+import { BOOK_READING_STATUS } from '$shared/session-reading';
 
 export const SESSION_READING_STATUSES = [
 	'considering',
@@ -26,7 +32,7 @@ export async function upsertSessionReadingChoice(
 	}
 ) {
 	const now = new Date().toISOString();
-	await db
+	const saveChoice = db
 		.insert(sessionReadingChoices)
 		.values(choice)
 		.onConflictDoUpdate({
@@ -40,6 +46,33 @@ export async function upsertSessionReadingChoice(
 				updatedAt: now
 			}
 		});
+	const attendee = await db
+		.select({ userId: attendeeIdentities.userId })
+		.from(attendeeIdentities)
+		.where(eq(attendeeIdentities.id, choice.attendeeId))
+		.get();
+	if (!attendee?.userId) {
+		await saveChoice;
+		return;
+	}
+
+	const readingStatus = BOOK_READING_STATUS[choice.readingStatus];
+	await db.batch([
+		saveChoice,
+		db
+			.insert(userSubjects)
+			.values({
+				userId: attendee.userId,
+				subjectType: 'book',
+				subjectId: choice.bookId,
+				readingStatus,
+				updatedAt: now
+			})
+			.onConflictDoUpdate({
+				target: [userSubjects.userId, userSubjects.subjectType, userSubjects.subjectId],
+				set: { readingStatus, updatedAt: now }
+			})
+	]);
 }
 
 export async function removeSessionReadingChoice(

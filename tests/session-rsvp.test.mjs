@@ -12,6 +12,7 @@ import {
 	books,
 	subjectSources,
 	userProfiles,
+	userSubjects,
 	themes,
 	threads
 } from '../src/lib/server/db/schema.ts';
@@ -689,6 +690,11 @@ test('a member can record a session reading choice without creating attendance',
 	assert.equal(urlResult.readingChoiceSaved, true);
 	assert.equal(await db.$count(sessionReadingChoices), 1);
 	assert.equal((await db.select().from(sessionReadingChoices).get()).bookId, 'url-book');
+	assert.equal(
+		(await db.select().from(userSubjects).where(eq(userSubjects.subjectId, 'url-book')).get())
+			.readingStatus,
+		'reading'
+	);
 	assert.equal(await db.$count(sessionParticipants), 0);
 
 	const adminLocals = {
