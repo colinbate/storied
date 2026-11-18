@@ -139,6 +139,63 @@ export const actions: Actions = {
 		return { themeBookAdded: true };
 	},
 
+	addBooks: async ({ request, params, locals, platform }) => {
+		requirePermission(locals, 'sessions:edit');
+		const theme = await findTheme(locals, params.slug);
+		if (!theme) return fail(404, { error: 'Theme not found.' });
+
+		const data = await request.formData();
+		const bookUrls = data.get('bookUrls')?.toString() ?? '';
+		const lines = bookUrls.split(/\r?\n/);
+		const entries = lines
+			.map((url, index) => ({ url: url.trim(), line: index + 1 }))
+			.filter((entry) => entry.url);
+		if (entries.length === 0 || entries.length > 50) {
+			return fail(400, { error: 'Enter between 1 and 50 book URLs, one per line.', bookUrls });
+		}
+
+		const links = new Map<string, ReturnType<typeof detectSubjectLinks>[number]>();
+		for (const entry of entries) {
+			const validUrl =
+				/^https?:\/\/(?:www\.)?(?:hardcover\.app\/books\/[a-z0-9][a-z0-9-]*|goodreads\.com\/book\/show\/\d+[\w.-]*)\/?(?:[?#]\S*)?$/i.test(
+					entry.url
+				);
+			const detected = detectSubjectLinks(entry.url);
+			if (!validUrl || detected.length !== 1 || detected[0].subjectKind !== 'book') {
+				return fail(400, {
+					error: `Line ${entry.line}: use one Goodreads or Hardcover book URL. No books were added.`,
+					bookUrls
+				});
+			}
+			const link = detected[0];
+			links.set(`${link.sourceType}:${link.sourceKey}`, link);
+		}
+
+		let linkedCount = 0;
+		let queuedCount = 0;
+		try {
+			for (const link of links.values()) {
+				const result = await ensureSubjectSource(locals.db, link, platform?.env, {
+					themeBookLink: { themeId: theme.id, addedByUserId: locals.user?.id ?? null }
+				});
+				if (result.resolvedSubjectId) linkedCount++;
+				else queuedCount++;
+			}
+		} catch (cause) {
+			console.error('Unable to import theme books:', cause);
+			return fail(503, {
+				error: `Import stopped after ${linkedCount} linked and ${queuedCount} queued. Retry the list to finish; existing links are kept.`,
+				bookUrls
+			});
+		}
+
+		return {
+			bulkBookMessage: `${linkedCount} linked to theme. ${queuedCount} queued and will be linked after import.`,
+			linkedCount,
+			queuedCount
+		};
+	},
+
 	removeBook: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 		const theme = await findTheme(locals, params.slug);

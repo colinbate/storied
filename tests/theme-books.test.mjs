@@ -13,6 +13,137 @@ const formRequest = (fields) =>
 		body: new URLSearchParams(fields)
 	});
 
+function bulkImportFixture() {
+	const { sqlite, db } = database();
+	sqlite.exec(`
+		INSERT INTO users (id, email, display_name, role) VALUES ('admin', 'admin@example.test', 'Admin', 'admin');
+		INSERT INTO themes (id, slug, name) VALUES ('theme-one', 'theme-one', 'Theme One');
+		INSERT INTO books (id, slug, title) VALUES ('book-one', 'book-one', 'Book One');
+		INSERT INTO subject_sources (id, source_type, source_url, source_key, subject_type, subject_id, fetch_status)
+		VALUES ('source-one', 'hardcover', 'https://hardcover.app/books/book-one', 'book-one', 'book', 'book-one', 'resolved');
+	`);
+	const messages = [];
+	const event = {
+		locals: { db, user: { id: 'admin' }, permissions: new Set(['sessions:edit']) },
+		params: { slug: 'theme-one' },
+		platform: { env: { STORIED_WORKER: { send: async (message) => messages.push(message) } } }
+	};
+	return {
+		sqlite,
+		messages,
+		event,
+		add: (bookUrls) => themeAdminActions.addBooks({ ...event, request: formRequest({ bookUrls }) })
+	};
+}
+
+test('bulk theme import links resolved books, queues new books, and deduplicates source URLs', async () => {
+	const { sqlite, messages, add } = bulkImportFixture();
+	const urls = [
+		'https://hardcover.app/books/book-one',
+		'',
+		'https://hardcover.app/books/book-two',
+		'https://hardcover.app/books/book-two?ref=list',
+		'https://www.goodreads.com/book/show/123.Book_Three'
+	].join('\r\n');
+	const result = await add(urls);
+	assert.equal(result.linkedCount, 1);
+	assert.equal(result.queuedCount, 2);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM theme_books').get().n, 1);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM subject_sources').get().n, 3);
+	assert.deepEqual(
+		messages.map((message) => ({
+			topic: message.topic,
+			key: message.payload.sourceKey,
+			themeBookLink: message.payload.themeBookLink
+		})),
+		[
+			{
+				topic: 'subject.resolve',
+				key: 'book-two',
+				themeBookLink: { themeId: 'theme-one', addedByUserId: 'admin' }
+			},
+			{
+				topic: 'subject.resolve',
+				key: '123',
+				themeBookLink: { themeId: 'theme-one', addedByUserId: 'admin' }
+			}
+		]
+	);
+
+	await add(urls);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM theme_books').get().n, 1);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM subject_sources').get().n, 3);
+});
+
+test('bulk theme import validates every line before linking or queuing any book', async () => {
+	for (const invalid of [
+		'https://hardcover.app/series/a-series',
+		'https://hardcover.app/authors/an-author',
+		'https://example.test/books/a-book',
+		'https://hardcover.app/books/book_two',
+		'https://hardcover.app/books/book-two https://hardcover.app/books/book-three',
+		'https://hardcover.app.evil.test/books/book-two',
+		'not a URL'
+	]) {
+		const { sqlite, messages, add } = bulkImportFixture();
+		const bookUrls = `https://hardcover.app/books/book-one\n\n${invalid}`;
+		const result = await add(bookUrls);
+		assert.equal(result.status, 400, invalid);
+		assert.match(result.data.error, /Line 3:/);
+		assert.equal(result.data.bookUrls, bookUrls);
+		assert.equal(sqlite.prepare('SELECT count(*) AS n FROM theme_books').get().n, 0);
+		assert.equal(sqlite.prepare('SELECT count(*) AS n FROM subject_sources').get().n, 1);
+		assert.equal(messages.length, 0);
+	}
+});
+
+test('bulk theme import rejects empty and oversized lists', async () => {
+	const { add, messages } = bulkImportFixture();
+	for (const urls of [
+		'',
+		' \n\t',
+		Array.from({ length: 51 }, (_, n) => `https://hardcover.app/books/book-${n}`).join('\n')
+	]) {
+		assert.equal((await add(urls)).status, 400);
+	}
+	const result = await add(
+		Array.from({ length: 50 }, (_, n) => `https://hardcover.app/books/book-${n}`).join('\n')
+	);
+	assert.equal(result.queuedCount, 50);
+	assert.equal(messages.length, 50);
+});
+
+test('bulk theme import reports partial progress and allows a safe retry', async (t) => {
+	t.mock.method(console, 'error', () => {});
+	const { event, sqlite, add } = bulkImportFixture();
+	const send = event.platform.env.STORIED_WORKER.send;
+	event.platform.env.STORIED_WORKER.send = async () => {
+		throw new Error('Worker unavailable');
+	};
+	const bookUrls = 'https://hardcover.app/books/book-one\nhttps://hardcover.app/books/book-two';
+	const result = await add(bookUrls);
+	assert.equal(result.status, 503);
+	assert.match(result.data.error, /1 linked and 0 queued/);
+	assert.equal(result.data.bookUrls, bookUrls);
+	event.platform.env.STORIED_WORKER.send = send;
+	const retried = await add(bookUrls);
+	assert.equal(retried.linkedCount, 1);
+	assert.equal(retried.queuedCount, 1);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM theme_books').get().n, 1);
+	assert.equal(sqlite.prepare('SELECT count(*) AS n FROM subject_sources').get().n, 2);
+});
+
+test('bulk theme import requires permission and an existing theme', async () => {
+	const { event, add } = bulkImportFixture();
+	event.params.slug = 'missing';
+	assert.equal((await add('https://hardcover.app/books/book-one')).status, 404);
+	event.locals.permissions.clear();
+	await assert.rejects(
+		add('https://hardcover.app/books/book-one'),
+		(error) => error.status === 403
+	);
+});
+
 function seedThemeSessionBooks(sqlite) {
 	sqlite.exec(`
 		INSERT INTO themes (id, slug, name) VALUES ('theme-one', 'theme-one', 'Theme One');

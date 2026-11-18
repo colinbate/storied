@@ -23,6 +23,9 @@
 	let saving = $state(false);
 	let addBookId = $state<string | undefined>(undefined);
 	let addBookUrl = $state<string | null>(null);
+	const submittedBookUrls = $derived(
+		form && 'bookUrls' in form && typeof form.bookUrls === 'string' ? form.bookUrls : ''
+	);
 	const statuses = ['idea', 'shortlist', 'selected', 'archived'] as const;
 	const availableBooks = $derived(
 		data.books.filter((book) => !data.linkedBooks.some((entry) => entry.book.id === book.id))
@@ -220,6 +223,47 @@
 					Add Book
 				</Button>
 			</form>
+
+			<details
+				class="rounded-md border p-3"
+				open={!!form && ('bookUrls' in form || !!form.bulkBookMessage)}
+			>
+				<summary class="cursor-pointer text-sm font-medium">Add Multiple Books</summary>
+				<form
+					method="POST"
+					action="?/addBooks"
+					use:enhance={() => {
+						saving = true;
+						return async ({ update }) => {
+							await update();
+							saving = false;
+						};
+					}}
+					class="mt-3 space-y-3"
+				>
+					<Label for="bookUrls">Book URLs</Label>
+					<Textarea
+						id="bookUrls"
+						name="bookUrls"
+						rows={6}
+						value={submittedBookUrls}
+						placeholder="https://hardcover.app/books/..."
+						aria-describedby="bookUrls-help"
+						required
+					/>
+					<p id="bookUrls-help" class="text-xs text-muted-foreground">
+						Paste up to 50 Hardcover or Goodreads book URLs, one per line. Duplicate URLs are
+						ignored. Books will be linked to this theme after import.
+					</p>
+					{#if form?.bulkBookMessage}
+						<p class="text-sm" role="status">{form.bulkBookMessage}</p>
+					{/if}
+					<Button type="submit" size="sm" disabled={saving}>
+						<PlusIcon class="h-4 w-4" />
+						{saving ? 'Adding Books...' : 'Add Books'}
+					</Button>
+				</form>
+			</details>
 
 			{#if data.sessions.length > 0}
 				<form
