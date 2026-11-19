@@ -294,6 +294,38 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions: Actions = {
+	updateLibbyCollection: async ({ request, params, locals }) => {
+		requirePermission(locals, 'sessions:edit');
+		const row = await locals.db.select().from(sessions).where(eq(sessions.slug, params.slug)).get();
+		if (!row) return fail(404, { error: 'Session not found' });
+		const data = await request.formData();
+		const staleFailure = rejectStaleSession(data, row.updatedAt);
+		if (staleFailure) return staleFailure;
+		const libbyCollectionUrl = getOptionalString(data, 'libbyCollectionUrl');
+		if (libbyCollectionUrl) {
+			try {
+				const url = new URL(libbyCollectionUrl);
+				if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
+					throw new Error('Invalid web address');
+			} catch {
+				return fail(400, {
+					libbyCollectionError: 'Enter a valid https:// or http:// collection link.',
+					libbyCollectionUrl
+				});
+			}
+		}
+		const saved = await locals.db
+			.update(sessions)
+			.set({ libbyCollectionUrl, updatedAt: new Date().toISOString() })
+			.where(and(eq(sessions.id, row.id), eq(sessions.updatedAt, row.updatedAt)))
+			.returning({ id: sessions.id });
+		if (!saved.length)
+			return fail(409, {
+				error: 'This session changed while you were saving. Reload the page and try again.'
+			});
+		return { libbyCollectionSaved: true };
+	},
+
 	updateSession: async ({ request, params, locals }) => {
 		requirePermission(locals, 'sessions:edit');
 

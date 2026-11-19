@@ -27,6 +27,7 @@ import {
 } from '$lib/server/rsvp';
 import { threadAccessCondition, threadViewer } from '$lib/server/thread-access';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
+import { loadLibbyBookIds } from '$lib/server/libby';
 import { detectSubjectLinks } from '$lib/server/book-links';
 import { ensureSubjectSource } from '$lib/server/subject-sources';
 import {
@@ -210,7 +211,7 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends, 
 			.all()
 	]);
 
-	const [bookClassifications, seriesClassifications] = await Promise.all([
+	const [bookClassifications, seriesClassifications, libbyBookIds] = await Promise.all([
 		loadClassificationsBySubject(
 			locals.db,
 			'book',
@@ -220,14 +221,24 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends, 
 			locals.db,
 			'series',
 			seriesSubjectRows.map(({ series }) => series.id)
-		)
+		),
+		loadLibbyBookIds(locals.db, [
+			...new Set([
+				...bookSubjectRows.map(({ book }) => book.id),
+				...readingChoiceRows.map(({ subject }) => subject.id)
+			])
+		])
 	]);
 
 	const subjects = [
 		...bookSubjectRows.map(({ link, book }) => ({
 			kind: 'book' as const,
 			link,
-			book: { ...book, classifications: bookClassifications[book.id] ?? [] }
+			book: {
+				...book,
+				libbyAvailable: libbyBookIds.has(book.id),
+				classifications: bookClassifications[book.id] ?? []
+			}
 		})),
 		...seriesSubjectRows.map(({ link, series }) => ({
 			kind: 'series' as const,
@@ -349,7 +360,10 @@ export const load: PageServerLoad = async ({ params, locals, platform, depends, 
 		canRsvp: canAcceptSessionRsvps(session),
 		attendingCount: await attendingCount(locals.db, session.id),
 		currentUserRsvp: await getCurrentUserSessionRsvp(locals.db, session.id, locals.user.id),
-		readingChoices: readingChoiceRows,
+		readingChoices: readingChoiceRows.map((row) => ({
+			...row,
+			subject: { ...row.subject, libbyAvailable: libbyBookIds.has(row.subject.id) }
+		})),
 		myReadingChoices: readingChoiceRows.filter((row) => row.attendee.userId === locals.user?.id),
 		allBooks,
 		starterSubjects: subjects.filter(({ link }) => link.status === 'starter'),

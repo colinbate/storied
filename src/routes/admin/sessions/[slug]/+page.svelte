@@ -461,6 +461,61 @@
 		{/key}
 	</Card.Root>
 
+	<Card.Root>
+		<Card.Header>
+			<h2 id="libby-heading" class="text-base font-semibold">Libby Collection</h2>
+			<Card.Description>
+				Add the library's collection for this session whenever it becomes available.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form
+				method="POST"
+				action="?/updateLibbyCollection"
+				aria-labelledby="libby-heading"
+				class="space-y-3"
+				use:enhance={() => {
+					saving = true;
+					return async ({ result, update }) => {
+						saving = false;
+						await update({ reset: false });
+						if (result.type === 'success') toast.success('Libby collection saved.');
+						else if (result.type === 'failure')
+							toast.error(String(result.data?.libbyCollectionError ?? result.data?.error));
+					};
+				}}
+			>
+				<input type="hidden" name="expectedUpdatedAt" value={data.session.updatedAt} />
+				<div class="space-y-2">
+					<Label for="libbyCollectionUrl">Collection link (optional)</Label>
+					<p id="libby-help" class="text-sm text-muted-foreground">
+						Paste the Libby or OverDrive web link. Leave blank to hide the collection.
+					</p>
+					<Input
+						id="libbyCollectionUrl"
+						name="libbyCollectionUrl"
+						type="url"
+						value={form?.libbyCollectionUrl ?? data.session.libbyCollectionUrl ?? ''}
+						aria-describedby={form?.libbyCollectionError ? 'libby-help libby-error' : 'libby-help'}
+						aria-invalid={form?.libbyCollectionError ? true : undefined}
+						autocorrect="off"
+						autocapitalize="none"
+						spellcheck={false}
+						class="min-h-12 text-base md:text-base"
+					/>
+					{#if form?.libbyCollectionError}
+						<p id="libby-error" role="alert" class="text-sm text-destructive">
+							{form.libbyCollectionError}
+						</p>
+					{/if}
+				</div>
+				<Button type="submit" variant="outline" class="min-h-12" disabled={saving}
+					>Save Libby Collection</Button
+				>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
 	<!-- Reading choices -->
 	<Card.Root id="reading" class="scroll-mt-24">
 		<Card.Header>

@@ -463,6 +463,25 @@
 		{/if}
 
 		<section class="space-y-4">
+			{#if data.session.libbyCollectionUrl}
+				<div
+					class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div class="space-y-1">
+						<h2 class="text-base font-semibold">Borrow books for this theme</h2>
+						<p class="text-sm text-muted-foreground">
+							Explore the library's Libby collection with your library card. Holds may apply.
+						</p>
+					</div>
+					<a
+						href={data.session.libbyCollectionUrl}
+						rel="external"
+						class={buttonVariants({ variant: 'outline', class: 'min-h-12 shrink-0' })}
+					>
+						Browse on Libby
+					</a>
+				</div>
+			{/if}
 			<Card.Root>
 				<Card.Header>
 					<div class="flex flex-wrap items-start justify-between gap-3">

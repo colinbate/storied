@@ -14,6 +14,9 @@
 	import SeriesPicker from '$lib/components/admin/series-picker.svelte';
 	import SessionPicker from '$lib/components/admin/session-picker.svelte';
 	import ConfirmButton from '$lib/components/confirm-button.svelte';
+	import BookAccessForm from '$lib/components/admin/book-access-form.svelte';
+	import { BOOK_ACCESS_FORMAT_LABELS, parseBookAccessFormats } from '$shared/book-availability';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
@@ -44,6 +47,24 @@
 		'starter'
 	);
 	let showAddAccessForm = $state(false);
+	let editingAccessId = $state<string | null>(null);
+	let accessPreset = $state({ providerName: '', providerType: 'library', format: 'print' });
+	const accessProviderLabels: Record<string, string> = {
+		library: 'Library',
+		retailer: 'Retailer',
+		subscription: 'Subscription',
+		other: 'Other source'
+	};
+
+	function openAccessForm(libby = false) {
+		accessPreset = {
+			providerName: libby ? 'Libby' : '',
+			providerType: 'library',
+			format: libby ? 'ebook' : 'print'
+		};
+		editingAccessId = null;
+		showAddAccessForm = true;
+	}
 
 	function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (status === 'resolved') return 'default';
@@ -336,166 +357,94 @@
 		<Card.Header>
 			<Card.Title class="text-base">Availability</Card.Title>
 			<Card.Description>
-				Manual links for libraries, retailers, and subscription services.
+				Manual links for libraries, retailers, and subscription services. Libby entries also label
+				this book on session pages and in the library.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4 p-4">
 			{#if data.accessOptions.length > 0}
-				<div class="space-y-3">
+				<div class="divide-y rounded-lg border">
 					{#each data.accessOptions as option (option.id)}
-						<div class="rounded-lg border p-3">
-							<form
-								method="POST"
-								action="?/updateAccessOption"
-								use:enhance={() => {
-									saving = true;
-									return async ({ result, update }) => {
-										saving = false;
-										await update({ reset: false });
-										if (result.type === 'success') toast.success('Availability updated.');
-										if (result.type === 'failure') {
-											toast.error(String(result.data?.error ?? 'Unable to update availability.'));
-										}
-									};
-								}}
-								class="grid gap-3 md:grid-cols-2"
-							>
-								<input type="hidden" name="accessOptionId" value={option.id} />
-								<div class="space-y-2">
-									<Label for="provider-{option.id}">Provider</Label>
-									<Input
-										id="provider-{option.id}"
-										name="providerName"
-										value={option.providerName}
-										required
-									/>
+						<div class="space-y-3 p-3">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0 space-y-1">
+									{#if option.url}
+										<a
+											href={option.url}
+											target="_blank"
+											rel="noopener noreferrer external"
+											class="font-medium break-words hover:underline">{option.providerName}</a
+										>
+									{:else}
+										<p class="font-medium break-words">{option.providerName}</p>
+									{/if}
+									<p class="text-sm text-muted-foreground">
+										{accessProviderLabels[option.providerType]} · {parseBookAccessFormats(
+											option.format
+										)
+											.map((format) => BOOK_ACCESS_FORMAT_LABELS[format])
+											.join(', ')}
+									</p>
+									{#if option.note}<p class="text-sm break-words text-muted-foreground">
+											{option.note}
+										</p>{/if}
 								</div>
-								<div class="space-y-2">
-									<Label for="provider-type-{option.id}">Provider Type</Label>
-									<NativeSelect
-										id="provider-type-{option.id}"
-										name="providerType"
-										value={option.providerType}
-										class="w-full"
+								<div class="flex shrink-0 items-center gap-1">
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										aria-label="Edit {option.providerName} availability"
+										aria-expanded={editingAccessId === option.id}
+										onclick={() => {
+											editingAccessId = editingAccessId === option.id ? null : option.id;
+											showAddAccessForm = false;
+										}}
 									>
-										<NativeSelectOption value="library">Library</NativeSelectOption>
-										<NativeSelectOption value="retailer">Retailer</NativeSelectOption>
-										<NativeSelectOption value="subscription">Subscription</NativeSelectOption>
-										<NativeSelectOption value="other">Other</NativeSelectOption>
-									</NativeSelect>
-								</div>
-								<div class="space-y-2">
-									<Label for="format-{option.id}">Format</Label>
-									<NativeSelect
-										id="format-{option.id}"
-										name="format"
-										value={option.format}
-										class="w-full"
+										<PencilIcon class="h-4 w-4" aria-hidden="true" />
+									</Button>
+									<ConfirmButton
+										confirmText="Remove this availability option?"
+										formAction="?/removeAccessOption"
+										formData={{ accessOptionId: option.id }}
+										variant="ghost"
+										size="icon"
 									>
-										<NativeSelectOption value="print">Print</NativeSelectOption>
-										<NativeSelectOption value="ebook">Ebook</NativeSelectOption>
-										<NativeSelectOption value="audiobook">Audiobook</NativeSelectOption>
-										<NativeSelectOption value="other">Other</NativeSelectOption>
-									</NativeSelect>
+										<XIcon class="h-4 w-4" aria-hidden="true" />
+										<span class="sr-only">Remove {option.providerName} availability</span>
+									</ConfirmButton>
 								</div>
-								<div class="space-y-2">
-									<Label for="access-url-{option.id}">Link</Label>
-									<Input
-										id="access-url-{option.id}"
-										name="url"
-										type="url"
-										value={option.url ?? ''}
-									/>
-								</div>
-								<div class="space-y-2 md:col-span-2">
-									<Label for="access-note-{option.id}">Note</Label>
-									<Input id="access-note-{option.id}" name="note" value={option.note ?? ''} />
-								</div>
-								<div class="flex items-center gap-2 md:col-span-2">
-									<Button type="submit" variant="outline" disabled={saving}>Save</Button>
-								</div>
-							</form>
-							<div class="mt-3 border-t pt-3">
-								<ConfirmButton
-									confirmText="Remove this availability option?"
-									formAction="?/removeAccessOption"
-									formData={{ accessOptionId: option.id }}
-									variant="ghost"
-									size="sm"
-								>
-									<XIcon class="h-4 w-4" />
-									Remove
-								</ConfirmButton>
 							</div>
+							{#if editingAccessId === option.id}
+								<div class="border-t pt-3">
+									<BookAccessForm
+										{option}
+										onsaved={() => (editingAccessId = null)}
+										oncancel={() => (editingAccessId = null)}
+									/>
+								</div>
+							{/if}
 						</div>
 					{/each}
 				</div>
 			{:else}
 				<p class="text-sm text-muted-foreground">No availability has been recorded.</p>
 			{/if}
-
 			{#if showAddAccessForm}
-				<form
-					method="POST"
-					action="?/addAccessOption"
-					use:enhance={() => {
-						saving = true;
-						return async ({ result, update }) => {
-							saving = false;
-							await update();
-							if (result.type === 'success') {
-								toast.success('Availability added.');
-								showAddAccessForm = false;
-							}
-							if (result.type === 'failure') {
-								toast.error(String(result.data?.error ?? 'Unable to add availability.'));
-							}
-						};
-					}}
-					class="grid gap-3 border-t pt-4 md:grid-cols-2"
-				>
-					<div class="space-y-2">
-						<Label for="new-provider">Provider</Label>
-						<Input id="new-provider" name="providerName" required />
-					</div>
-					<div class="space-y-2">
-						<Label for="new-provider-type">Provider Type</Label>
-						<NativeSelect id="new-provider-type" name="providerType" value="library" class="w-full">
-							<NativeSelectOption value="library">Library</NativeSelectOption>
-							<NativeSelectOption value="retailer">Retailer</NativeSelectOption>
-							<NativeSelectOption value="subscription">Subscription</NativeSelectOption>
-							<NativeSelectOption value="other">Other</NativeSelectOption>
-						</NativeSelect>
-					</div>
-					<div class="space-y-2">
-						<Label for="new-format">Format</Label>
-						<NativeSelect id="new-format" name="format" value="print" class="w-full">
-							<NativeSelectOption value="print">Print</NativeSelectOption>
-							<NativeSelectOption value="ebook">Ebook</NativeSelectOption>
-							<NativeSelectOption value="audiobook">Audiobook</NativeSelectOption>
-							<NativeSelectOption value="other">Other</NativeSelectOption>
-						</NativeSelect>
-					</div>
-					<div class="space-y-2">
-						<Label for="new-access-url">Link</Label>
-						<Input id="new-access-url" name="url" type="url" />
-					</div>
-					<div class="space-y-2 md:col-span-2">
-						<Label for="new-access-note">Note</Label>
-						<Input id="new-access-note" name="note" placeholder="Optional access details" />
-					</div>
-					<div class="flex gap-2 md:col-span-2">
-						<Button type="submit" disabled={saving}>Add Availability</Button>
-						<Button type="button" variant="ghost" onclick={() => (showAddAccessForm = false)}
-							>Cancel</Button
-						>
-					</div>
-				</form>
+				<div class="border-t pt-4">
+					<BookAccessForm
+						option={accessPreset}
+						onsaved={() => (showAddAccessForm = false)}
+						oncancel={() => (showAddAccessForm = false)}
+					/>
+				</div>
 			{:else}
-				<div class="border-t pt-3">
-					<Button variant="outline" onclick={() => (showAddAccessForm = true)}>
-						<PlusIcon class="h-4 w-4" />
-						Add Availability
+				<div class="flex flex-wrap gap-2 border-t pt-3">
+					<Button type="button" variant="outline" onclick={() => openAccessForm(true)}
+						>Add Libby Availability</Button
+					>
+					<Button type="button" variant="outline" onclick={() => openAccessForm()}>
+						<PlusIcon class="h-4 w-4" /> Add Availability
 					</Button>
 				</div>
 			{/if}

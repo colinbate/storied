@@ -16,6 +16,7 @@
 		coverUrl?: string | null;
 		goodreadsUrl?: string | null;
 		hardcoverUrl?: string | null;
+		libbyAvailable?: boolean;
 		firstPublishYear?: number | null;
 		description?: string | null;
 		classifications?: Array<{
@@ -62,6 +63,9 @@
 			{#if book.authorText}
 				<p class="mt-0.5 text-xs text-muted-foreground">{book.authorText}</p>
 			{/if}
+			{#if book.libbyAvailable}
+				<Badge variant="secondary" class="mt-1">On Libby</Badge>
+			{/if}
 		</div>
 	</a>
 {:else}
@@ -93,6 +97,9 @@
 						Book
 					</Badge>
 					<ClassificationBadges classifications={book.classifications} />
+					{#if book.libbyAvailable}
+						<Badge variant="secondary">On Libby</Badge>
+					{/if}
 					{#if book.firstPublishYear}
 						<Badge variant="secondary">{book.firstPublishYear}</Badge>
 					{/if}

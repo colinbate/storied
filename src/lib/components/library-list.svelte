@@ -52,6 +52,7 @@
 		}>;
 		accessCount?: number;
 		accessFormats?: string[];
+		libbyAvailable?: boolean;
 	};
 
 	type Series = {
@@ -397,6 +398,9 @@
 											<Badge variant="secondary">
 												Available: {(book.accessFormats ?? []).map(formatLabel).join(', ')}
 											</Badge>
+										{/if}
+										{#if book.libbyAvailable}
+											<Badge variant="secondary">On Libby</Badge>
 										{/if}
 									</div>
 									{#if organized && book.sessionLinks?.length}

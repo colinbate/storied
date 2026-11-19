@@ -18,7 +18,7 @@ export type { SessionStatus } from '$shared/session-lifecycle';
 export type SessionThreadRole = 'primary' | 'related';
 export type SessionSubjectStatus = 'starter' | 'featured' | 'discussed' | 'mentioned_off_theme';
 export type BookAccessProviderType = 'library' | 'retailer' | 'subscription' | 'other';
-export type BookAccessFormat = 'print' | 'ebook' | 'audiobook' | 'other';
+export type { BookAccessFormat } from '$shared/book-availability';
 export type SessionAttendanceStatus =
 	| 'attending'
 	| 'waitlisted'
@@ -354,6 +354,7 @@ export const sessions = sqliteTable(
 		isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
 		astroPath: text('astro_path'),
 		externalUrl: text('external_url'),
+		libbyCollectionUrl: text('libby_collection_url'),
 		/** Set by the facilitator runner; independent of the publication status. */
 		liveStartedAt: text('live_started_at'),
 		liveEndedAt: text('live_ended_at'),
@@ -797,7 +798,8 @@ export const bookAccessOptions = sqliteTable(
 			.notNull()
 			.default('library')
 			.$type<BookAccessProviderType>(),
-		format: text('format').notNull().default('print').$type<BookAccessFormat>(),
+		/** One or more comma-separated format keys. Existing single values remain valid. */
+		format: text('format').notNull().default('print'),
 		url: text('url'),
 		note: text('note'),
 		createdByUserId: text('created_by_user_id').references(() => users.id, {

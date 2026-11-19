@@ -12,7 +12,6 @@ import {
 	themeBooks,
 	themes,
 	subjectSources,
-	type BookAccessFormat,
 	type BookAccessProviderType,
 	type SessionSubjectStatus
 } from '$lib/server/db/schema';
@@ -27,11 +26,11 @@ import {
 	replaceSubjectClassifications
 } from '$lib/server/classifications';
 import { newId } from '$lib/server/ids';
+import { BOOK_ACCESS_FORMATS } from '$shared/book-availability';
 
 const SUBJECT = 'book' as const;
 const sessionSubjectStatuses = new Set(['starter', 'featured', 'discussed', 'mentioned_off_theme']);
 const accessProviderTypes = new Set(['library', 'retailer', 'subscription', 'other']);
-const accessFormats = new Set(['print', 'ebook', 'audiobook', 'other']);
 
 function getSessionSubjectStatus(data: FormData): SessionSubjectStatus {
 	const status = data.get('status')?.toString();
@@ -48,13 +47,15 @@ function optionalPositiveInteger(data: FormData, name: string) {
 function accessValues(data: FormData) {
 	const providerName = data.get('providerName')?.toString().trim() ?? '';
 	const providerType = data.get('providerType')?.toString() ?? '';
-	const format = data.get('format')?.toString() ?? '';
+	const formats = data.getAll('format').map((value) => value.toString());
 	const url = data.get('url')?.toString().trim() || null;
 	const note = data.get('note')?.toString().trim() || null;
 	if (!providerName) return { error: 'Enter a provider name.' } as const;
 	if (!accessProviderTypes.has(providerType))
 		return { error: 'Choose a valid provider type.' } as const;
-	if (!accessFormats.has(format)) return { error: 'Choose a valid format.' } as const;
+	if (!formats.length) return { error: 'Select at least one format.' } as const;
+	if (formats.some((format) => !BOOK_ACCESS_FORMATS.some((known) => known === format)))
+		return { error: 'Choose valid formats.' } as const;
 	if (url) {
 		try {
 			const parsed = new URL(url);
@@ -66,7 +67,7 @@ function accessValues(data: FormData) {
 	return {
 		providerName,
 		providerType: providerType as BookAccessProviderType,
-		format: format as BookAccessFormat,
+		format: BOOK_ACCESS_FORMATS.filter((format) => formats.includes(format)).join(','),
 		url,
 		note
 	};

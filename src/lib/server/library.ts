@@ -11,6 +11,8 @@ import {
 import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { loadClassificationsBySubject } from '$lib/server/classifications';
 import { selectNextSession, sessionStartDate } from '$shared/session-lifecycle';
+import { isLibbyAccessOption } from '$shared/libby';
+import { parseBookAccessFormats } from '$shared/book-availability';
 
 type LibraryContextOptions = {
 	userId: string;
@@ -136,9 +138,15 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 					.orderBy(asc(sessions.startsAt), asc(sessions.title))
 					.all()
 			: Promise.resolve([]),
-		context && bookIds.length
+		bookIds.length
 			? db
-					.select({ bookId: bookAccessOptions.bookId, format: bookAccessOptions.format })
+					.select({
+						bookId: bookAccessOptions.bookId,
+						format: bookAccessOptions.format,
+						providerName: bookAccessOptions.providerName,
+						providerType: bookAccessOptions.providerType,
+						url: bookAccessOptions.url
+					})
 					.from(bookAccessOptions)
 					.innerJoin(books, eq(bookAccessOptions.bookId, books.id))
 					.where(isNull(books.deletedAt))
@@ -187,10 +195,13 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 	}
 
 	const accessByBook = new Map<string, { count: number; formats: string[] }>();
+	const libbyBookIds = new Set(accessRows.filter(isLibbyAccessOption).map((row) => row.bookId));
 	for (const row of accessRows) {
 		const existing = accessByBook.get(row.bookId) ?? { count: 0, formats: [] };
 		existing.count += 1;
-		if (!existing.formats.includes(row.format)) existing.formats.push(row.format);
+		for (const format of parseBookAccessFormats(row.format)) {
+			if (!existing.formats.includes(format)) existing.formats.push(format);
+		}
 		accessByBook.set(row.bookId, existing);
 	}
 
@@ -235,6 +246,7 @@ export async function loadLibrarySubjects(db: App.Locals['db'], context?: Librar
 			isRecommended: relations.get(book.id)?.isRecommended ?? false,
 			sessionLinks: sessionsByBook.get(book.id) ?? [],
 			accessCount: accessByBook.get(book.id)?.count ?? 0,
+			libbyAvailable: libbyBookIds.has(book.id),
 			accessFormats: accessByBook.get(book.id)?.formats ?? []
 		})),
 		series: seriesRows.map((entry) => ({

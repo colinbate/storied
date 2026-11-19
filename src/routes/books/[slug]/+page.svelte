@@ -23,6 +23,7 @@
 	import LibraryNav from '$lib/components/library-nav.svelte';
 	import LibraryBreadcrumb from '$lib/components/library-breadcrumb.svelte';
 	import ClassificationBadges from '$lib/components/classification-badges.svelte';
+	import { BOOK_ACCESS_FORMAT_LABELS, parseBookAccessFormats } from '$shared/book-availability';
 
 	let { data } = $props();
 	const timeZone = $derived(data.user?.timezone);
@@ -40,12 +41,6 @@
 		featured: 'Featured',
 		discussed: 'Discussed',
 		mentioned_off_theme: 'Mentioned off theme'
-	};
-	const accessFormatLabels: Record<string, string> = {
-		print: 'Print',
-		ebook: 'Ebook',
-		audiobook: 'Audiobook',
-		other: 'Other format'
 	};
 	const accessProviderLabels: Record<string, string> = {
 		library: 'Library',
@@ -409,7 +404,9 @@
 									<p class="font-medium">{option.providerName}</p>
 								{/if}
 								<div class="mt-1 flex flex-wrap gap-1.5">
-									<Badge variant="secondary">{accessFormatLabels[option.format]}</Badge>
+									{#each parseBookAccessFormats(option.format) as format (format)}
+										<Badge variant="secondary">{BOOK_ACCESS_FORMAT_LABELS[format]}</Badge>
+									{/each}
 									<Badge variant="outline">{accessProviderLabels[option.providerType]}</Badge>
 								</div>
 								{#if option.note}<p class="mt-2 text-sm text-muted-foreground">
