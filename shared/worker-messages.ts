@@ -106,6 +106,7 @@ export interface ReactionNotificationPayload {
 
 export interface NewThreadFanoutPayload {
 	threadId: string;
+	mentionedUserIds?: string[];
 	threadAuthorUserId: string;
 	baseUrl: string;
 	broadcastToAllMembers?: boolean;

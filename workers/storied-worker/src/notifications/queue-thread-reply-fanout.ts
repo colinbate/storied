@@ -2,8 +2,9 @@ import type { ThreadReplyFanoutPayload } from '$shared/worker-messages';
 import { spoilerSafeExcerpt } from '$shared/spoilers';
 import type { HandlerContext } from '../dispatch';
 import { generateId } from '../shared/ids';
-import { sendEmail, renderMentionNotificationEmail, renderReplyNotificationEmail } from './email';
+import { sendEmail, renderReplyNotificationEmail } from './email';
 import { queuePushoverForRecipients } from './pushover';
+import { notifyMentionedUsers } from './mentions';
 
 type EmailRecipient = {
 	user_id: string;
@@ -144,85 +145,16 @@ export async function handleThreadReplyFanout(
 		baseUrl
 	});
 
-	if (mentionedUserIds.length > 0) {
-		const mentionRecipientsResult = await env.DB.prepare(
-			`SELECT
-				 u.id AS user_id,
-				 u.email AS email,
-				 COALESCE(np.email_enabled, 1) AS email_enabled,
-				 CASE
-					 WHEN np.pushover_enabled = 1
-						 AND np.pushover_user_key IS NOT NULL
-						 AND np.pushover_user_key != ''
-					 THEN np.pushover_user_key
-					 ELSE NULL
-				 END AS pushover_user_key,
-				 CASE
-					 WHEN np.pushover_enabled = 1
-						 AND np.pushover_user_key IS NOT NULL
-						 AND np.pushover_user_key != ''
-					 THEN np.pushover_device
-					 ELSE NULL
-				 END AS pushover_device
-			 FROM users u
-			 LEFT JOIN notification_preferences np ON np.user_id = u.id
-			 WHERE u.id IN (SELECT value FROM json_each(?))
-			   AND u.id != ?
-			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
-			   AND (
-			     ? IS NULL
-			     OR EXISTS (
-			       SELECT 1 FROM group_memberships gm
-			       WHERE gm.group_id = ? AND gm.user_id = u.id
-			     )
-			   )
-			   AND u.status = 'active'
-			   AND u.last_login_at IS NOT NULL`
-		)
-			.bind(
-				mentionedUserIdsJson,
-				replyAuthorUserId,
-				thread.visibility,
-				thread.audience_group_id,
-				thread.audience_group_id
-			)
-			.all<MentionRecipient>();
-		const mentionRecipients = mentionRecipientsResult.results ?? [];
-		const mentionEmailRecipients = mentionRecipients.filter(
-			(recipient) => recipient.email_enabled === 1
-		);
-
-		const mentionTemplate = renderMentionNotificationEmail({
-			threadTitle: thread.title,
-			threadSlug: thread.slug,
-			postId: post.id,
-			replyAuthor: author.display_name,
-			replyPreview,
-			baseUrl
-		});
-
-		await insertNotificationEvents(env, mentionEmailRecipients, 'mention', threadId, postId);
-
-		for (const recipient of mentionEmailRecipients) {
-			await sendEmail(env, {
-				to: recipient.email,
-				subject: mentionTemplate.subject,
-				textBody: mentionTemplate.textBody,
-				htmlBody: mentionTemplate.htmlBody
-			});
-		}
-
-		await queuePushoverForRecipients(env, mentionRecipients.filter(hasPushoverKey), {
-			title: `Mention: ${thread.title}`,
-			message: `${author.display_name} mentioned you: ${pushoverPreview}`,
-			url: postUrl,
-			urlTitle: 'Open reply',
-			priority: 0,
-			eventType: 'mention',
-			threadId,
-			postId
-		});
-	}
+	await notifyMentionedUsers(env, {
+		thread,
+		authorUserId: replyAuthorUserId,
+		authorDisplayName: author.display_name,
+		mentionedUserIds,
+		preview: replyPreview,
+		pushoverPreview,
+		baseUrl,
+		postId: post.id
+	});
 
 	await queuePushoverForRecipients(env, replyPushoverRecipients, {
 		title: `New reply: ${thread.title}`,

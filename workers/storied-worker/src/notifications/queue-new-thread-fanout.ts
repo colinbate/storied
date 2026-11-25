@@ -9,12 +9,17 @@ import {
 	renderNewThreadNotificationEmail
 } from './email';
 import { queuePushoverForRecipients } from './pushover';
+import { notifyMentionedUsers } from './mentions';
 
 export async function handleNewThreadFanout(
 	payload: NewThreadFanoutPayload,
 	{ env }: HandlerContext
 ): Promise<void> {
 	const { threadId, threadAuthorUserId, baseUrl, broadcastToAllMembers } = payload;
+	const mentionedUserIds = [...new Set(payload.mentionedUserIds ?? [])].filter(
+		(userId) => userId !== threadAuthorUserId
+	);
+	const mentionedUserIdsJson = JSON.stringify(mentionedUserIds);
 
 	const thread = await env.DB.prepare(
 		`SELECT t.id, t.slug, t.title, t.body_source, t.contains_spoilers, t.category_id,
@@ -53,6 +58,16 @@ export async function handleNewThreadFanout(
 			maxLength: 400
 		}) ?? '';
 
+	await notifyMentionedUsers(env, {
+		thread,
+		authorUserId: threadAuthorUserId,
+		authorDisplayName: author.display_name,
+		mentionedUserIds,
+		preview: threadPreview,
+		pushoverPreview,
+		baseUrl
+	});
+
 	if (broadcastToAllMembers) {
 		const recipientsResult = await env.DB.prepare(
 			`SELECT u.id AS user_id, u.email AS email
@@ -60,6 +75,7 @@ export async function handleNewThreadFanout(
 			 LEFT JOIN notification_preferences np ON np.user_id = u.id
 			 WHERE u.status = 'active'
 			   AND u.id != ?
+			   AND u.id NOT IN (SELECT value FROM json_each(?))
 			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
 			   AND (
 			     ? IS NULL
@@ -72,6 +88,7 @@ export async function handleNewThreadFanout(
 		)
 			.bind(
 				threadAuthorUserId,
+				mentionedUserIdsJson,
 				thread.visibility,
 				thread.audience_group_id,
 				thread.audience_group_id
@@ -94,6 +111,7 @@ export async function handleNewThreadFanout(
 			 WHERE u.status = 'active'
 			   AND u.role = 'admin'
 			   AND u.id != ?
+			   AND u.id NOT IN (SELECT value FROM json_each(?))
 			   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
 			   AND (
 			     ? IS NULL
@@ -108,6 +126,7 @@ export async function handleNewThreadFanout(
 		)
 			.bind(
 				threadAuthorUserId,
+				mentionedUserIdsJson,
 				thread.visibility,
 				thread.audience_group_id,
 				thread.audience_group_id
@@ -154,6 +173,7 @@ export async function handleNewThreadFanout(
 		 WHERE s.category_id = ?
 		   AND s.mode = 'immediate'
 		   AND s.user_id != ?
+		   AND s.user_id NOT IN (SELECT value FROM json_each(?))
 		   AND u.status = 'active'
 		   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
 		   AND (
@@ -168,6 +188,7 @@ export async function handleNewThreadFanout(
 		.bind(
 			thread.category_id,
 			threadAuthorUserId,
+			mentionedUserIdsJson,
 			thread.visibility,
 			thread.audience_group_id,
 			thread.audience_group_id
@@ -192,6 +213,7 @@ export async function handleNewThreadFanout(
 		 WHERE s.category_id = ?
 		   AND s.mode = 'immediate'
 		   AND s.user_id != ?
+		   AND s.user_id NOT IN (SELECT value FROM json_each(?))
 		   AND u.status = 'active'
 		   AND (? != 'admins' OR u.role IN ('admin', 'moderator'))
 		   AND (
@@ -210,6 +232,7 @@ export async function handleNewThreadFanout(
 		.bind(
 			thread.category_id,
 			threadAuthorUserId,
+			mentionedUserIdsJson,
 			thread.visibility,
 			thread.audience_group_id,
 			thread.audience_group_id
